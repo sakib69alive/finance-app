@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="bn">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>হিসাবী</title>
+  <meta name="description" content="অফলাইন ব্যবসার হিসাব: মূলধন, খরচ, প্রতি ইউনিট খরচ, বিক্রি দাম ও লাভ।">
+  <meta name="theme-color" id="meta-theme" content="#F8F0DE">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="হিসাবী">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar" id="topbar"></header>
+    <main class="view" id="view"></main>
+    <nav class="tabbar" id="tabbar" aria-label="মেনু"></nav>
+  </div>
+  <div class="sheet-root" id="sheet-root"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <input type="file" id="import-file" accept="application/json,.json" hidden>
+  <script src="app.js" defer></script>
+</body>
+</html>
