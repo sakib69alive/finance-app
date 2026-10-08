@@ -332,6 +332,20 @@ function insights(b, c) {
    ========================================================= */
 let tab = 'home';
 let expFilter = 'all';
+const TAB_ORDER = ['home', 'products', 'expenses', 'sales', 'more'];
+const TAB_LABEL = id => ({ home: L('হোম', 'Home'), products: L('প্রোডাক্ট', 'Products'), expenses: L('খরচ', 'Costs'), sales: L('বিক্রি', 'Sales'), more: L('আরও', 'More') }[id]);
+let trail = ['home']; // কোন কোন ট্যাবে গেছেন, ক্রমানুসারে (সর্বোচ্চ ৫টা)
+function setTab(id, dir = 0) {
+  if (!TAB_ORDER.includes(id) || id === tab) return;
+  const i = trail.indexOf(id);
+  if (i >= 0) trail = trail.slice(0, i + 1); else trail.push(id);
+  if (trail.length > 5) trail.shift();
+  tab = id;
+  render();
+  window.scrollTo(0, 0);
+  const v = $('#view');
+  if (dir) { v.classList.remove('slide-l', 'slide-r'); void v.offsetWidth; v.classList.add(dir > 0 ? 'slide-l' : 'slide-r'); }
+}
 
 const langBtn = () => `<button type="button" class="icon-btn txt" data-action="toggle-lang" aria-label="${L('Switch to English', 'বাংলায় দেখুন')}">${L('EN', 'বাং')}</button>`;
 
@@ -347,11 +361,14 @@ function render() {
   }
   const c = compute(b);
   $('#topbar').innerHTML = `
-    <button type="button" class="batch-btn" data-action="batches" aria-label="${L('ব্যাচ বদলান', 'Switch batch')}">
-      <span class="logo-sm">${LOGO}</span>
-      <span class="bb-text"><small>${L('হিসাবী', 'Hisabi')}</small><b>${esc(b.name)}</b></span>${icon('chev', 18)}
-    </button>
-    <div class="top-actions">${langBtn()}</div>`;
+    <div class="batch-btn">
+      <button type="button" class="home-btn" data-action="go-home" aria-label="${L('হোমে ফিরুন', 'Back to Home')}"><span class="logo-sm">${LOGO}</span></button>
+      <span class="bb-text"><button type="button" class="home-link" data-action="go-home">${L('হিসাবী', 'Hisabi')}</button>
+        <button type="button" class="batch-name" data-action="batches" aria-label="${L('ব্যাচ বদলান', 'Switch batch')}"><b>${esc(b.name)}</b>${icon('chev', 16)}</button></span>
+    </div>
+    <div class="top-actions">${langBtn()}</div>
+    ${trail.length > 1 ? `<nav class="crumbs" aria-label="${L('আপনি কোথায় ছিলেন', 'Where you have been')}">${trail.map((id, i) =>
+      `${i ? '<i>›</i>' : ''}<button type="button" class="${id === tab ? 'cur' : ''}" data-action="tab" data-tab="${id}">${TAB_LABEL(id)}</button>`).join('')}</nav>` : ''}`;
   const views = { home: viewHome, products: viewProducts, expenses: viewExpenses, sales: viewSales, more: viewMore };
   $('#view').innerHTML = (views[tab] || viewHome)(b, c);
   const tabs = [
@@ -957,7 +974,8 @@ const DELETED = () => L('ডিলিট হয়েছে', 'Deleted');
    ========================================================= */
 const ACTIONS = {
   'close-sheet': () => closeSheet(),
-  tab: el => { tab = el.dataset.tab; render(); window.scrollTo(0, 0); },
+  tab: el => setTab(el.dataset.tab),
+  'go-home': () => { if (sheetOpen) closeSheet(); setTab('home'); window.scrollTo(0, 0); },
   'toggle-lang': () => { state.settings.lang = isEN() ? 'bn' : 'en'; if (sheetOpen) closeSheet(); commit(); },
   lang: el => { state.settings.lang = el.dataset.v; commit(); },
 
@@ -1080,7 +1098,7 @@ const FORMS = {
       const b = newBatch(data);
       state.batches.push(b);
       state.activeBatchId = b.id;
-      tab = 'home';
+      tab = 'home'; trail = ['home'];
       const first = !sheetOpen;
       closeSheet();
       commit(L('ব্যাচ তৈরি হয়েছে 🎉 এবার ধাপ ২', 'Batch created 🎉 Now step 2'));
@@ -1346,7 +1364,7 @@ $('#import-file').addEventListener('change', e => {
       const lang = state.settings.lang;
       state = migrate(s);
       state.settings.lang = lang;
-      tab = 'home';
+      tab = 'home'; trail = ['home'];
       commit(L('ব্যাকআপ থেকে ফেরত আনা হয়েছে', 'Backup restored'));
     } catch (err) {
       toast(L('ফাইলটা সঠিক ব্যাকআপ না', 'That file is not a valid backup'), 'danger');
@@ -1374,6 +1392,21 @@ const onLive = e => {
   }
   if (f) runLive(f, e.target);
 };
+// বাম/ডানে সোয়াইপ করলে পাশের ট্যাবে যাবে
+let sw0 = null;
+document.addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  const skip = sheetOpen || e.touches.length > 1 || !e.target.closest('#view') || e.target.closest('input, select, textarea, .chiprow, .seg, details[open]');
+  sw0 = skip ? null : { x: t.clientX, y: t.clientY, t: Date.now() };
+}, { passive: true });
+document.addEventListener('touchend', e => {
+  if (!sw0 || !activeBatch()) return;
+  const t = e.changedTouches[0], dx = t.clientX - sw0.x, dy = t.clientY - sw0.y, dt = Date.now() - sw0.t;
+  sw0 = null;
+  if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.7 || dt > 700) return;
+  const i = TAB_ORDER.indexOf(tab) + (dx < 0 ? 1 : -1);
+  if (i >= 0 && i < TAB_ORDER.length) setTab(TAB_ORDER[i], dx < 0 ? 1 : -1);
+}, { passive: true });
 document.addEventListener('input', onLive);
 document.addEventListener('change', onLive);
 

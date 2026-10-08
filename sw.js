@@ -1,6 +1,6 @@
 // অফলাইনে চালানোর জন্য সার্ভিস ওয়ার্কার।
 // অ্যাপ আপডেট করলে VERSION বাড়ান, তাহলে ফোনে নতুন ফাইল যাবে।
-const VERSION = 'hisabi-v3';
+const VERSION = 'hisabi-v4';
 const ASSETS = [
   './', './index.html', './styles.css', './app.js', './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',
