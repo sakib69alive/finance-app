@@ -7,6 +7,7 @@
 
 /* ---------- হেল্পার ---------- */
 const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 const sum = a => a.reduce((x, y) => x + y, 0);
@@ -370,8 +371,9 @@ function ring(p) {
     <text x="42" y="48" text-anchor="middle">${Math.round(p * 100)}%</text></svg>`;
 }
 const stat = (label, value, sub, cls = '') => `<div class="stat"><small>${label}</small><b class="${cls}">${value}</b><em>${sub}</em></div>`;
-const seg = (name, opts, val) => `<div class="seg">${opts.map(([v, l]) =>
-  `<label><input type="radio" name="${name}" value="${v}" ${v === val ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>`;
+const seg = (name, opts, val, disabled = []) => `<div class="seg">${opts.map(([v, l]) =>
+  `<label class="${disabled.includes(v) ? 'off' : ''}"><input type="radio" name="${name}" value="${v}" ${v === val ? 'checked' : ''} ${disabled.includes(v) ? 'disabled' : ''}><span>${l}</span></label>`).join('')}</div>`;
+const hintLine = t => `<div class="hint">${t}</div>`;
 const sheetHead = (title, sub = '') => `<div class="sheet-head"><h3>${title}${sub ? `<small>${sub}</small>` : ''}</h3>
   <button type="button" class="icon-btn" data-action="close-sheet" aria-label="${L('বন্ধ করুন', 'Close')}">${icon('x', 20)}</button></div>`;
 const moneyInput = (name, value, ph = '0', extra = '') => `<div class="input-wrap has-prefix"><span class="prefix">৳</span>
@@ -445,6 +447,8 @@ function viewHome(b, c) {
     <div class="hero-foot"><span>${L('হাতে এসেছে', 'Cash in hand')} <b>${fmt(c.cash)}</b></span><span>${L('বাকি', 'To go')} <b>${fmt(Math.max(0, c.target - c.cash))}</b></span></div>
   </section>
 
+  ${stepsCard(b, c)}
+
   <div class="quick">
     <button type="button" class="qbtn" data-action="add-expense"><span class="qi">${icon('receipt')}</span>${L('খরচ', 'Cost')}</button>
     <button type="button" class="qbtn" data-action="add-sale"><span class="qi">${icon('trend')}</span>${L('বিক্রি', 'Sale')}</button>
@@ -487,6 +491,26 @@ function viewHome(b, c) {
         <div><span>${L('মোট সম্পদ − মূলধন', 'Worth − capital')} = ${nw >= 0 ? L('লাভ', 'profit') : L('ক্ষতি', 'loss')}</span><span class="${nw >= 0 ? 'pos' : 'neg'}">${fmt(nw)}</span></div>
       </div>
     </details>
+  </section>`;
+}
+
+// ধাপে ধাপে গাইড: কোনটা শেষ, এখন কোনটা করতে হবে
+function stepsCard(b, c) {
+  const steps = [
+    { done: true, t: L('মূলধন ও টার্গেট ঠিক করা', 'Set capital and target'), d: L(`মূলধন ${fmt(c.capital)}, টার্গেট ${fmt(c.target)}`, `Capital ${fmt(c.capital)}, target ${fmt(c.target)}`) },
+    { done: b.products.length > 0, t: L('প্রোডাক্ট যোগ করা', 'Add your product'), d: L('কী এনেছেন, কয়টা ইউনিট, কত দামে', 'What you bought, how many units, at what price'), a: 'add-product', btn: L('প্রোডাক্ট যোগ করুন', 'Add product') },
+    { done: b.expenses.length > 0, t: L('খরচ যোগ করা', 'Add your costs'), d: L('অ্যাড, শিপিং, প্যাকেজিং, কুরিয়ার, যা লেগেছে', 'Ads, shipping, packaging, courier, anything you paid'), a: 'add-expense', btn: L('খরচ যোগ করুন', 'Add cost'), need: b.products.length > 0 },
+    { done: b.sales.length > 0, t: L('বিক্রি লিখে রাখা', 'Record your sales'), d: L('প্রতিটা অর্ডার বিক্রি হলে এখানে লিখুন, লাভ নিজে হিসাব হবে', 'Log each order, the profit is worked out for you'), a: 'add-sale', btn: L('বিক্রি যোগ করুন', 'Add sale'), need: b.products.length > 0 },
+  ];
+  if (steps.every(s => s.done)) return '';
+  const cur = steps.findIndex(s => !s.done && s.need !== false);
+  const done = steps.filter(s => s.done).length;
+  return `<section class="card steps">
+    <div class="card-head"><h2>${L('শুরু করুন: ধাপে ধাপে', 'Get going, step by step')}</h2><span class="muted" style="font-size:13px;font-weight:700">${L(`${done}/4 শেষ`, `${done}/4 done`)}</span></div>
+    <ol class="steplist">${steps.map((s, i) => `<li class="${s.done ? 'done' : i === cur ? 'now' : 'later'}">
+      <span class="sn">${s.done ? icon('check', 16) : i + 1}</span>
+      <div class="sb"><b>${L('ধাপ', 'Step')} ${i + 1}: ${s.t}</b><small>${s.d}</small>
+        ${i === cur && s.a ? `<button type="button" class="btn primary sm" data-action="${s.a}">${icon('plus', 16)} ${s.btn}</button>` : ''}</div></li>`).join('')}</ol>
   </section>`;
 }
 
@@ -627,15 +651,15 @@ function productForm(p) {
   const v = p || { emoji: '📦', priceMode: 'unit', currency: 'BDT' };
   const cur = v.currency || 'BDT';
   const rate = v.rate || state.settings.rates[cur] || '';
-  return `${sheetHead(isNew ? L('নতুন প্রোডাক্ট', 'New product') : L('প্রোডাক্ট এডিট', 'Edit product'))}
+  return `${sheetHead(isNew ? L('নতুন প্রোডাক্ট', 'New product') : L('প্রোডাক্ট এডিট', 'Edit product'), isNew && !activeBatch().products.length ? L('ধাপ ২: কী এনেছেন, কয়টা, কত দামে', 'Step 2: what you bought, how many, at what price') : '')}
   <form data-form="product" data-live="product" data-id="${p ? p.id : ''}" autocomplete="off">
     <label class="field"><span>${L('প্রোডাক্টের নাম', 'Product name')}</span>
       <input class="input" name="name" maxlength="60" value="${esc(v.name || '')}" placeholder="${L('যেমন: মিনি পোর্টেবল ফ্যান', 'e.g. Mini portable fan')}"></label>
     <div class="field"><span class="flabel">${L('আইকন', 'Icon')}</span><div class="emoji-row">${EMOJIS.map(em =>
       `<label class="emo"><input type="radio" name="emoji" value="${em}" ${em === v.emoji ? 'checked' : ''}><span>${em}</span></label>`).join('')}</div></div>
-    <label class="field"><span>${L('কয়টা ইউনিট কিনেছেন', 'Units bought')}</span>
-      <input class="input" name="units" inputmode="numeric" value="${esc(v.units ?? '')}" placeholder="${L('যেমন: 5', 'e.g. 5')}"></label>
-    <div class="field"><span class="flabel">${L('কেনা দাম', 'Purchase price')}</span>
+    <label class="field"><span>${L('১. কয়টা ইউনিট (পিস) কিনেছেন?', '1. How many units (pieces) did you buy?')}</span>
+      <input class="input" name="units" inputmode="numeric" value="${esc(v.units ?? '')}" placeholder="${L('যেমন: 5', 'e.g. 5')}">${hintLine(L('শুধু সংখ্যা লিখুন। এই সংখ্যা দিয়েই প্রতি ইউনিটের খরচ বের হবে।', 'Just a number. The cost per unit is worked out from this.'))}</label>
+    <div class="field"><span class="flabel" data-price-label>${L('২. কেনা দাম', '2. Purchase price')}</span>
       ${seg('priceMode', [['unit', L('প্রতি ইউনিট', 'Per unit')], ['total', L('সব মিলিয়ে মোট', 'Total for all')]], v.priceMode || 'unit')}
       <div class="mt8">${seg('currency', [['BDT', L('৳ টাকা', '৳ Taka')], ['CNY', L('¥ ইউয়ান', '¥ Yuan')], ['USD', L('$ ডলার', '$ Dollar')]], cur)}</div>
       <div class="input-wrap has-prefix mt8"><span class="prefix" data-cur>${CUR[cur]}</span>
@@ -697,15 +721,18 @@ function expenseForm(e, presetProduct) {
   const b = activeBatch();
   const isNew = !e;
   const v = e || { category: 'ads', productId: presetProduct || '', date: today() };
-  return `${sheetHead(isNew ? L('নতুন খরচ', 'New cost') : L('খরচ এডিট', 'Edit cost'))}
+  const hasUnits = expenseUnits(b, '') > 0;
+  return `${sheetHead(isNew ? L('নতুন খরচ', 'New cost') : L('খরচ এডিট', 'Edit cost'), isNew && !b.expenses.length ? L('ধাপ ৩: অ্যাড, শিপিং, প্যাকেজিং, যা খরচ হয়েছে', 'Step 3: ads, shipping, packaging, whatever you spent') : '')}
   <form data-form="expense" data-live="expense" data-id="${e ? e.id : ''}" autocomplete="off">
     <div class="field"><span class="flabel">${L('কিসের খরচ?', 'What for?')}</span><div class="chips">${EXPENSE_CATS.map(k =>
       `<label class="chip"><input type="radio" name="category" value="${k}" ${k === v.category ? 'checked' : ''}><span>${cicon(k)} ${cl(k)}</span></label>`).join('')}</div></div>
     <label class="field"><span>${L('কোন প্রোডাক্টের জন্য?', 'For which product?')}</span>
       <select class="input" name="productId"><option value="">${L('সব প্রোডাক্টে ভাগ হবে (অটো)', 'Split across all products (auto)')}</option>
       ${b.products.map(p => `<option value="${p.id}" ${p.id === v.productId ? 'selected' : ''}>${p.emoji || ''} ${esc(p.name)}</option>`).join('')}</select></label>
-    <label class="check"><input type="checkbox" name="perUnit" ${v.perUnit ? 'checked' : ''}><span>${L('প্রতি ইউনিট হিসেবে দেব (যেমন প্যাকেজিং ৳20 × সব ইউনিট)', 'Enter per unit (e.g. packaging ৳20 × all units)')}</span></label>
-    <label class="field"><span data-amt-label></span>${moneyInput('amount', v.perUnit ? v.perUnitAmount : v.amount)}</label>
+    <div class="field"><span class="flabel">${L('কিভাবে টাকা লিখবেন?', 'How do you want to enter it?')}</span>
+      ${seg('mode', [['total', L('মোট টাকা', 'Total amount')], ['unit', L('প্রতি ইউনিটে', 'Per unit')]], v.perUnit && hasUnits ? 'unit' : 'total', hasUnits ? [] : ['unit'])}
+      <div class="hint">${hasUnits ? L('যেমন প্যাকেজিং প্রতিটায় ৳20 হলে "প্রতি ইউনিটে" বেছে ২০ লিখুন, app নিজে সব ইউনিটে গুণ করবে।', 'E.g. packaging ৳20 each: pick "Per unit", type 20, the app multiplies for you.') : L('"প্রতি ইউনিটে" চালু হবে প্রোডাক্ট যোগ করলে (ইউনিট কয়টা জানা দরকার)।', '"Per unit" unlocks once you add a product (the app needs the unit count).')}</div></div>
+    <label class="field"><span data-amt-label></span>${moneyInput('amount', v.perUnit && hasUnits ? v.perUnitAmount : v.amount)}</label>
     <div class="preview" data-preview></div>
     <div class="row2">
       <label class="field"><span>${L('তারিখ', 'Date')}</span><input class="input" type="date" name="date" value="${esc(v.date || today())}"></label>
@@ -900,6 +927,23 @@ function toast(msg, kind = '') {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.className = 'toast'; }, 2400);
 }
+// ভুল হলে ফর্মের ওপরেই লাল বক্স + ঘর হাইলাইট (কীবোর্ডের নিচে টোস্ট লুকিয়ে যেত)
+function fail(f, msg, field) {
+  $$('.form-error', f).forEach(n => n.remove());
+  $$('.invalid', f).forEach(n => n.classList.remove('invalid'));
+  const box = document.createElement('div');
+  box.className = 'form-error';
+  box.setAttribute('role', 'alert');
+  box.textContent = msg;
+  f.insertBefore(box, f.firstChild);
+  const input = field && f.elements[field];
+  if (input) {
+    const wrap = input.closest ? input.closest('.field') : null;
+    if (wrap) wrap.classList.add('invalid');
+    try { input.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+  }
+  box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
 function commit(msg) {
   save();
   render();
@@ -1018,8 +1062,9 @@ const FORMS = {
     const name = f.elements.name.value.trim() || L('আমার ব্যবসা', 'My business');
     const capital = toNum(f.elements.capital.value);
     const target = toNum(f.elements.target.value);
-    if (capital <= 0) return toast(L('মূলধন দিন', 'Enter capital'), 'danger');
-    if (target <= 0) return toast(L('টার্গেট দিন', 'Enter a target'), 'danger');
+    if (capital <= 0) return fail(f, L('মূলধন লিখুন। যেমন: 10000', 'Enter your capital, e.g. 10000'), 'capital');
+    if (target <= 0) return fail(f, L('টার্গেট লিখুন। যেমন: 12000', 'Enter a target, e.g. 12000'), 'target');
+    if (target <= capital) return fail(f, L(`টার্গেট (${fmt(target)}) মূলধনের (${fmt(capital)}) চেয়ে বেশি হতে হবে, নইলে লাভ হিসাব হবে না। নিচের "+20% লাভ" বাটনে ট্যাপ করতে পারেন।`, `Target (${fmt(target)}) must be higher than capital (${fmt(capital)}). Try a "+20% profit" button.`), 'target');
     const data = {
       name, capital, target,
       returnRate: clamp(toNum(f.elements.returnRate.value), 0, 90),
@@ -1036,23 +1081,25 @@ const FORMS = {
       state.batches.push(b);
       state.activeBatchId = b.id;
       tab = 'home';
+      const first = !sheetOpen;
       closeSheet();
-      commit(L('ব্যাচ তৈরি হয়েছে 🎉', 'Batch created 🎉'));
+      commit(L('ব্যাচ তৈরি হয়েছে 🎉 এবার ধাপ ২', 'Batch created 🎉 Now step 2'));
+      if (first) openSheet(productForm(null)); // প্রথমবার হলে সরাসরি প্রোডাক্ট যোগের ধাপে
     }
   },
   product: f => {
     const b = activeBatch();
     const name = f.elements.name.value.trim();
     const pc = productCalc(f);
-    if (!name) return toast(L('প্রোডাক্টের নাম দিন', 'Enter a product name'), 'danger');
-    if (pc.units <= 0) return toast(L('ইউনিট সংখ্যা দিন', 'Enter the number of units'), 'danger');
-    if (pc.input <= 0) return toast(L('কেনা দাম দিন', 'Enter the purchase price'), 'danger');
-    if (pc.cur !== 'BDT' && pc.rate <= 0) return toast(L('টাকার রেট দিন', 'Enter the taka rate'), 'danger');
+    if (!name) return fail(f, L('প্রোডাক্টের নাম লিখুন। যেমন: মিনি ফ্যান', 'Enter a product name, e.g. Mini fan'), 'name');
+    if (pc.units <= 0) return fail(f, L('কয়টা ইউনিট কিনেছেন সেটা লিখুন। যেমন: 5', 'Enter how many units you bought, e.g. 5'), 'units');
+    if (pc.input <= 0) return fail(f, L('কেনা দাম লিখুন', 'Enter the purchase price'), 'priceInput');
+    if (pc.cur !== 'BDT' && pc.rate <= 0) return fail(f, L(`১ ${curName(pc.cur)} কত টাকা সেটা লিখুন`, `Enter how many taka 1 ${curName(pc.cur)} is`), 'rate');
     const id = f.dataset.id;
     const existing = id && b.products.find(p => p.id === id);
     if (existing) {
       const sold = b.sales.filter(s => s.productId === id && s.status !== 'returned').reduce((a, s) => a + toNum(s.qty), 0);
-      if (pc.units < sold) return toast(L(`${cnt(sold)} আগেই বিক্রি হয়েছে, এর কম দেওয়া যাবে না`, `${sold} already sold, can't go below that`), 'danger');
+      if (pc.units < sold) return fail(f, L(`${cnt(sold)} আগেই বিক্রি/পেন্ডিং আছে, এর কম দেওয়া যাবে না`, `${sold} already sold or pending, can't go below that`), 'units');
     }
     const p = existing || { id: uid(), createdAt: Date.now() };
     Object.assign(p, {
@@ -1067,12 +1114,12 @@ const FORMS = {
   },
   expense: f => {
     const b = activeBatch();
-    const perUnit = f.elements.perUnit.checked;
+    const perUnit = f.elements.mode.value === 'unit';
     const productId = f.elements.productId.value;
     const input = toNum(f.elements.amount.value);
-    if (input <= 0) return toast(L('টাকার পরিমাণ দিন', 'Enter an amount'), 'danger');
+    if (input <= 0) return fail(f, L('কত টাকা খরচ হয়েছে লিখুন', 'Enter how much it cost'), 'amount');
     const units = expenseUnits(b, productId);
-    if (perUnit && units <= 0) return toast(L('ইউনিট নেই, আগে প্রোডাক্ট যোগ করুন', 'No units yet, add a product first'), 'danger');
+    if (perUnit && units <= 0) return fail(f, L('"প্রতি ইউনিটে" দিতে হলে আগে প্রোডাক্ট যোগ করতে হবে, নইলে ইউনিট কয়টা app জানে না। "মোট টাকা" বেছে নিন, অথবা আগে প্রোডাক্ট যোগ করুন।', 'Per-unit needs a product first so the app knows the unit count. Pick "Total" or add a product first.'), 'amount');
     const id = f.dataset.id;
     const e = (id && b.expenses.find(x => x.id === id)) || { id: uid(), createdAt: Date.now() };
     Object.assign(e, {
@@ -1092,12 +1139,12 @@ const FORMS = {
     const qty = Math.floor(toNum(f.elements.qty.value));
     const price = toNum(f.elements.price.value);
     const status = f.elements.status.value || 'delivered';
-    if (!productId) return toast(L('প্রোডাক্ট বাছুন', 'Pick a product'), 'danger');
-    if (qty <= 0) return toast(L('কয়টা বিক্রি হলো দিন', 'Enter the quantity'), 'danger');
+    if (!productId) return fail(f, L('কোন প্রোডাক্ট বিক্রি হলো বাছুন', 'Pick the product that was sold'), 'productId');
+    if (qty <= 0) return fail(f, L('কয়টা বিক্রি হলো লিখুন (কমপক্ষে ১)', 'Enter how many were sold (at least 1)'), 'qty');
     if (status !== 'returned') {
-      if (price <= 0) return toast(L('দাম দিন', 'Enter a price'), 'danger');
+      if (price <= 0) return fail(f, L('প্রতিটা কত টাকায় বেচলেন লিখুন', 'Enter the price per unit'), 'price');
       const avail = availableFor(c, productId, existing);
-      if (qty > avail) return toast(L(`স্টকে আছে মাত্র ${cnt(avail)}`, `Only ${avail} in stock`), 'danger');
+      if (qty > avail) return fail(f, L(`স্টকে আছে মাত্র ${cnt(avail)}, এর বেশি বিক্রি দেওয়া যাবে না`, `Only ${avail} in stock`), 'qty');
     }
     const s = existing || { id: uid(), createdAt: Date.now(), cod: toNum(b.codRate) };
     Object.assign(s, {
@@ -1112,7 +1159,7 @@ const FORMS = {
   budget: f => {
     const vals = Object.fromEntries(BUDGET_KEYS.map(k => [k, clamp(toNum(f.elements[k].value), 0, 100)]));
     const total = sum(Object.values(vals));
-    if (Math.abs(total - 100) > 0.01) return toast(L(`মোট ১০০% হতে হবে (এখন ${pct(total)})`, `Must total 100% (now ${pct(total)})`), 'danger');
+    if (Math.abs(total - 100) > 0.01) return fail(f, L(`সব মিলিয়ে ঠিক ১০০% হতে হবে (এখন ${pct(total)})`, `Must total exactly 100% (now ${pct(total)})`));
     activeBatch().budget = vals;
     closeSheet();
     commit(L('বাজেট সেভ হয়েছে', 'Budget saved'));
@@ -1137,6 +1184,10 @@ const LIVE = {
   product: f => {
     const pc = productCalc(f);
     $('[data-cur]', f).textContent = CUR[pc.cur];
+    $('[data-price-label]', f).textContent = pc.mode === 'unit'
+      ? L('২. একটা ইউনিটের কেনা দাম কত?', '2. What did ONE unit cost?')
+      : L('২. সব ইউনিট মিলিয়ে মোট কত দিয়েছেন?', '2. What did ALL units cost in total?');
+    f.elements.priceInput.placeholder = pc.mode === 'unit' ? L('যেমন: 1000 (একটার দাম)', 'e.g. 1000 (price of one)') : L('যেমন: 5000 (সবগুলোর মোট)', 'e.g. 5000 (for all)');
     $('[data-rate-wrap]', f).classList.toggle('hidden', pc.cur === 'BDT');
     f.elements.rate.placeholder = L(`১ ${curName(pc.cur)} = কত টাকা?`, `1 ${curName(pc.cur)} = how many taka?`);
     if (pc.cur !== 'BDT' && !f.elements.rate.value && state.settings.rates[pc.cur]) f.elements.rate.value = state.settings.rates[pc.cur];
@@ -1147,14 +1198,15 @@ const LIVE = {
   },
   expense: f => {
     const b = activeBatch();
-    const perUnit = f.elements.perUnit.checked;
+    const perUnit = f.elements.mode.value === 'unit';
     const pid = f.elements.productId.value;
-    $('[data-amt-label]', f).textContent = perUnit ? L('প্রতি ইউনিটে কত টাকা', 'Amount per unit') : L('কত টাকা', 'Amount');
     const amt = toNum(f.elements.amount.value);
     const units = expenseUnits(b, pid);
     const cat = f.elements.category.value;
+    $('[data-amt-label]', f).textContent = perUnit ? L(`প্রতিটা ইউনিটে কত টাকা? (${cnt(units)} ইউনিট আছে)`, `Cost per unit (you have ${units} units)`) : L('মোট কত টাকা খরচ হয়েছে?', 'Total cost');
+    f.elements.amount.placeholder = perUnit ? L('যেমন: 20', 'e.g. 20') : L('যেমন: 1500', 'e.g. 1500');
     let html = '';
-    if (perUnit && amt > 0) html += `${fmt(amt)} × ${units} ${L('ইউনিট', 'units')} = <b>${fmt(amt * units)}</b><br>`;
+    if (perUnit && amt > 0) html += `${fmt(amt)} × ${units} ${L('ইউনিট', 'units')} = <b>${fmt(amt * units)}</b> ${L('মোট খরচ', 'total')}<br>`;
     if (!pid) {
       const allW = b.products.length && b.products.every(p => toNum(p.weight) > 0);
       const by = cat === 'shipping' && allW ? L('ওজন', 'weight') : (b.allocBy === 'units' ? L('ইউনিট সংখ্যা', 'unit count') : L('কেনা দাম', 'purchase value'));
@@ -1316,6 +1368,10 @@ document.addEventListener('submit', e => {
 });
 const onLive = e => {
   const f = e.target.closest && e.target.closest('form[data-live]');
+  if (f && e.type === 'input') {
+    const w = e.target.closest('.field');
+    if (w) w.classList.remove('invalid');
+  }
   if (f) runLive(f, e.target);
 };
 document.addEventListener('input', onLive);

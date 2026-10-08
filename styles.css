@@ -29,14 +29,14 @@
   --hero-shadow: 0 16px 34px -18px rgba(63, 66, 46, .6);
   --shadow: 0 1px 2px rgba(63, 50, 20, .04), 0 6px 20px rgba(63, 50, 20, .05);
 
-  --c-product: #4F5436;
-  --c-shipping: #7C97A0;
-  --c-ads: #D78B30;
-  --c-packaging: #C0705D;
-  --c-courier: #8C9B5E;
-  --c-returns: #B4452E;
-  --c-other: #9F886F;
-  --c-reserve: #6D8F4A;
+  --c-product: #6B7048;
+  --c-shipping: #6FA3A8;
+  --c-ads: #E3A04A;
+  --c-packaging: #D4807A;
+  --c-courier: #A9B97C;
+  --c-returns: #C0553E;
+  --c-other: #B39C84;
+  --c-reserve: #7FA463;
 
   --radius: 22px;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Hind Siliguri", "Noto Sans Bengali", "Kohinoor Bangla", "Bangla Sangam MN", sans-serif;
@@ -432,3 +432,39 @@ details.more[open] summary::before { content: "− "; }
 .top-actions { display: flex; gap: 8px; flex: none; }
 .icon-btn.txt { width: auto; min-width: 44px; padding: 0 12px; font-weight: 800; font-size: 13.5px; color: var(--text); letter-spacing: .02em; }
 .welcome-top { display: flex; justify-content: space-between; align-items: flex-start; }
+
+/* ===== ফর্মের ভুল দেখানো ===== */
+.form-error {
+  background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(180, 69, 46, .35);
+  border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; font-size: 14px; font-weight: 600; line-height: 1.55;
+}
+.field.invalid > .input, .field.invalid .input { border-color: var(--danger); background: var(--danger-soft); }
+.field.invalid > span:first-child { color: var(--danger); }
+.seg label.off { opacity: .45; }
+.seg label.off span { cursor: not-allowed; }
+
+/* ===== ধাপে ধাপে গাইড ===== */
+.steps { margin: 14px 0; background: linear-gradient(180deg, #FFFBF2 0%, #FBF1DC 100%); }
+.steplist { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.steplist li { display: flex; gap: 12px; align-items: flex-start; padding: 10px 8px; border-radius: 16px; }
+.steplist .sn {
+  width: 28px; height: 28px; border-radius: 50%; flex: none; display: grid; place-items: center;
+  font-weight: 800; font-size: 14px; background: var(--surface-2); color: var(--muted);
+}
+.steplist .sb { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.steplist .sb b { font-size: 14.5px; }
+.steplist .sb small { color: var(--muted); line-height: 1.45; }
+.steplist li.done .sn { background: var(--good); color: #fff; }
+.steplist li.done .sb b { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(110, 101, 82, .45); }
+.steplist li.now { background: var(--warn-soft); }
+.steplist li.now .sn { background: var(--apricot); color: #fff; }
+.steplist li.now .btn { align-self: flex-start; margin-top: 8px; }
+.steplist li.later { opacity: .6; }
+
+/* ===== আরও নরম, আরও সুন্দর ===== */
+body { background: radial-gradient(1200px 500px at 50% -120px, #FCEFD2 0%, var(--bg) 60%); background-attachment: fixed; }
+.card { border-radius: 24px; border-color: #EBDDBE; }
+.btn.primary { background: linear-gradient(160deg, #4A4E35, #3F422E); }
+.hero { background: linear-gradient(150deg, #3F422E 0%, #4D5236 55%, #6A5D3A 100%); }
+.hero-bar span { background: linear-gradient(90deg, #E3A04A, #D78B30); }
+.input { border-radius: 16px; }
