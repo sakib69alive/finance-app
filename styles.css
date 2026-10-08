@@ -489,3 +489,24 @@ body { background: radial-gradient(1200px 500px at 50% -120px, #FCEFD2 0%, var(-
 @keyframes slideL { from { opacity: .3; transform: translateX(36px); } to { opacity: 1; transform: none; } }
 @keyframes slideR { from { opacity: .3; transform: translateX(-36px); } to { opacity: 1; transform: none; } }
 .home-btn { flex: none; } .home-btn .logo-sm { display: block; width: 36px; height: 36px; }
+
+/* ===== ডিলিট বাটন, আনডু, ইনস্টল ===== */
+.lwrap { display: flex; align-items: stretch; }
+.lwrap + .lwrap { border-top: 1px solid var(--border); }
+.lwrap .lrow { flex: 1; min-width: 0; width: auto; }
+.lwrap .lrow + .lrow { border-top: 0; }
+.rowdel { flex: none; width: 46px; display: grid; place-items: center; color: var(--danger); opacity: .75; }
+.rowdel:active { background: var(--danger-soft); opacity: 1; }
+.rowdel.inline { width: 40px; height: 36px; border-radius: 12px; background: var(--danger-soft); opacity: 1; }
+.pcard { cursor: pointer; }
+.pc-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; font-size: 12.5px; }
+.toast.has-act { pointer-events: auto; display: flex; align-items: center; gap: 12px; }
+.toast-act { color: var(--apricot); font-weight: 800; padding: 6px 4px; white-space: nowrap; }
+.install { margin: 14px 0; background: linear-gradient(160deg, #FFF6E2, #F8E6C4); }
+.inst-row { display: flex; gap: 12px; align-items: flex-start; }
+.inst-ic { font-size: 28px; line-height: 1; }
+.inst-row .sb { display: flex; flex-direction: column; gap: 2px; }
+.inst-row small { color: var(--muted); }
+.howlist { list-style: none; display: flex; flex-direction: column; gap: 12px; margin: 6px 0 14px; }
+.howlist li { display: flex; gap: 12px; align-items: flex-start; line-height: 1.55; }
+.howlist .sn { width: 28px; height: 28px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 800; font-size: 14px; background: var(--apricot); color: #fff; }

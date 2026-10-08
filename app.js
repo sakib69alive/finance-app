@@ -390,6 +390,7 @@ function ring(p) {
 const stat = (label, value, sub, cls = '') => `<div class="stat"><small>${label}</small><b class="${cls}">${value}</b><em>${sub}</em></div>`;
 const seg = (name, opts, val, disabled = []) => `<div class="seg">${opts.map(([v, l]) =>
   `<label class="${disabled.includes(v) ? 'off' : ''}"><input type="radio" name="${name}" value="${v}" ${v === val ? 'checked' : ''} ${disabled.includes(v) ? 'disabled' : ''}><span>${l}</span></label>`).join('')}</div>`;
+const delBtn = (action, id) => `<button type="button" class="rowdel" data-action="${action}" data-id="${id}" aria-label="${L('ডিলিট', 'Delete')}">${icon('trash', 18)}</button>`;
 const hintLine = t => `<div class="hint">${t}</div>`;
 const sheetHead = (title, sub = '') => `<div class="sheet-head"><h3>${title}${sub ? `<small>${sub}</small>` : ''}</h3>
   <button type="button" class="icon-btn" data-action="close-sheet" aria-label="${L('বন্ধ করুন', 'Close')}">${icon('x', 20)}</button></div>`;
@@ -435,7 +436,7 @@ function batchForm(b) {
         <div class="hint">${L('সব প্রোডাক্টে ওজন দিলে শিপিং খরচ ওজন অনুযায়ী ভাগ হবে।', 'If every product has a weight, shipping is split by weight.')}</div></div>
     </details>
     <button class="btn primary block" type="submit">${isNew ? L('শুরু করি →', 'Get started →') : L('সেভ করুন', 'Save')}</button>
-    ${!isNew && state.batches.length > 1 ? `<button type="button" class="btn danger block mt8" data-action="delete-batch" data-id="${b.id}">${icon('trash', 18)} ${L('এই ব্যাচ ডিলিট', 'Delete this batch')}</button>` : ''}
+    ${!isNew ? `<button type="button" class="btn danger block mt8" data-action="delete-batch" data-id="${b.id}">${icon('trash', 18)} ${L('এই ব্যাচ ডিলিট', 'Delete this batch')}</button>` : ''}
   </form>`;
 }
 
@@ -465,6 +466,7 @@ function viewHome(b, c) {
   </section>
 
   ${stepsCard(b, c)}
+  ${installCard()}
 
   <div class="quick">
     <button type="button" class="qbtn" data-action="add-expense"><span class="qi">${icon('receipt')}</span>${L('খরচ', 'Cost')}</button>
@@ -566,7 +568,7 @@ function viewProducts(b, c) {
   const cards = c.items.map(x => {
     const soldW = x.units ? x.delivered / x.units * 100 : 0;
     const pendW = x.units ? x.pending / x.units * 100 : 0;
-    return `<button type="button" class="pcard" data-action="open-product" data-id="${x.p.id}">
+    return `<div class="pcard" role="button" tabindex="0" data-action="open-product" data-id="${x.p.id}">
       <div class="pc-head">
         <span class="avatar">${x.p.emoji || '📦'}</span>
         <span class="pmain"><b>${esc(x.p.name)}</b><small>${L('স্টক', 'Stock')} ${x.remaining}/${x.units} · ${L('বিক্রি', 'Sold')} ${x.delivered}${x.pending ? ` · ${L('পথে', 'In transit')} ${x.pending}` : ''}</small></span>
@@ -578,7 +580,8 @@ function viewProducts(b, c) {
         <div><small>${L('ইউনিটে লাভ', 'Profit/unit')}</small><b class="${x.unitProfit >= 0 ? 'pos' : 'neg'}">${fmt(x.unitProfit)}</b></div>
       </div>
       <div class="stockbar"><span class="s-sold" style="width:${soldW}%"></span><span class="s-pend" style="width:${pendW}%"></span></div>
-    </button>`;
+      <div class="pc-actions"><span class="muted">${L('ট্যাপ করে বিস্তারিত দেখুন', 'Tap for details')}</span>${delBtn('delete-product', x.p.id).replace('class="rowdel"', 'class="rowdel inline"')}</div>
+    </div>`;
   }).join('');
   return `<div class="page-head"><h1>${L('প্রোডাক্ট', 'Products')}</h1>
       <button type="button" class="btn primary sm" data-action="add-product">${icon('plus', 18)} ${L('নতুন', 'New')}</button></div>
@@ -711,12 +714,12 @@ function viewExpenses(b, c) {
   const list = [...b.expenses].sort(byDateDesc).filter(e => expFilter === 'all' || e.category === expFilter);
   const used = EXPENSE_CATS.filter(k => b.expenses.some(e => e.category === k));
   const rows = list.map(e => `
-    <button type="button" class="lrow" data-action="edit-expense" data-id="${e.id}">
+    <div class="lwrap"><button type="button" class="lrow" data-action="edit-expense" data-id="${e.id}">
       <span class="lic dotted" style="--c:var(--c-${e.category})">${cicon(e.category)}</span>
       <span class="lmain"><b>${esc(e.note || cl(e.category))}</b>
         <small>${cl(e.category)} · ${esc(pname(e.productId))}</small></span>
       <span class="lend"><b>${fmt(toNum(e.amount))}</b><small>${fmtDate(e.date)}</small></span>
-    </button>`).join('');
+    </button>${delBtn('delete-expense', e.id)}</div>`).join('');
   return `<div class="page-head"><h1>${L('খরচ', 'Costs')}</h1>
       <button type="button" class="btn primary sm" data-action="add-expense">${icon('plus', 18)} ${L('খরচ', 'Cost')}</button></div>
     <div class="minis">
@@ -771,12 +774,12 @@ function viewSales(b, c) {
   const rows = list.map(s => {
     const p = pmap.get(s.productId);
     const gross = Math.max(0, toNum(s.qty) * toNum(s.price) - toNum(s.discount));
-    return `<button type="button" class="lrow" data-action="edit-sale" data-id="${s.id}">
+    return `<div class="lwrap"><button type="button" class="lrow" data-action="edit-sale" data-id="${s.id}">
       <span class="lic">${p ? p.emoji || '📦' : '❔'}</span>
       <span class="lmain"><b>${esc(p ? p.name : L('মুছে ফেলা প্রোডাক্ট', 'Deleted product'))} × ${toNum(s.qty)}</b>
         <small><span class="badge ${s.status}">${statusLabel(s.status)}</span> ${esc(s.note || '')}</small></span>
       <span class="lend"><b class="${s.status === 'returned' ? 'neg' : ''}">${s.status === 'returned' ? fmt(-toNum(s.returnCost)) : fmt(gross)}</b><small>${fmtDate(s.date)}</small></span>
-    </button>`;
+    </button>${delBtn('delete-sale', s.id)}</div>`;
   }).join('');
   return `<div class="page-head"><h1>${L('বিক্রি', 'Sales')}</h1>
       <button type="button" class="btn primary sm" data-action="add-sale" ${b.products.length ? '' : 'disabled'}>${icon('plus', 18)} ${L('বিক্রি', 'Sale')}</button></div>
@@ -847,6 +850,11 @@ function viewMore(b, c) {
       ${mi('batches', 'layers', L('সব ব্যাচ', 'All batches'), L(`${cnt(state.batches.length)} ব্যাচ · নতুন ব্যাচ শুরু করুন`, `${state.batches.length} batch(es) · start a new one`))}
       ${mi('edit-budget', 'pie', L('বাজেট পরিকল্পনা', 'Budget plan'), L('কোন খাতে মূলধনের কত % রাখবেন', 'How much of capital goes where'))}
       ${mi('calculator', 'calc', L('কেনার আগে হিসাব', 'Plan before buying'), L('প্রোডাক্ট আনার আগেই খরচ ও দাম দেখুন', 'See cost and price before you import'))}
+    </div>
+    <div class="section-title">${L('অ্যাপ', 'App')}</div>
+    <div class="menu">
+      ${isStandalone() ? '' : mi('install-app', 'download', L('ফোনে ইনস্টল করুন', 'Install on phone'), L('একবার ইনস্টল করলে অফলাইনে চলবে', 'Works offline once installed'))}
+      ${mi('guide', 'spark', L('কিভাবে ব্যবহার করবেন', 'How to use'), L('৬টা সহজ কথায় পুরো অ্যাপ', 'The whole app in six lines'))}
     </div>
     <div class="section-title">${L('ডেটা', 'Data')}</div>
     <div class="menu">
@@ -937,12 +945,28 @@ window.addEventListener('popstate', () => {
 });
 
 let toastTimer;
-function toast(msg, kind = '') {
+function toast(msg, kind = '', act = null) {
   const t = $('#toast');
   t.textContent = msg;
-  t.className = 'toast show ' + kind;
+  if (act) {
+    const bt = document.createElement('button');
+    bt.type = 'button';
+    bt.className = 'toast-act';
+    bt.textContent = act.label;
+    bt.onclick = () => { t.className = 'toast'; act.fn(); };
+    t.appendChild(bt);
+  }
+  t.className = 'toast show ' + kind + (act ? ' has-act' : '');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.className = 'toast'; }, 2400);
+  toastTimer = setTimeout(() => { t.className = 'toast'; }, act ? 7000 : 2400);
+}
+// মুছলে সাথে সাথে "ফিরিয়ে আনুন" বাটন আসে, তাই ভুল করে ডিলিট হলেও ভয় নেই
+function undoable(msg, mutate) {
+  const snap = JSON.stringify(state);
+  mutate();
+  save();
+  render();
+  toast(msg, '', { label: L('↶ ফিরিয়ে আনুন', '↶ Undo'), fn: () => { state = migrate(JSON.parse(snap)); commit(L('ফিরিয়ে আনা হয়েছে', 'Restored')); } });
 }
 // ভুল হলে ফর্মের ওপরেই লাল বক্স + ঘর হাইলাইট (কীবোর্ডের নিচে টোস্ট লুকিয়ে যেত)
 function fail(f, msg, field) {
@@ -990,11 +1014,12 @@ const ACTIONS = {
     const ne = b.expenses.filter(e => e.productId === p.id).length;
     const extra = ns || ne ? L(`\nএর সাথে ${cnt(ns)} বিক্রি আর ${cnt(ne)} খরচও মুছে যাবে।`, `\nThis also deletes ${ns} sale(s) and ${ne} cost(s).`) : '';
     if (!confirm(L(`"${p.name}" ডিলিট করবেন?`, `Delete "${p.name}"?`) + extra)) return;
-    b.products = b.products.filter(q => q.id !== p.id);
-    b.sales = b.sales.filter(s => s.productId !== p.id);
-    b.expenses = b.expenses.filter(e => e.productId !== p.id);
-    closeSheet();
-    commit(DELETED());
+    if (sheetOpen) closeSheet();
+    undoable(DELETED(), () => {
+      b.products = b.products.filter(q => q.id !== p.id);
+      b.sales = b.sales.filter(s => s.productId !== p.id);
+      b.expenses = b.expenses.filter(e => e.productId !== p.id);
+    });
   },
   'save-price': el => {
     const f = el.closest('form');
@@ -1015,11 +1040,9 @@ const ACTIONS = {
   'add-expense': el => openSheet(expenseForm(null, el.dataset.product)),
   'edit-expense': el => openSheet(expenseForm(activeBatch().expenses.find(e => e.id === el.dataset.id))),
   'delete-expense': el => {
-    if (!confirm(L('এই খরচ ডিলিট করবেন?', 'Delete this cost?'))) return;
     const b = activeBatch();
-    b.expenses = b.expenses.filter(e => e.id !== el.dataset.id);
-    closeSheet();
-    commit(DELETED());
+    if (sheetOpen) closeSheet();
+    undoable(DELETED(), () => { b.expenses = b.expenses.filter(e => e.id !== el.dataset.id); });
   },
   'exp-filter': el => { expFilter = el.dataset.cat; render(); },
 
@@ -1029,11 +1052,9 @@ const ACTIONS = {
   },
   'edit-sale': el => openSheet(saleForm(activeBatch().sales.find(s => s.id === el.dataset.id))),
   'delete-sale': el => {
-    if (!confirm(L('এই বিক্রি ডিলিট করবেন?', 'Delete this sale?'))) return;
     const b = activeBatch();
-    b.sales = b.sales.filter(s => s.id !== el.dataset.id);
-    closeSheet();
-    commit(DELETED());
+    if (sheetOpen) closeSheet();
+    undoable(DELETED(), () => { b.sales = b.sales.filter(s => s.id !== el.dataset.id); });
   },
   'qty-step': el => {
     const f = el.closest('form');
@@ -1048,10 +1069,12 @@ const ACTIONS = {
   'delete-batch': el => {
     const b = state.batches.find(x => x.id === el.dataset.id);
     if (!b || !confirm(L(`"${b.name}" ব্যাচের সব হিসাব মুছে যাবে। ডিলিট করবেন?`, `All records in "${b.name}" will be deleted. Continue?`))) return;
-    state.batches = state.batches.filter(x => x.id !== b.id);
-    if (state.activeBatchId === b.id) state.activeBatchId = state.batches[0] ? state.batches[0].id : null;
-    closeSheet();
-    commit(L('ব্যাচ ডিলিট হয়েছে', 'Batch deleted'));
+    if (sheetOpen) closeSheet();
+    undoable(L('ব্যাচ ডিলিট হয়েছে', 'Batch deleted'), () => {
+      state.batches = state.batches.filter(x => x.id !== b.id);
+      if (state.activeBatchId === b.id) state.activeBatchId = state.batches[0] ? state.batches[0].id : null;
+      tab = 'home'; trail = ['home'];
+    });
   },
   'target-pct': el => {
     const f = el.closest('form');
@@ -1068,6 +1091,15 @@ const ACTIONS = {
     runLive(f, null);
   },
   calculator: () => openSheet(calcForm(activeBatch())),
+  'install-app': async () => {
+    if (deferredInstall) {
+      deferredInstall.prompt();
+      try { await deferredInstall.userChoice; } catch (e) { /* ignore */ }
+      deferredInstall = null;
+      render();
+    } else openSheet(installHelp());
+  },
+  guide: () => openSheet(guideSheet()),
   export: () => exportBackup(),
   import: () => $('#import-file').click(),
 };
@@ -1322,6 +1354,43 @@ const LIVE = {
 function runLive(f, t) {
   const fn = LIVE[f.dataset.live];
   if (fn) fn(f, t);
+}
+
+/* ---------- ফোনে ইনস্টল (অফলাইন অ্যাপ) ---------- */
+let deferredInstall = null;
+const isStandalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; if (!sheetOpen) render(); });
+window.addEventListener('appinstalled', () => { deferredInstall = null; render(); toast(L('ইনস্টল হয়ে গেছে! এখন ইন্টারনেট ছাড়াই চলবে 🎉', 'Installed! Works offline now 🎉')); });
+function installCard() {
+  if (isStandalone()) return '';
+  return `<section class="card install">
+    <div class="inst-row"><span class="inst-ic">📲</span><div class="sb"><b>${L('ফোনে অ্যাপ হিসেবে রাখুন', 'Keep it as a phone app')}</b>
+      <small>${L('একবার ইনস্টল করলে ইন্টারনেট ছাড়াই চলবে, হোম স্ক্রিন থেকে খুলবেন।', 'Install once, then it works offline from your home screen.')}</small></div></div>
+    <button type="button" class="btn primary block mt8" data-action="install-app">${icon('download', 18)} ${L('ইনস্টল করুন (অফলাইনে চলবে)', 'Install (works offline)')}</button>
+  </section>`;
+}
+function installHelp() {
+  const secure = location.protocol === 'https:' || location.hostname === 'localhost';
+  const steps = isIOS()
+    ? [L('Safari দিয়ে এই পেজ খুলুন (অন্য ব্রাউজারে হবে না)', 'Open this page in Safari (other browsers will not work)'), L('নিচের মাঝের <b>Share</b> বাটনে (⬆️) ট্যাপ করুন', 'Tap the <b>Share</b> button (⬆️) at the bottom'), L('নিচে স্ক্রল করে <b>Add to Home Screen</b> চাপুন', 'Scroll and tap <b>Add to Home Screen</b>'), L('<b>Add</b> চাপুন। হোম স্ক্রিনে হিসাবী আইকন চলে আসবে', 'Tap <b>Add</b>. The Hisabi icon appears on your home screen')]
+    : [L('Chrome দিয়ে এই পেজ খুলুন', 'Open this page in Chrome'), L('ওপরের ডানের <b>⋮</b> মেনুতে ট্যাপ করুন', 'Tap the <b>⋮</b> menu at the top right'), L('<b>Install app</b> বা <b>Add to Home screen</b> চাপুন', 'Tap <b>Install app</b> or <b>Add to Home screen</b>'), L('<b>Install</b> চাপুন। হোম স্ক্রিনে হিসাবী আইকন চলে আসবে', 'Tap <b>Install</b>. The Hisabi icon appears on your home screen')];
+  return `${sheetHead(L('ফোনে ইনস্টল করুন', 'Install on your phone'), L('একবার করলেই অফলাইনে চলবে', 'Do it once, then it works offline'))}
+    ${secure ? '' : `<div class="form-error">${L('এই পেজ ইন্টারনেটের লিংকে (https) খুলুন। ফাইল থেকে সরাসরি খুললে ইনস্টল হয় না। README দেখুন।', 'Open this from the https web link. Installing does not work from a local file. See the README.')}</div>`}
+    <ol class="howlist">${steps.map((t, i) => `<li><span class="sn">${i + 1}</span><div>${t}</div></li>`).join('')}</ol>
+    <p class="hint">${L('ইনস্টলের পর ডেটা শুধু এই ফোনেই থাকে। মাঝে মাঝে "আরও" থেকে ব্যাকআপ নিন।', 'After installing, data stays on this phone only. Back up now and then from "More".')}</p>`;
+}
+function guideSheet() {
+  const items = [
+    [L('মূলধন ও টার্গেট', 'Capital and target'), L('কত টাকা লাগিয়েছেন আর শেষে কত টাকা বানাতে চান।', 'How much you put in and how much you want to end with.')],
+    [L('প্রোডাক্ট', 'Product'), L('কী কিনেছেন, কয়টা পিস, কত দামে। এটাই প্রতি ইউনিটের খরচের ভিত্তি।', 'What you bought, how many pieces, at what price. This is the base of cost per unit.')],
+    [L('খরচ', 'Costs'), L('অ্যাড, শিপিং, প্যাকেজিং, কুরিয়ার। দিলে প্রতি ইউনিটের আসল খরচ বাড়ে, app নিজে ভাগ করে।', 'Ads, shipping, packaging, courier. The app splits them into the true cost per unit.')],
+    [L('কত দামে বেচবেন', 'What to charge'), L('প্রোডাক্টে ট্যাপ করলে টার্গেট পূরণের দাম দেখাবে, স্লাইডার টেনে দাম বদলে দেখতে পারবেন।', 'Tap a product to see the price that hits your target. Drag the slider to try prices.')],
+    [L('বিক্রি', 'Sales'), L('প্রতিটা অর্ডার লিখুন: ডেলিভারড, পেন্ডিং বা রিটার্ন। লাভ নিজে হিসাব হবে।', 'Log each order: delivered, pending or returned. Profit is worked out for you.')],
+    [L('ভুল হলে', 'Made a mistake?'), L('ডিলিট করার পর নিচে "ফিরিয়ে আনুন" আসে, চাপলেই আগের অবস্থায় ফিরবে। ট্যাবে বাম/ডানে সোয়াইপও করতে পারেন।', 'After deleting, tap "Undo" at the bottom. You can also swipe left/right to switch tabs.')],
+  ];
+  return `${sheetHead(L('কিভাবে ব্যবহার করবেন', 'How to use'), L('৬টা সহজ কথা', 'Six simple things'))}
+    <ol class="howlist">${items.map(([t, d], i) => `<li><span class="sn">${i + 1}</span><div><b>${t}</b><br><span class="muted">${d}</span></div></li>`).join('')}</ol>`;
 }
 
 /* ---------- ব্যাকআপ ---------- */
