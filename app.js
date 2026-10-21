@@ -106,6 +106,7 @@ const statusLabel = s => ({ delivered: L('ডেলিভারড', 'Delivered'
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
+const APP_VERSION = 'v7'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 function newBatch(o = {}) {
   return {
@@ -1016,7 +1017,7 @@ function viewMore(b, c) {
     <div class="section-title">${L('ভাষা', 'Language')}</div>
     <div class="seg">${[['bn', 'বাংলা'], ['en', 'English']].map(([v, l]) =>
       `<button type="button" class="${lang === v ? 'active' : ''}" data-action="lang" data-v="${v}">${l}</button>`).join('')}</div>
-    <p class="about">${L('হিসাবী · সব ডেটা শুধু এই ফোনে থাকে, কোনো সার্ভারে যায় না।<br>ফোন বদলালে বা অ্যাপ মুছলে ডেটা হারাবে, তাই মাঝে মাঝে ব্যাকআপ নিন।',
+    <p class="about">${L('ভার্সন', 'Version')} ${APP_VERSION}<br>${L('হিসাবী · সব ডেটা শুধু এই ফোনে থাকে, কোনো সার্ভারে যায় না।<br>ফোন বদলালে বা অ্যাপ মুছলে ডেটা হারাবে, তাই মাঝে মাঝে ব্যাকআপ নিন।',
       'Hisabi · All data stays on this phone and never goes to a server.<br>Changing phones or deleting the app loses data, so back up now and then.')}</p>`;
 }
 
