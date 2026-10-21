@@ -1,6 +1,6 @@
 // অফলাইনে চালানোর জন্য সার্ভিস ওয়ার্কার।
 // অ্যাপ আপডেট করলে VERSION বাড়ান, তাহলে ফোনে নতুন ফাইল যাবে।
-const VERSION = 'hisabi-v8';
+const VERSION = 'hisabi-v9';
 const ASSETS = [
   './', './index.html', './styles.css', './app.js', './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',
@@ -8,7 +8,14 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(VERSION)
+      .then(c => Promise.all(ASSETS.map(u => fetch(u, { cache: 'reload' }).then(r => {
+        if (!r.ok) throw new Error(u);
+        return c.put(u, r);
+      }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', e => {
@@ -19,18 +26,22 @@ self.addEventListener('activate', e => {
   );
 });
 
-// ক্যাশ থেকে সাথে সাথে দেখায়, পেছনে নেট থাকলে নতুন কপি এনে রাখে
+// নেট থাকলে সবসময় নতুন কপি, না থাকলে ক্যাশ থেকে (অফলাইন)
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
   e.respondWith(
     caches.open(VERSION).then(async cache => {
       const key = req.mode === 'navigate' ? './index.html' : req;
-      const cached = await cache.match(key, { ignoreSearch: true });
-      const fresh = fetch(req)
-        .then(res => { if (res.ok) cache.put(key, res.clone()); return res; })
-        .catch(() => cached);
-      return cached || fresh;
+      try {
+        const res = await fetch(req, { cache: 'no-cache' });
+        if (res.ok) cache.put(key, res.clone());
+        return res;
+      } catch (err) {
+        const cached = await cache.match(key, { ignoreSearch: true });
+        if (cached) return cached;
+        throw err;
+      }
     })
   );
 });
