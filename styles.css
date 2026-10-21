@@ -522,3 +522,6 @@ body { background: radial-gradient(1200px 500px at 50% -120px, #FCEFD2 0%, var(-
 .next-act { background: var(--accent-soft); border-radius: 14px; padding: 11px 12px; font-size: 14.5px; font-weight: 600; line-height: 1.55; margin-bottom: 8px; }
 .next-act small { display: block; color: var(--accent); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 hr.sep { border: 0; border-top: 1.5px dashed var(--border); margin: 10px 0; }
+
+.bar { height: 8px; border-radius: 99px; background: var(--border); overflow: hidden; margin-top: 12px; }
+.bar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }

@@ -106,7 +106,7 @@ const statusLabel = s => ({ delivered: L('ডেলিভারড', 'Delivered'
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v7'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v8'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 function newBatch(o = {}) {
   return {
@@ -873,8 +873,24 @@ function viewExpenses(b, c) {
         <small>${cl(e.category)} · ${esc(pname(e.productId))}</small></span>
       <span class="lend"><b>${fmt(toNum(e.amount))}</b><small>${fmtDate(e.date)}</small></span>
     </button>${delBtn('delete-expense', e.id)}</div>`).join('');
+  const catRows = ['product', ...EXPENSE_CATS, 'returns'].filter(k => c.cat[k] > 0)
+    .map(k => `<div><span>− ${cicon(k)} ${cl(k)}</span><span>${fmt(c.cat[k])}</span></div>`).join('');
+  const usedPct = c.capital > 0 ? clamp(c.spent / c.capital * 100, 0, 100) : 0;
+  const live = `<section class="card">
+      <div class="bignum"><small>${L('এখন হাতে আছে (লাইভ)', 'Cash in hand now (live)')}</small>
+        <b class="${c.cash < 0 ? 'neg' : ''}">${fmt(c.cash)}</b></div>
+      <div class="bar"><i style="width:${usedPct}%"></i></div>
+      <div class="ledger">
+        <div><span>${L('মূলধন', 'Capital')}</span><span>${fmt(c.capital)}</span></div>
+        ${catRows}
+        ${c.revenue > 0 ? `<div><span>+ ${L('বিক্রি থেকে এসেছে', 'From sales')}</span><span>${fmt(c.revenue)}</span></div>` : ''}
+        <div class="total"><span>= ${L('হাতে ক্যাশ', 'Cash in hand')}</span><span>${fmt(c.cash)}</span></div>
+      </div>
+      ${c.cash < 0 ? `<p class="hint neg">${L('মূলধনের চেয়ে বেশি খরচ হয়ে গেছে।', 'You have spent more than your capital.')}</p>` : ''}
+    </section>`;
   return `<div class="page-head"><h1>${L('খরচ', 'Costs')}</h1>
       <button type="button" class="btn primary sm" data-action="add-expense">${icon('plus', 18)} ${L('খরচ', 'Cost')}</button></div>
+    ${live}
     <div class="minis">
       <div class="mini"><small>${L('মোট খরচ', 'Total spent')}</small><b>${fmt(c.spent)}</b></div>
       <div class="mini"><small>${L('প্রোডাক্ট কেনা', 'Products')}</small><b>${fmt(c.cat.product)}</b></div>
