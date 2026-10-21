@@ -110,7 +110,7 @@ const statusLabel = s => ({ delivered: L('ডেলিভারড', 'Delivered'
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v16'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v17'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 function newBatch(o = {}) {
   return {
@@ -183,11 +183,26 @@ async function imgTx(mode, fn) {
     tx.onerror = tx.onabort = () => rej(tx.error || new Error('tx'));
   });
 }
+// লিস্টে ছোট থাম্বনেইল (বড় ছবি ডিকোড করলে সস্তা ফোন ল্যাগ করে)
+const thumbURL = new Map();
+async function makeThumb(id, blob) {
+  try {
+    const bmp = await createImageBitmap(blob, { resizeWidth: 160, resizeQuality: 'medium' });
+    const cv = document.createElement('canvas');
+    cv.width = bmp.width; cv.height = bmp.height;
+    cv.getContext('2d').drawImage(bmp, 0, 0);
+    if (bmp.close) bmp.close();
+    const t = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.8));
+    if (!t) return;
+    if (thumbURL.has(id)) URL.revokeObjectURL(thumbURL.get(id));
+    thumbURL.set(id, URL.createObjectURL(t));
+  } catch (e) { thumbURL.delete(id); }
+}
 function setImgURL(id, blob) {
   if (imgURL.has(id)) URL.revokeObjectURL(imgURL.get(id));
-  if (blob) imgURL.set(id, URL.createObjectURL(blob)); else imgURL.delete(id);
+  if (blob) imgURL.set(id, URL.createObjectURL(blob)); else { imgURL.delete(id); thumbURL.delete(id); }
 }
-async function putImage(id, blob) { await imgTx('readwrite', s => s.put(blob, id)); setImgURL(id, blob); }
+async function putImage(id, blob) { await imgTx('readwrite', s => s.put(blob, id)); setImgURL(id, blob); await makeThumb(id, blob); }
 async function deleteImage(id) { await imgTx('readwrite', s => s.delete(id)); setImgURL(id, null); }
 async function allImages() {
   const keys = await imgTx('readonly', s => s.getAllKeys());
@@ -201,6 +216,7 @@ async function loadImages() {
     const ids = new Set(state.batches.flatMap(b => b.products.map(p => p.id)));
     const all = await allImages();
     all.forEach(([k, blob]) => { if (ids.has(k) && blob) setImgURL(k, blob); });
+    await Promise.all(all.filter(([k, blob]) => ids.has(k) && blob).map(([k, blob]) => makeThumb(k, blob)));
     const stale = all.map(([k]) => k).filter(k => !ids.has(k));
     if (stale.length) imgTx('readwrite', s => { stale.forEach(k => s.delete(k)); }).catch(() => {});
     if (imgURL.size && !sheetOpen) render();
@@ -231,7 +247,7 @@ function compressImage(file) {
 }
 const blobToDataURL = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
 const avatar = (p, cls = 'avatar') => (imgURL.has(p.id)
-  ? `<span class="${cls} has-img"><img src="${imgURL.get(p.id)}" alt=""></span>`
+  ? `<span class="${cls} has-img"><img src="${thumbURL.get(p.id) || imgURL.get(p.id)}" alt="" decoding="async" loading="lazy"></span>`
   : `<span class="${cls}">${p.emoji || '📦'}</span>`);
 let pendingImg; // ফর্মে বাছাই করা ছবি: undefined = বদলায়নি, null = মুছতে হবে
 let pendingPrev = '';
@@ -1147,7 +1163,7 @@ function viewMore(b, c) {
     <div class="seg">${[['bn', 'বাংলা'], ['en', 'English']].map(([v, l]) =>
       `<button type="button" class="${lang === v ? 'active' : ''}" data-action="lang" data-v="${v}">${l}</button>`).join('')}</div>
     <p class="about">${L('ভার্সন', 'Version')} ${APP_VERSION}<br>${L('হিসাবী · সব ডেটা শুধু এই ফোনে থাকে, কোনো সার্ভারে যায় না।<br>ফোন বদলালে বা অ্যাপ মুছলে ডেটা হারাবে, তাই মাঝে মাঝে ব্যাকআপ নিন।',
-      'Hisabi · All data stays on this phone and never goes to a server.<br>Changing phones or deleting the app loses data, so back up now and then.')}</p>`;
+      'Hisabi · All data stays on this phone and never goes to a server.<br>Changing phones or deleting the app loses data, so back up now and then.')}<br><br>${L('বানিয়েছেন', 'Made by')} <a href="https://github.com/sakib69alive" target="_blank" rel="noopener">@sakib69alive</a></p>`;
 }
 
 function budgetForm(b) {
