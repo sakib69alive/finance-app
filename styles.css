@@ -1,45 +1,41 @@
-/* ===== রঙ ও থিম — Ivory · Apricot · Natural · Organic ===== */
+/* ===== রঙ ও থিম — Lavender · Violet · Mint (Apple-style premium) ===== */
 :root {
-  --ivory: #F5E6C5;
-  --apricot: #D78B30;
-  --natural: #9F886F;
-  --organic: #3F422E;
+  --bg: #F4F3FB;
+  --bg-glass: rgba(244, 243, 251, .82);
+  --surface: #FFFFFF;
+  --surface-2: #F2F1FA;
+  --text: #16152B;
+  --muted: #6B6985;
+  --faint: #A3A1BA;
+  --border: #E9E7F5;
+  --accent: #6B57F5;
+  --accent-soft: #ECE9FE;
+  --on-accent: #FFFFFF;
+  --apricot: #8B7BFF;
+  --good: #14A06A;
+  --good-soft: #E1F6EC;
+  --warn: #D9811A;
+  --warn-soft: #FDF0DC;
+  --danger: #E5484D;
+  --danger-soft: #FDE8E9;
+  --info: #6B6985;
+  --info-soft: #F2F1FA;
+  --hero: linear-gradient(145deg, #8A76FF 0%, #6B57F5 55%, #5B45E6 100%);
+  --hero-ink: #FFFFFF;
+  --hero-shadow: 0 22px 40px -22px rgba(91, 69, 230, .7);
+  --shadow: 0 1px 2px rgba(40, 30, 100, .04), 0 10px 28px -12px rgba(40, 30, 100, .12);
 
-  --bg: #F8F0DE;
-  --bg-glass: rgba(248, 240, 222, .88);
-  --surface: #FFFBF2;
-  --surface-2: #F2E7CD;
-  --text: #2A2C1F;
-  --muted: #6E6552;
-  --faint: #A3967E;
-  --border: #E8DABB;
-  --accent: #3F422E;
-  --accent-soft: #E9E3CB;
-  --on-accent: #F5E6C5;
-  --good: #5B7A35;
-  --good-soft: #E7EDD3;
-  --warn: #A9631A;
-  --warn-soft: #F8E6C8;
-  --danger: #B4452E;
-  --danger-soft: #F6DFD6;
-  --info: #7A6750;
-  --info-soft: #EFE5D2;
-  --hero: linear-gradient(150deg, #3F422E 0%, #4A4E35 60%, #5A5638 100%);
-  --hero-ink: #F5E6C5;
-  --hero-shadow: 0 16px 34px -18px rgba(63, 66, 46, .6);
-  --shadow: 0 1px 2px rgba(63, 50, 20, .04), 0 6px 20px rgba(63, 50, 20, .05);
+  --c-product: #6B57F5;
+  --c-shipping: #2BB5A6;
+  --c-ads: #F5A524;
+  --c-packaging: #F06A9B;
+  --c-courier: #7DD3A8;
+  --c-returns: #E5484D;
+  --c-other: #9A98B5;
+  --c-reserve: #14A06A;
 
-  --c-product: #6B7048;
-  --c-shipping: #6FA3A8;
-  --c-ads: #E3A04A;
-  --c-packaging: #D4807A;
-  --c-courier: #A9B97C;
-  --c-returns: #C0553E;
-  --c-other: #B39C84;
-  --c-reserve: #7FA463;
-
-  --radius: 22px;
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Hind Siliguri", "Noto Sans Bengali", "Kohinoor Bangla", "Bangla Sangam MN", sans-serif;
+  --radius: 24px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, "Segoe UI", Roboto, "Hind Siliguri", "Noto Sans Bengali", "Kohinoor Bangla", "Bangla Sangam MN", sans-serif;
   color-scheme: light;
 }
 
@@ -79,7 +75,7 @@ small { font-size: 12.5px; }
 .topbar:empty { display: none; }
 .batch-btn { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 4px 8px 4px 4px; border-radius: 16px; }
 .batch-btn:active { background: var(--surface-2); }
-.logo-sm { width: 36px; height: 36px; border-radius: 11px; overflow: hidden; flex: none; box-shadow: 0 4px 12px -4px rgba(63, 66, 46, .45); }
+.logo-sm { width: 36px; height: 36px; border-radius: 11px; overflow: hidden; flex: none; box-shadow: 0 4px 12px -4px rgba(91, 69, 230, .45); }
 .logo-sm svg { width: 100%; height: 100%; display: block; }
 .bb-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
 .bb-text small { color: var(--muted); font-size: 11.5px; font-weight: 600; }
@@ -92,7 +88,7 @@ small { font-size: 12.5px; }
 .icon-btn:active { transform: scale(.95); }
 
 /* ===== ভিউ ===== */
-.view { padding: 6px 16px calc(100px + env(safe-area-inset-bottom)); }
+.view { padding: 6px 16px calc(110px + env(safe-area-inset-bottom)); }
 .view > * + * { margin-top: 14px; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 4px; }
 .page-head h1 { font-size: 24px; letter-spacing: -.01em; }
@@ -114,18 +110,18 @@ small { font-size: 12.5px; }
   box-shadow: var(--hero-shadow); position: relative; overflow: hidden;
 }
 .hero::before, .hero::after { content: ""; position: absolute; border-radius: 50%; pointer-events: none; }
-.hero::before { width: 220px; height: 220px; right: -70px; top: -90px; background: radial-gradient(circle, rgba(215,139,48,.28), transparent 70%); }
-.hero::after { width: 160px; height: 160px; left: -50px; bottom: -80px; background: radial-gradient(circle, rgba(245,230,197,.10), transparent 70%); }
+.hero::before { width: 220px; height: 220px; right: -70px; top: -90px; background: radial-gradient(circle, rgba(255,255,255,.28), transparent 70%); }
+.hero::after { width: 160px; height: 160px; left: -50px; bottom: -80px; background: radial-gradient(circle, rgba(255,255,255,.14), transparent 70%); }
 .hero > * { position: relative; z-index: 1; }
 .hero-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .hero-label { font-size: 13px; opacity: .85; font-weight: 600; }
-.hero-target { font-size: 34px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.hero-target { font-size: 38px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .hero-sub { font-size: 12.5px; opacity: .85; margin-top: 4px; }
 .ring { flex: none; }
-.ring-bg { fill: none; stroke: rgba(245,230,197,.18); stroke-width: 8; }
-.ring-fg { fill: none; stroke: var(--apricot); stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset .7s cubic-bezier(.2,.8,.2,1); }
+.ring-bg { fill: none; stroke: rgba(255,255,255,.25); stroke-width: 8; }
+.ring-fg { fill: none; stroke: #fff; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset .7s cubic-bezier(.2,.8,.2,1); }
 .ring text { fill: var(--hero-ink); font-weight: 800; font-size: 17px; font-family: var(--font); }
-.hero-bar { height: 8px; border-radius: 9px; background: rgba(245,230,197,.16); margin-top: 16px; overflow: hidden; }
+.hero-bar { height: 8px; border-radius: 9px; background: rgba(255,255,255,.22); margin-top: 16px; overflow: hidden; }
 .hero-bar span { display: block; height: 100%; border-radius: 9px; background: var(--apricot); }
 .hero-foot { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 13px; }
 .hero-foot span { opacity: .92; }
@@ -234,7 +230,7 @@ details.recon[open] summary .ic { transform: rotate(180deg); }
 .chiprow { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 4px; margin: 0 -16px; padding-left: 16px; padding-right: 16px; scrollbar-width: none; }
 .chiprow::-webkit-scrollbar { display: none; }
 .fchip { white-space: nowrap; padding: 7px 13px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--muted); }
-.fchip.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+.fchip.active { background: var(--accent); color: #fff; border-color: var(--text); }
 
 .minis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .mini { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 10px 12px; min-width: 0; }
@@ -328,7 +324,7 @@ details.more[open] summary::before { content: "− "; }
 /* ===== শিট ===== */
 .sheet-root { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 50; display: none; }
 .sheet-root.open { display: block; }
-.backdrop { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(8, 8, 20, .5); opacity: 0; transition: opacity .25s; }
+.backdrop { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(20, 15, 50, .45); opacity: 0; transition: opacity .25s; }
 .sheet-root.show .backdrop { opacity: 1; }
 .sheet {
   position: absolute; left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: 520px;
@@ -389,7 +385,7 @@ details.more[open] summary::before { content: "− "; }
 
 /* ===== ওয়েলকাম ===== */
 .welcome { padding: calc(36px + env(safe-area-inset-top)) 4px 20px; }
-.welcome .logo { width: 72px; height: 72px; border-radius: 22px; overflow: hidden; box-shadow: 0 14px 30px -12px rgba(63, 66, 46, .5); margin-bottom: 18px; }
+.welcome .logo { width: 72px; height: 72px; border-radius: 22px; overflow: hidden; box-shadow: 0 14px 30px -12px rgba(91, 69, 230, .5); margin-bottom: 18px; }
 .welcome .logo svg { width: 100%; height: 100%; display: block; }
 .welcome h1 { font-size: 30px; letter-spacing: -.02em; }
 .welcome .lead { color: var(--muted); font-size: 15.5px; margin: 6px 0 22px; }
@@ -398,23 +394,23 @@ details.more[open] summary::before { content: "− "; }
 .feat div { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 10px 12px; font-size: 13px; font-weight: 600; }
 .feat div span { display: block; font-size: 18px; }
 
-/* ===== ট্যাববার ===== */
-.tabbar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
-  background: var(--bg-glass); -webkit-backdrop-filter: saturate(1.5) blur(18px); backdrop-filter: saturate(1.5) blur(18px);
-  border-top: 1px solid var(--border);
-  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-}
+/* ===== ট্যাববার: ভাসমান পিল ===== */
+.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; padding: 0 14px calc(10px + env(safe-area-inset-bottom)); pointer-events: none; }
 .tabbar:empty { display: none; }
-.tabbar-inner { display: flex; max-width: 520px; margin: 0 auto; }
-.tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; font-size: 11.5px; font-weight: 700; color: var(--faint); }
-.tab .tw { width: 52px; height: 30px; border-radius: 999px; display: grid; place-items: center; transition: background .2s, color .2s; }
-.tab.active { color: var(--accent); }
-.tab.active .tw { background: var(--accent-soft); }
+.tabbar-inner {
+  display: flex; max-width: 440px; margin: 0 auto; padding: 6px; gap: 2px; pointer-events: auto;
+  background: rgba(24, 22, 46, .92); border-radius: 30px;
+  -webkit-backdrop-filter: saturate(1.6) blur(18px); backdrop-filter: saturate(1.6) blur(18px);
+  box-shadow: 0 18px 36px -14px rgba(24, 22, 46, .55);
+}
+.tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 0 4px; font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,.55); border-radius: 24px; }
+.tab .tw { width: 44px; height: 28px; border-radius: 999px; display: grid; place-items: center; transition: background .2s, color .2s; }
+.tab.active { color: #fff; }
+.tab.active .tw { background: var(--accent); box-shadow: 0 6px 14px -6px var(--accent); }
 
 /* ===== টোস্ট ===== */
 .toast {
-  position: fixed; left: 50%; bottom: calc(92px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px);
+  position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px);
   background: var(--text); color: var(--bg); padding: 11px 18px; border-radius: 14px; font-size: 14px; font-weight: 600;
   opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 80; max-width: calc(100% - 32px); text-align: center;
 }
@@ -435,7 +431,7 @@ details.more[open] summary::before { content: "− "; }
 
 /* ===== ফর্মের ভুল দেখানো ===== */
 .form-error {
-  background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(180, 69, 46, .35);
+  background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(229, 72, 77, .35);
   border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; font-size: 14px; font-weight: 600; line-height: 1.55;
 }
 .field.invalid > .input, .field.invalid .input { border-color: var(--danger); background: var(--danger-soft); }
@@ -444,7 +440,7 @@ details.more[open] summary::before { content: "− "; }
 .seg label.off span { cursor: not-allowed; }
 
 /* ===== ধাপে ধাপে গাইড ===== */
-.steps { margin: 14px 0; background: linear-gradient(180deg, #FFFBF2 0%, #FBF1DC 100%); }
+.steps { margin: 14px 0; background: var(--surface); }
 .steplist { list-style: none; display: flex; flex-direction: column; gap: 4px; }
 .steplist li { display: flex; gap: 12px; align-items: flex-start; padding: 10px 8px; border-radius: 16px; }
 .steplist .sn {
@@ -456,17 +452,16 @@ details.more[open] summary::before { content: "− "; }
 .steplist .sb small { color: var(--muted); line-height: 1.45; }
 .steplist li.done .sn { background: var(--good); color: #fff; }
 .steplist li.done .sb b { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(110, 101, 82, .45); }
-.steplist li.now { background: var(--warn-soft); }
-.steplist li.now .sn { background: var(--apricot); color: #fff; }
+.steplist li.now { background: var(--accent-soft); }
+.steplist li.now .sn { background: var(--accent); color: #fff; }
 .steplist li.now .btn { align-self: flex-start; margin-top: 8px; }
 .steplist li.later { opacity: .6; }
 
 /* ===== আরও নরম, আরও সুন্দর ===== */
-body { background: radial-gradient(1200px 500px at 50% -120px, #FCEFD2 0%, var(--bg) 60%); background-attachment: fixed; }
-.card { border-radius: 24px; border-color: #EBDDBE; }
-.btn.primary { background: linear-gradient(160deg, #4A4E35, #3F422E); }
-.hero { background: linear-gradient(150deg, #3F422E 0%, #4D5236 55%, #6A5D3A 100%); }
-.hero-bar span { background: linear-gradient(90deg, #E3A04A, #D78B30); }
+body { background: radial-gradient(900px 420px at 50% -140px, #E4DEFF 0%, var(--bg) 62%); background-attachment: fixed; }
+.card { border-radius: 26px; border-color: transparent; }
+.btn.primary { background: linear-gradient(160deg, #7A66FF, #5B45E6); }
+.hero-bar span { background: #fff; }
 .input { border-radius: 16px; }
 
 /* ===== টপবার: হোমে ফেরা + কোথায় ছিলেন + সোয়াইপ ===== */
@@ -501,8 +496,8 @@ body { background: radial-gradient(1200px 500px at 50% -120px, #FCEFD2 0%, var(-
 .pcard { cursor: pointer; }
 .pc-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; font-size: 12.5px; }
 .toast.has-act { pointer-events: auto; display: flex; align-items: center; gap: 12px; }
-.toast-act { color: var(--apricot); font-weight: 800; padding: 6px 4px; white-space: nowrap; }
-.install { margin: 14px 0; background: linear-gradient(160deg, #FFF6E2, #F8E6C4); }
+.toast-act { color: #B9AEFF; font-weight: 800; padding: 6px 4px; white-space: nowrap; }
+.install { margin: 14px 0; background: var(--accent-soft); }
 .inst-row { display: flex; gap: 12px; align-items: flex-start; }
 .inst-ic { font-size: 28px; line-height: 1; }
 .inst-row .sb { display: flex; flex-direction: column; gap: 2px; }
@@ -536,3 +531,25 @@ hr.sep { border: 0; border-top: 1.5px dashed var(--border); margin: 10px 0; }
 .dsell .btn:last-child { flex: 1.6; }
 .dline b.pos { color: var(--good); }
 .dline b.neg { color: var(--danger); }
+
+/* ===== নতুন হোম ===== */
+.hero-chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+.hero-chips div { background: rgba(255,255,255,.16); border-radius: 16px; padding: 9px 11px; min-width: 0; }
+.hero-chips small { display: block; font-size: 11.5px; opacity: .85; }
+.hero-chips b { font-size: 15.5px; font-variant-numeric: tabular-nums; white-space: nowrap; display: block; overflow: hidden; text-overflow: ellipsis; }
+.goalline { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--accent-soft); color: var(--accent); border-radius: 16px; padding: 11px 14px; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.goalline b { font-size: 17px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dsell .btn:first-child { flex: 1.6; }
+.dsell .btn:nth-child(2) { flex: .7; }
+.dsell .btn:last-child { flex: 1.2; }
+.next-card { background: var(--accent-soft); }
+.next-card small { color: var(--accent); font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.next-card p { font-weight: 600; line-height: 1.55; margin-top: 4px; }
+details.more-card summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 700; }
+details.more-card summary::-webkit-details-marker { display: none; }
+details.more-card summary .ic { color: var(--muted); transition: transform .2s; }
+details.more-card[open] summary .ic { transform: rotate(180deg); }
+details.more-card[open] > summary { margin-bottom: 14px; }
+details.more-card > * + * { margin-top: 14px; }
+.sub-title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.toast.has-act { width: max-content; white-space: nowrap; }

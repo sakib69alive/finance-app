@@ -71,7 +71,7 @@ const ICONS = {
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z"/>',
 };
 const icon = (n, s = 22) => `<svg class="ic" viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;
-const LOGO = '<svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3F422E"/><stop offset="1" stop-color="#5A5638"/></linearGradient></defs><rect width="512" height="512" fill="url(#lg)"/><rect x="102" y="271" width="68" height="138" rx="18" fill="#F5E6C5" opacity=".7"/><rect x="222" y="195" width="68" height="215" rx="18" fill="#F5E6C5" opacity=".92"/><rect x="342" y="102" width="68" height="307" rx="18" fill="#D78B30"/></svg>';
+const LOGO = '<svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7A66FF"/><stop offset="1" stop-color="#5B45E6"/></linearGradient></defs><rect width="512" height="512" fill="url(#lg)"/><rect x="102" y="271" width="68" height="138" rx="18" fill="#FFFFFF" opacity=".7"/><rect x="222" y="195" width="68" height="215" rx="18" fill="#FFFFFF" opacity=".92"/><rect x="342" y="102" width="68" height="307" rx="18" fill="#9CF0CF"/></svg>';
 
 /* ---------- ক্যাটাগরি ও বাজেট ---------- */
 const CATS = {
@@ -106,7 +106,7 @@ const statusLabel = s => ({ delivered: L('ডেলিভারড', 'Delivered'
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v10'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v11'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 function newBatch(o = {}) {
   return {
@@ -551,87 +551,74 @@ function batchForm(b) {
 function viewHome(b, c) {
   const progress = c.target > 0 ? clamp(c.cash / c.target, 0, 1) : 0;
   const ins = insights(b, c);
-  const rows = c.items.map(x => `
-    <button type="button" class="prow" data-action="open-product" data-id="${x.p.id}">
-      ${avatar(x.p)}
-      <span class="pmain"><b>${esc(x.p.name)}</b><small>${L('খরচ', 'Cost')} ${fmt(x.unit)}/${L('ইউনিট', 'unit')} · ${L('স্টক', 'Stock')} ${x.remaining}</small></span>
-      <span class="pend"><b>${fmt(x.planned)}</b><small>${x.myPrice > 0 ? L('আপনার দাম', 'Your price') : L('বেচবেন', 'Sell at')}</small></span>
-    </button>`).join('');
   const nw = c.netWorth - c.capital;
+  const next = ins[0] && ins[0].lvl !== 'good' ? ins[0] : null;
   return `
   <section class="hero">
     <div class="hero-top">
       <div>
-        <div class="hero-label">${L('টার্গেট (মূলধনসহ শেষে হাতে ক্যাশ)', 'Target (final cash incl. capital)')}</div>
-        <div class="hero-target">${fmt(c.target)}</div>
-        <div class="hero-sub">${L('মূলধন', 'Capital')} ${fmt(c.capital)} · ${L('লক্ষ্য লাভ', 'Goal profit')} ${fmt(c.targetProfit)}${c.capital > 0 ? ` (${pct(c.targetProfit / c.capital * 100)})` : ''}</div>
+        <div class="hero-label">${L('এখন হাতে ক্যাশ', 'Cash in hand now')}</div>
+        <div class="hero-target">${fmt(c.cash)}</div>
+        <div class="hero-sub">${L('টার্গেট', 'Target')} ${fmt(c.target)} · ${L('মূলধন', 'Capital')} ${fmt(c.capital)}</div>
       </div>
       ${ring(progress)}
     </div>
-    <div class="hero-bar"><span style="width:${(progress * 100).toFixed(1)}%"></span></div>
-    <div class="hero-foot"><span>${L('হাতে এসেছে', 'Cash in hand')} <b>${fmt(c.cash)}</b></span><span>${L('বাকি', 'To go')} <b>${fmt(Math.max(0, c.target - c.cash))}</b></span></div>
+    <div class="hero-chips">
+      <div><small>${L('খরচ', 'Spent')}</small><b>${fmt(c.spent)}</b></div>
+      <div><small>${L('বিক্রি', 'Sales')}</small><b>${fmt(c.revenue)}</b></div>
+      <div><small>${c.profit >= 0 ? L('লাভ', 'Profit') : L('লস', 'Loss')}</small><b>${fmt(c.profit)}</b></div>
+    </div>
   </section>
 
   ${stepsCard(b, c)}
-  ${installCard()}
 
   <div class="quick">
-    <button type="button" class="qbtn" data-action="add-expense"><span class="qi">${icon('receipt')}</span>${L('খরচ', 'Cost')}</button>
     <button type="button" class="qbtn" data-action="add-sale"><span class="qi">${icon('trend')}</span>${L('বিক্রি', 'Sale')}</button>
+    <button type="button" class="qbtn" data-action="add-expense"><span class="qi">${icon('receipt')}</span>${L('খরচ', 'Cost')}</button>
     <button type="button" class="qbtn" data-action="add-product"><span class="qi">${icon('box')}</span>${L('প্রোডাক্ট', 'Product')}</button>
   </div>
 
   ${productDash(c)}
+  ${installCard()}
 
-  <section class="stat-grid">
-    ${stat(L('মোট খরচ', 'Total spent'), fmt(c.spent), c.capital > 0 ? L(`মূলধনের ${pct(c.spent / c.capital * 100)}`, `${pct(c.spent / c.capital * 100)} of capital`) : '&nbsp;')}
-    ${stat(L('বিক্রি (নেট)', 'Sales (net)'), fmt(c.revenue), L(`${cnt(c.deliveredOrders)} অর্ডার ডেলিভারড`, `${c.deliveredOrders} order${c.deliveredOrders === 1 ? '' : 's'} delivered`))}
-    ${stat(L('স্টকে আছে', 'In stock'), fmt(c.stockValue), L(`${c.remainingUnits} ইউনিট (খরচ মূল্যে)`, `${c.remainingUnits} units (at cost)`))}
-    ${stat(c.profit >= 0 ? L('লাভ', 'Profit') : L('ক্ষতি', 'Loss'), fmt(c.profit), L('বিক্রি হওয়া ইউনিটে', 'On units sold'), c.profit >= 0 ? 'pos' : 'neg')}
-    ${stat(L('পাওনা (কুরিয়ারে)', 'Receivable (courier)'), fmt(c.pendingNet), L('এখনও ক্যাশ না', 'Not cash yet'))}
-    ${stat(L('রিজার্ভ', 'Reserve'), fmt(Math.max(0, c.unspent)), L(`ন্যূনতম ${fmt(limitOf(b, 'reserve'))} · খরচ না`, `Min ${fmt(limitOf(b, 'reserve'))} · not an expense`), c.unspent < limitOf(b, 'reserve') ? 'neg' : '')}
-  </section>
+  ${next ? `<section class="card next-card"><small>${L('এখন যা করবেন', 'Do this next')}</small><p>${esc(next.t)}</p></section>` : ''}
 
-  <section class="card">
-    <h2 class="card-title">${icon('spark', 20)} ${L('বিজনেস গাইড', 'Business guide')}</h2>
-    ${ins[0] && ins[0].lvl !== 'good' ? `<div class="next-act"><small>${L('এখন যা করবেন', 'Do this next')}</small>${esc(ins[0].t)}</div>` : ''}
-    <ul class="insights">${ins.slice(ins[0] && ins[0].lvl !== 'good' ? 1 : 0).map(i => `<li class="insight ${i.lvl}">${esc(i.t)}</li>`).join('')}</ul>
+  <details class="card more-card">
+    <summary>${L('আরও হিসাব দেখুন', 'More details')} ${icon('chev', 20)}</summary>
+    <section class="stat-grid">
+      ${stat(L('মোট খরচ', 'Total spent'), fmt(c.spent), c.capital > 0 ? L(`মূলধনের ${pct(c.spent / c.capital * 100)}`, `${pct(c.spent / c.capital * 100)} of capital`) : '&nbsp;')}
+      ${stat(L('বিক্রি (নেট)', 'Sales (net)'), fmt(c.revenue), L(`${cnt(c.deliveredOrders)} অর্ডার ডেলিভারড`, `${c.deliveredOrders} order${c.deliveredOrders === 1 ? '' : 's'} delivered`))}
+      ${stat(L('স্টকে আছে', 'In stock'), fmt(c.stockValue), L(`${c.remainingUnits} ইউনিট (খরচ মূল্যে)`, `${c.remainingUnits} units (at cost)`))}
+      ${stat(c.profit >= 0 ? L('লাভ', 'Profit') : L('ক্ষতি', 'Loss'), fmt(c.profit), L('বিক্রি হওয়া ইউনিটে', 'On units sold'), c.profit >= 0 ? 'pos' : 'neg')}
+      ${stat(L('পাওনা (কুরিয়ারে)', 'Receivable (courier)'), fmt(c.pendingNet), L('এখনও ক্যাশ না', 'Not cash yet'))}
+      ${stat(L('রিজার্ভ', 'Reserve'), fmt(Math.max(0, c.unspent)), L(`ন্যূনতম ${fmt(limitOf(b, 'reserve'))} · খরচ না`, `Min ${fmt(limitOf(b, 'reserve'))} · not an expense`), c.unspent < limitOf(b, 'reserve') ? 'neg' : '')}
+    </section>
+
+    <h3 class="sub-title">${icon('spark', 18)} ${L('বিজনেস গাইড', 'Business guide')}</h3>
+    <ul class="insights">${ins.slice(next ? 1 : 0).map(i => `<li class="insight ${i.lvl}">${esc(i.t)}</li>`).join('')}</ul>
     <p class="hint">${L('এই পরামর্শ আপনার দেওয়া হিসাব থেকে, ফোনেই তৈরি (ইন্টারনেট লাগে না)। লাভের নিশ্চয়তা নয়।', 'Built on this device from your own numbers (no internet). Not a guarantee of profit.')}</p>
-  </section>
 
-  ${c.items.length ? `<section class="card">
-    <div class="card-head"><h2>${L('কত দামে বেচবেন', 'What to charge')}</h2><button type="button" class="link" data-action="tab" data-tab="products">${L('বিস্তারিত', 'Details')}</button></div>
-    <div class="plist">${rows}</div>
-  </section>` : ''}
-
-  <section class="card">
-    <div class="card-head"><h2>${L('টাকা কোথায় গেল', 'Where the money went')}</h2><button type="button" class="link" data-action="edit-budget">${L('বাজেট ও সীমা বদলান', 'Edit budget & limits')}</button></div>
+    <div class="card-head"><h3 class="sub-title">${L('টাকা কোথায় গেল', 'Where the money went')}</h3><button type="button" class="link" data-action="edit-budget">${L('বাজেট ও সীমা বদলান', 'Edit budget & limits')}</button></div>
     ${budgetBlock(b, c)}
-  </section>
 
-  <section class="card">
-    <details class="recon">
-      <summary>${L('টাকার মিলান (১ টাকারও হিসাব)', 'Money check (to the last taka)')} ${icon('chev', 20)}</summary>
-      <div class="ledger">
-        <div><span>${L('মূলধন', 'Capital')}</span><span>${fmt(c.capital)}</span></div>
-        <div><span>− ${L('মোট খরচ', 'Total spent')}</span><span>${fmt(c.spent)}</span></div>
-        <div><span>+ ${L('বিক্রি থেকে এসেছে (নেট)', 'From sales (net)')}</span><span>${fmt(c.revenue)}</span></div>
-        <div class="total"><span>= ${L('হাতে ক্যাশ', 'Cash in hand')}</span><span>${fmt(c.cash)}</span></div>
-        <div><span>+ ${L('স্টকে আছে (খরচ মূল্যে)', 'Stock (at cost)')}</span><span>${fmt(c.stockValue)}</span></div>
-        <div><span>+ ${L('কুরিয়ারে আছে (খরচ মূল্যে)', 'With courier (at cost)')}</span><span>${fmt(c.transitValue)}</span></div>
-        <div class="total"><span>= ${L('মোট সম্পদ', 'Total worth')}</span><span>${fmt(c.netWorth)}</span></div>
-        <div><span>${L('মোট সম্পদ − মূলধন', 'Worth − capital')} = ${nw >= 0 ? L('লাভ', 'profit') : L('ক্ষতি', 'loss')}</span><span class="${nw >= 0 ? 'pos' : 'neg'}">${fmt(nw)}</span></div>
-      </div>
-    </details>
-  </section>`;
+    <h3 class="sub-title">${L('টাকার মিলান (১ টাকারও হিসাব)', 'Money check (to the last taka)')}</h3>
+    <div class="ledger">
+      <div><span>${L('মূলধন', 'Capital')}</span><span>${fmt(c.capital)}</span></div>
+      <div><span>− ${L('মোট খরচ', 'Total spent')}</span><span>${fmt(c.spent)}</span></div>
+      <div><span>+ ${L('বিক্রি থেকে এসেছে (নেট)', 'From sales (net)')}</span><span>${fmt(c.revenue)}</span></div>
+      <div class="total"><span>= ${L('হাতে ক্যাশ', 'Cash in hand')}</span><span>${fmt(c.cash)}</span></div>
+      <div><span>+ ${L('স্টকে আছে (খরচ মূল্যে)', 'Stock (at cost)')}</span><span>${fmt(c.stockValue)}</span></div>
+      <div><span>+ ${L('কুরিয়ারে আছে (খরচ মূল্যে)', 'With courier (at cost)')}</span><span>${fmt(c.transitValue)}</span></div>
+      <div class="total"><span>= ${L('মোট সম্পদ', 'Total worth')}</span><span>${fmt(c.netWorth)}</span></div>
+      <div><span>${L('মোট সম্পদ − মূলধন', 'Worth − capital')} = ${nw >= 0 ? L('লাভ', 'profit') : L('ক্ষতি', 'loss')}</span><span class="${nw >= 0 ? 'pos' : 'neg'}">${fmt(nw)}</span></div>
+    </div>
+  </details>`;
 }
 
-// হোমের প্রোডাক্ট ড্যাশবোর্ড: প্রতিটার লাইভ স্টক, আসল খরচ, কত দামে বেচতে হবে + এক প্রেসে বিক্রি
+// হোমের প্রোডাক্ট তালিকা: প্রতিটার স্টক, দাম আর এক প্রেসে বিক্রি
 function productDash(c) {
   if (!c.items.length) return '';
-  const left = c.items.filter(x => x.remaining > 0);
-  const toBreakEven = sum(left.map(x => x.remaining * x.breakeven));
-  const toTarget = sum(left.map(x => x.remaining * x.goalPrice));
+  const toTarget = sum(c.items.filter(x => x.remaining > 0).map(x => x.remaining * x.goalPrice));
   const cards = c.items.map(x => {
     const soldPct = x.units ? clamp((x.delivered + x.pending) / x.units * 100, 0, 100) : 0;
     const out = x.remaining < 1;
@@ -639,28 +626,20 @@ function productDash(c) {
       <button type="button" class="prow" data-action="open-product" data-id="${x.p.id}">
         ${avatar(x.p)}
         <span class="pmain"><b>${esc(x.p.name)}</b>
-          <small>${L('স্টক', 'Stock')} ${x.remaining}/${x.units} · ${L('বিক্রি', 'Sold')} ${x.delivered}${x.pending ? ` · ${L('পথে', 'Transit')} ${x.pending}` : ''}</small></span>
+          <small>${L('স্টক', 'Stock')} ${x.remaining}/${x.units} · ${L('খরচ', 'Cost')} ${fmt(x.unit)}${x.pending ? ` · ${L('পথে', 'Transit')} ${x.pending}` : ''}</small></span>
         <span class="pend"><b>${fmt(x.planned)}</b><small>${x.myPrice > 0 ? L('আপনার দাম', 'Your price') : L('বেচবেন', 'Sell at')}</small></span>
       </button>
       <div class="bar sm"><i style="width:${soldPct.toFixed(1)}%"></i></div>
-      <div class="dline"><span>${L('সব খরচসহ প্রতিটা পড়ছে', 'All-in cost each')} <b>${fmt(x.unit)}</b></span>
-        <span>${x.profit >= 0 ? L('লাভ', 'Profit') : L('লস', 'Loss')} <b class="${x.profit >= 0 ? 'pos' : 'neg'}">${fmt(x.profit)}</b></span></div>
-      <div class="dline"><span>${L('বাকি স্টক বেচলে আসবে', 'Remaining stock brings')} <b>${fmt(x.remaining * x.planned * c.factor)}</b></span></div>
       <div class="dsell">
         <button type="button" class="btn primary sm" data-action="quick-sell" data-id="${x.p.id}" data-qty="1" ${out ? 'disabled' : ''}>${L('+১ বিক্রি', '+1 sold')}</button>
-        <button type="button" class="btn sm" data-action="quick-sell" data-id="${x.p.id}" data-qty="2" ${x.remaining < 2 ? 'disabled' : ''}>${L('+২ বিক্রি', '+2 sold')}</button>
-        <button type="button" class="btn sm" data-action="add-sale" data-product="${x.p.id}" ${out ? 'disabled' : ''}>${L('ডিসকাউন্ট / অন্যটা', 'Discount / other')}</button>
+        <button type="button" class="btn sm" data-action="quick-sell" data-id="${x.p.id}" data-qty="2" ${x.remaining < 2 ? 'disabled' : ''}>${L('+২', '+2')}</button>
+        <button type="button" class="btn sm" data-action="add-sale" data-product="${x.p.id}" ${out ? 'disabled' : ''}>${L('ডিসকাউন্ট', 'Discount')}</button>
       </div>
     </div>`;
   }).join('');
   return `<section class="card">
-    <div class="card-head"><h2>${L('প্রোডাক্ট ড্যাশবোর্ড', 'Product dashboard')}</h2><span class="muted">${L('লাইভ', 'Live')}</span></div>
-    <div class="minis">
-      <div class="mini"><small>${L('বাকি স্টক', 'Units left')}</small><b>${c.remainingUnits}</b></div>
-      <div class="mini"><small>${L('খরচ উঠাতে', 'To break even')}</small><b>${fmt(toBreakEven)}</b></div>
-      <div class="mini"><small>${L('টার্গেটের জন্য', 'For target')}</small><b>${fmt(toTarget)}</b></div>
-    </div>
-    <p class="hint">${L('বাকি সব স্টক বেচে এত টাকা তুলতে হবে। নিচে প্রতিটা প্রোডাক্টের হিসাব, বিক্রি হলেই বাটন চাপুন।', 'Money to bring in by selling all remaining stock. Tap a button below whenever you sell.')}</p>
+    <div class="card-head"><h2>${L('আমার প্রোডাক্ট', 'My products')}</h2><span class="muted">${c.remainingUnits} ${L('টা বাকি', 'left')}</span></div>
+    <div class="goalline"><span>${L('টার্গেটে যেতে বাকি স্টক বেচে তুলতে হবে', 'To hit target, sell remaining stock for')}</span><b>${fmt(toTarget)}</b></div>
     ${cards}
   </section>`;
 }
