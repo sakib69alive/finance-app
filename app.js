@@ -110,7 +110,7 @@ const statusLabel = s => ({ delivered: L('ডেলিভারড', 'Delivered'
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v18'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v19'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 function newBatch(o = {}) {
   return {
@@ -646,13 +646,62 @@ function paceCard(b, c) {
   </section>`;
 }
 
+// হিরো ট্যাপ করলে: সব হিসাব এক সিরিয়ালে
+function heroDetail(b, c) {
+  const row = (label, val, cls = '') => `<div class="${cls}"><span>${label}</span><span>${val}</span></div>`;
+  const nw = c.netWorth - c.capital;
+  const p = pace(b, c);
+  const cats = ['product', ...EXPENSE_CATS, 'returns'].filter(k => c.cat[k] > 0)
+    .map(k => row(`− ${cicon(k)} ${cl(k)}`, fmt(c.cat[k]))).join('');
+  const prog = c.target > 0 ? Math.round(clamp(c.cash / c.target, 0, 9.99) * 100) : 0;
+  return `${sheetHead(L('পুরো হিসাব', 'Full breakdown'), esc(b.name))}
+  <div class="fb-top"><small>${L('এখন হাতে ক্যাশ', 'Cash in hand now')}</small><b>${fmt(c.cash)}</b>
+    <span>${L('টার্গেট', 'Target')} ${fmt(c.target)} · ${prog}% ${L('পূরণ', 'done')}</span></div>
+
+  <h4 class="fb-h"><i>1</i>${L('টাকার হিসাব', 'Money flow')}</h4>
+  <div class="ledger fb">
+    ${row(L('মূলধন', 'Capital'), fmt(c.capital))}
+    ${cats}
+    ${row(`= ${L('মোট খরচ', 'Total spent')}`, fmt(c.spent), 'sub')}
+    ${row(`+ ${L('বিক্রি থেকে এসেছে (নেট)', 'Sales received (net)')}`, fmt(c.revenue))}
+    ${row(`= ${L('হাতে ক্যাশ', 'Cash in hand')}`, fmt(c.cash), 'total')}
+  </div>
+
+  <h4 class="fb-h"><i>2</i>${L('সম্পদ', 'Assets')}</h4>
+  <div class="ledger fb">
+    ${row(L('হাতে ক্যাশ', 'Cash in hand'), fmt(c.cash))}
+    ${row(`+ ${L('স্টকে আছে (খরচ মূল্যে)', 'Stock (at cost)')}`, fmt(c.stockValue))}
+    ${row(`+ ${L('কুরিয়ারে আছে (খরচ মূল্যে)', 'With courier (at cost)')}`, fmt(c.transitValue))}
+    ${row(`= ${L('মোট সম্পদ', 'Total worth')}`, fmt(c.netWorth), 'total')}
+    ${row(`${L('মোট সম্পদ − মূলধন', 'Worth − capital')} = ${nw >= 0 ? L('লাভ', 'profit') : L('ক্ষতি', 'loss')}`, fmt(nw), nw >= 0 ? 'pos' : 'neg')}
+  </div>
+
+  <h4 class="fb-h"><i>3</i>${L('বিক্রি', 'Sales')}</h4>
+  <div class="ledger fb">
+    ${row(L('ডেলিভারড অর্ডার', 'Delivered orders'), c.deliveredOrders)}
+    ${row(L('কুরিয়ারে (পেন্ডিং)', 'Pending with courier'), `${c.pendingOrders} · ${fmt(c.pendingNet)}`)}
+    ${row(L('রিটার্ন', 'Returns'), c.returnedOrders)}
+    ${row(L('বিক্রি হওয়া ইউনিটে লাভ', 'Profit on units sold'), fmt(c.profit), c.profit >= 0 ? 'pos' : 'neg')}
+    ${row(L('স্টকে বাকি', 'Units left'), c.remainingUnits)}
+  </div>
+
+  <h4 class="fb-h"><i>4</i>${L('টার্গেট', 'Target')}</h4>
+  <div class="ledger fb">
+    ${row(L('লক্ষ্য লাভ', 'Goal profit'), `${fmt(c.targetProfit)}${c.capital > 0 ? ` (${pct(c.targetProfit / c.capital * 100)})` : ''}`)}
+    ${row(L('আরও তুলতে হবে', 'Still to bring in'), fmt(Math.max(0, c.target - c.cash)))}
+    ${row(L('সব স্টক বেচলে শেষে হাতে হবে (আনুমানিক)', 'Expected final cash if all sold'), fmt(c.projected))}
+    ${p ? row(L('ডেডলাইন', 'Deadline'), L(`${p.days} দিনের ${Math.min(p.dayNo, p.days)} নম্বর দিন`, `Day ${Math.min(p.dayNo, p.days)} of ${p.days}`)) : ''}
+  </div>
+  <p class="hint">${L('বিক্রির অংশ COD চার্জ কেটে নেট ধরা হয়েছে। স্টক ও কুরিয়ারের মান খরচ মূল্যে, বিক্রি দামে নয়।', 'Sales are net of COD charges. Stock and courier are valued at cost, not selling price.')}</p>`;
+}
+
 function viewHome(b, c) {
   const progress = c.target > 0 ? clamp(c.cash / c.target, 0, 1) : 0;
   const ins = insights(b, c);
   const nw = c.netWorth - c.capital;
   const next = ins[0] && ins[0].lvl !== 'good' ? ins[0] : null;
   return `
-  <section class="hero">
+  <section class="hero tappable" data-action="hero-detail" role="button" tabindex="0" aria-label="${L('পুরো হিসাব দেখুন', 'See full breakdown')}">
     <div class="hero-top">
       <div>
         <div class="hero-label">${L('এখন হাতে ক্যাশ', 'Cash in hand now')}</div>
@@ -666,6 +715,7 @@ function viewHome(b, c) {
       <div><small>${L('বিক্রি', 'Sales')}</small><b>${fmt(c.revenue)}</b></div>
       <div><small>${c.profit >= 0 ? L('লাভ', 'Profit') : L('লস', 'Loss')}</small><b>${fmt(c.profit)}</b></div>
     </div>
+    <div class="hero-more">${L('ট্যাপ করে পুরো হিসাব দেখুন', 'Tap for the full breakdown')} ${icon('chev', 16)}</div>
   </section>
 
   ${stepsCard(b, c)}
@@ -1388,6 +1438,7 @@ const ACTIONS = {
   batches: () => openSheet(batchesSheet()),
   'switch-batch': el => { state.activeBatchId = el.dataset.id; closeSheet(); commit(L('ব্যাচ বদলানো হয়েছে', 'Batch switched')); },
   'new-batch': () => openSheet(`${sheetHead(L('নতুন ব্যাচ', 'New batch'), L('নতুন ইনভেস্টমেন্ট রাউন্ড', 'A new investment round'))}${batchForm(null)}`),
+  'hero-detail': () => { const b = activeBatch(); openSheet(heroDetail(b, compute(b))); },
   'add-days': el => {
     const b = activeBatch();
     b.days = Math.max(0, Math.floor(toNum(b.days))) + Math.floor(toNum(el.dataset.n));
