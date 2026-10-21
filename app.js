@@ -33,10 +33,14 @@ const ceil10 = n => Math.ceil((n - 1e-9) / 10) * 10;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const cnt = n => L(`${n}টা`, `${n}`);
 
-function today() {
-  const d = new Date();
+function dateOf(ts) {
+  const d = new Date(ts);
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
+const today = () => dateOf(Date.now());
+// দুই তারিখের (YYYY-MM-DD) মাঝে কত দিন
+const daysBetween = (a, b) => Math.round((Date.UTC(...b.split('-').map((n, i) => i === 1 ? n - 1 : +n)) - Date.UTC(...a.split('-').map((n, i) => i === 1 ? n - 1 : +n))) / 864e5);
+const dayShift = (s, n) => { const [y, m, d] = s.split('-').map(Number); return dateOf(new Date(y, m - 1, d + n).getTime()); };
 const MONTHS = {
   bn: ['জানু', 'ফেব্রু', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টে', 'অক্টো', 'নভে', 'ডিসে'],
   en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
@@ -106,12 +110,13 @@ const statusLabel = s => ({ delivered: L('ডেলিভারড', 'Delivered'
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v13'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v14'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 function newBatch(o = {}) {
   return {
     id: uid(), name: o.name || 'My business', createdAt: Date.now(),
     capital: toNum(o.capital), target: toNum(o.target),
+    days: Math.max(0, Math.floor(toNum(o.days))), startDate: o.startDate || today(),
     returnRate: o.returnRate ?? 5, codRate: o.codRate ?? 1, allocBy: o.allocBy || 'value',
     budget: { ...DEFAULT_BUDGET }, limits: {}, warnAt: 80, products: [], expenses: [], sales: [],
   };
@@ -122,6 +127,7 @@ function migrate(s) {
   s.batches = (s.batches || []).map(b => Object.assign(newBatch(), b, {
     budget: Object.assign({ ...DEFAULT_BUDGET }, b.budget || {}),
     products: b.products || [], expenses: b.expenses || [], sales: b.sales || [],
+    startDate: b.startDate || dateOf(b.createdAt || Date.now()),
   }));
   if (!s.batches.some(b => b.id === s.activeBatchId)) s.activeBatchId = s.batches[0] ? s.batches[0].id : null;
   return s;
@@ -533,6 +539,9 @@ function batchForm(b) {
     <label class="field"><span>${L('টার্গেট (মূলধন থেকে মোট কত টাকা বানাতে চান)', 'Target (total you want to turn it into)')}</span>${moneyInput('target', v.target, L('যেমন: 12000', 'e.g. 12000'), 'required')}
       <div class="qchips">${[10, 20, 30, 50].map(p => `<button type="button" data-action="target-pct" data-pct="${p}">+${p}% ${L('লাভ', 'profit')}</button>`).join('')}</div>
       <div class="hint" data-target-hint></div></label>
+    <label class="field"><span>${L('কত দিনে টার্গেট বেচতে চান? (ঐচ্ছিক)', 'In how many days? (optional)')}</span>
+      <div class="input-wrap"><input class="input" name="days" inputmode="numeric" value="${esc(v.days || '')}" placeholder="${L('যেমন: 30', 'e.g. 30')}"><span class="suffix">${L('দিন', 'days')}</span></div>
+      <div class="hint">${L('দিলে হোমে প্রতিদিনের টার্গেট আর আজ কতটা এগোলেন দেখাবে। পরে যেকোনো সময় বদলানো যায়।', 'Home will show your daily target and today\'s progress. You can change it anytime.')}</div></label>
     <details class="more" ${isNew ? '' : 'open'}><summary>${L('অ্যাডভান্সড সেটিংস', 'Advanced settings')}</summary>
       <div class="row2">
         <label class="field"><span>${L('রিটার্ন/ড্যামেজ বাফার', 'Return/damage buffer')}</span><div class="input-wrap"><input class="input" name="returnRate" inputmode="decimal" value="${esc(v.returnRate)}"><span class="suffix">%</span></div></label>
@@ -548,6 +557,72 @@ function batchForm(b) {
 }
 
 /* ---------- হোম ---------- */
+/* ---------- দিনের হিসাব: টার্গেট কত দিনে, আজ কতটা বেচলে ঠিক থাকবে ---------- */
+function pace(b, c) {
+  const days = Math.floor(toNum(b.days));
+  if (days <= 0 || !c.items.length) return null;
+  const t = today();
+  const dayNo = Math.max(1, daysBetween(b.startDate || t, t) + 1);
+  const daysLeft = days - dayNo + 1; // আজকের দিনসহ, ০ বা কম হলে সময় শেষ
+  const left = c.remainingUnits;
+  const avgNet = left > 0 ? sum(c.items.map(x => x.remaining * x.planned * c.factor)) / left : 0;
+  const avgCost = left > 0 ? sum(c.items.map(x => x.remaining * x.unit)) / left : 0;
+  const margin = avgNet - avgCost;
+  const soldOn = d => sum(b.sales.filter(s => s.status !== 'returned' && s.date === d).map(s => toNum(s.qty)));
+  const soldToday = soldOn(t), soldYest = soldOn(dayShift(t, -1));
+  const totalSold = sum(b.sales.filter(s => s.status !== 'returned').map(s => toNum(s.qty)));
+  const reached = c.need <= 0;
+  const needUnits = reached ? 0 : (avgNet > 0 ? Math.ceil(c.need / avgNet) : Infinity);
+  const enough = needUnits <= left;
+  // দিনের শুরুতে কত ইউনিট বাকি ছিল, সেটা দিয়ে ওই দিনের টার্গেট
+  const targetOn = (sold, daysFromNow) => reached && sold === 0 ? 0 : Math.max(1, Math.ceil((needUnits + sold) / Math.max(1, daysLeft + daysFromNow)));
+  const targetToday = daysLeft > 0 ? targetOn(soldToday, 0) : 0;
+  const targetYest = dayNo > 1 ? targetOn(soldYest, 1) : null;
+  const perDay = totalSold / dayNo;
+  const needDays = perDay > 0 ? Math.ceil(needUnits / perDay) : null;
+  const extra = needDays != null && isFinite(needUnits) ? Math.max(0, needDays - Math.max(0, daysLeft)) : null;
+  const projCash = c.cash + c.pendingNet + Math.min(left, perDay * Math.max(0, daysLeft)) * avgNet;
+  return { days, dayNo, daysLeft, needUnits, enough, reached, margin, soldToday, soldYest, targetToday, targetYest, perDay, needDays, extra, projCash };
+}
+
+function paceCard(b, c) {
+  const p = pace(b, c);
+  if (!p) {
+    return c.items.length ? `<button type="button" class="paceset" data-action="edit-batch">⏱ ${L('কত দিনে টার্গেট বেচবেন? ডেডলাইন সেট করুন (ঐচ্ছিক)', 'Set a deadline for your target (optional)')}</button>` : '';
+  }
+  const over = p.daysLeft <= 0;
+  const timePct = clamp(p.dayNo / p.days * 100, 0, 100);
+  const diff = p.soldToday - p.targetToday;
+  const line = (label, target, sold) => {
+    const d = sold - target;
+    return `<div class="pline"><span>${label}</span><span>${L('টার্গেট', 'Target')} <b>${target}</b> · ${L('বিক্রি', 'Sold')} <b>${sold}</b></span>
+      <span class="pdiff ${d >= 0 ? 'pos' : 'neg'}">${d >= 0 ? (d > 0 ? `+${d} ${L('বেশি', 'extra')}` : '✓') : `${d} ${L('কম', 'short')}`}</span></div>`;
+  };
+  let advice;
+  if (p.reached) advice = L('🎉 টার্গেট পূরণ হয়ে গেছে। এখন যা বিক্রি হবে সবই বাড়তি লাভ।', '🎉 Target reached. Everything you sell now is extra profit.');
+  else if (!p.enough) advice = L(`স্টকে কুলাবে না: টার্গেটে যেতে প্রায় ${p.needUnits}টা লাগবে, আছে ${c.remainingUnits}টা। আরও মাল আনুন, দাম বাড়ান, বা টার্গেট কমান।`, `Not enough stock: about ${p.needUnits} more sales needed, you have ${c.remainingUnits}. Restock, raise prices, or lower the target.`);
+  else if (over) advice = L(`সময় শেষ, টার্গেটে পৌঁছাতে আরও প্রায় ${p.needUnits}টা বিক্রি লাগবে। ${p.needDays != null ? `এই গতিতে আরও ${p.needDays} দিন লাগবে।` : 'ডেডলাইন বাড়ান।'}`, `Time is up. About ${p.needUnits} more sales needed.${p.needDays != null ? ` At this pace, ${p.needDays} more days.` : ''}`);
+  else if (p.perDay <= 0) advice = L(`এখনও বিক্রি শুরু হয়নি। ${p.daysLeft} দিনে টার্গেট ধরতে প্রতিদিন প্রায় ${p.targetToday}টা বেচতে হবে।`, `No sales yet. To hit target in ${p.daysLeft} days, sell about ${p.targetToday} per day.`);
+  else if (p.extra > 0) advice = L(`এই গতিতে (গড়ে দিনে ${(Math.round(p.perDay * 10) / 10)}টা) টার্গেটে পৌঁছাতে আরও প্রায় ${p.needDays} দিন লাগবে, আপনার হাতে আছে ${p.daysLeft} দিন। তাই ${p.extra} দিন বাড়ানো ভালো। শেষ দিনে হাতে থাকবে আনুমানিক ${fmt(p.projCash)} (টার্গেট ${fmt(c.target)})।`,
+    `At your pace (${Math.round(p.perDay * 10) / 10}/day) you need ~${p.needDays} more days but have ${p.daysLeft}. Consider adding ${p.extra} days. Expected cash at the end: ${fmt(p.projCash)} (target ${fmt(c.target)}).`);
+  else advice = L(`ভালো চলছে! এই গতিতে ${p.needDays} দিনেই টার্গেট ধরবেন, হাতে আছে ${p.daysLeft} দিন।`, `On track. At this pace you hit target in ${p.needDays} days, with ${p.daysLeft} left.`);
+  const mg = p.margin > 0 && !p.reached ? L(` প্রতি বিক্রিতে গড়ে লাভ ${fmt(p.margin)}।`, ` Avg profit per sale ${fmt(p.margin)}.`) : '';
+  return `<section class="card pace">
+    <div class="card-head"><h2>⏱ ${L('টার্গেট টাইমলাইন', 'Target timeline')}</h2>
+      <span class="daychip ${over ? 'late' : ''}">${over ? L('সময় শেষ', 'Time up') : L(`${p.daysLeft} দিন বাকি`, `${p.daysLeft} days left`)}</span></div>
+    <div class="bar sm"><i style="width:${timePct.toFixed(1)}%"></i></div>
+    <p class="hint" style="margin:0 0 8px">${L(`দিন ${Math.min(p.dayNo, p.days)} / ${p.days}`, `Day ${Math.min(p.dayNo, p.days)} of ${p.days}`)}</p>
+    ${over ? '' : line(L('আজ', 'Today'), p.targetToday, p.soldToday)}
+    ${p.targetYest != null ? line(L('গতকাল', 'Yesterday'), p.targetYest, p.soldYest) : ''}
+    <p class="advice">${advice}${mg}</p>
+    <div class="dsell">
+      <button type="button" class="btn sm" data-action="add-days" data-n="3">${L('+৩ দিন', '+3 days')}</button>
+      <button type="button" class="btn sm" data-action="add-days" data-n="7">${L('+৭ দিন', '+7 days')}</button>
+      <button type="button" class="btn sm" data-action="edit-batch">${L('দিন বদলান', 'Change days')}</button>
+    </div>
+  </section>`;
+}
+
 function viewHome(b, c) {
   const progress = c.target > 0 ? clamp(c.cash / c.target, 0, 1) : 0;
   const ins = insights(b, c);
@@ -577,6 +652,8 @@ function viewHome(b, c) {
     <button type="button" class="qbtn" data-action="add-expense"><span class="qi">${icon('receipt')}</span>${L('খরচ', 'Cost')}</button>
     <button type="button" class="qbtn" data-action="add-product"><span class="qi">${icon('box')}</span>${L('প্রোডাক্ট', 'Product')}</button>
   </div>
+
+  ${paceCard(b, c)}
 
   ${productDash(c)}
   ${installCard()}
@@ -1288,6 +1365,11 @@ const ACTIONS = {
   batches: () => openSheet(batchesSheet()),
   'switch-batch': el => { state.activeBatchId = el.dataset.id; closeSheet(); commit(L('ব্যাচ বদলানো হয়েছে', 'Batch switched')); },
   'new-batch': () => openSheet(`${sheetHead(L('নতুন ব্যাচ', 'New batch'), L('নতুন ইনভেস্টমেন্ট রাউন্ড', 'A new investment round'))}${batchForm(null)}`),
+  'add-days': el => {
+    const b = activeBatch();
+    b.days = Math.max(0, Math.floor(toNum(b.days))) + Math.floor(toNum(el.dataset.n));
+    commit(L(`ডেডলাইন ${el.dataset.n} দিন বাড়ল`, `Deadline extended by ${el.dataset.n} days`));
+  },
   'edit-batch': () => openSheet(`${sheetHead(L('ব্যাচ সেটিংস', 'Batch settings'))}${batchForm(activeBatch())}`),
   'delete-batch': el => {
     const b = state.batches.find(x => x.id === el.dataset.id);
@@ -1356,6 +1438,7 @@ const FORMS = {
       returnRate: clamp(toNum(f.elements.returnRate.value), 0, 90),
       codRate: clamp(toNum(f.elements.codRate.value), 0, 50),
       allocBy: f.elements.allocBy.value || 'value',
+      days: clamp(Math.floor(toNum(f.elements.days.value)), 0, 3650),
     };
     const id = f.dataset.id;
     if (id) {

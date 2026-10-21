@@ -1,7 +1,7 @@
 /* ===== রঙ ও থিম — Sage · Cream · Sun · Lavender · Ink (Apple-style premium) ===== */
 :root {
-  --bg: #DCE3D0;
-  --bg-glass: rgba(220, 227, 208, .85);
+  --bg: #FFFFFF;
+  --bg-glass: rgba(255, 255, 255, .85);
   --surface: #FBF9F1;
   --surface-2: #F1EEE0;
   --text: #1A1A17;
@@ -462,7 +462,7 @@ details.more[open] summary::before { content: "− "; }
 .steplist li.later { opacity: .6; }
 
 /* ===== আরও নরম, আরও সুন্দর ===== */
-body { background: radial-gradient(900px 420px at 50% -140px, #EEF2E3 0%, var(--bg) 62%); background-attachment: fixed; }
+body { background: var(--bg); background-attachment: fixed; }
 .card { border-radius: 26px; border-color: transparent; }
 .btn.primary { background: var(--ink); color: #fff; box-shadow: 0 10px 20px -12px rgba(0,0,0,.6); }
 .hero-bar span { background: var(--ink); }
@@ -557,3 +557,15 @@ details.more-card[open] > summary { margin-bottom: 14px; }
 details.more-card > * + * { margin-top: 14px; }
 .sub-title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
 .toast.has-act { width: max-content; white-space: nowrap; }
+
+/* ===== টার্গেট টাইমলাইন ===== */
+.paceset { width: 100%; text-align: center; padding: 12px 14px; border-radius: 18px; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 13.5px; }
+.daychip { background: var(--sun); color: var(--ink); font-weight: 800; font-size: 12.5px; padding: 5px 12px; border-radius: 999px; white-space: nowrap; }
+.daychip.late { background: var(--danger-soft); color: var(--danger); }
+.pline { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.pline > span:first-child { font-weight: 800; min-width: 48px; }
+.pline > span:nth-child(2) { flex: 1; color: var(--muted); }
+.pline b { color: var(--text); }
+.pdiff { font-weight: 800; white-space: nowrap; }
+.advice { background: var(--surface-2); border-radius: 16px; padding: 11px 13px; font-size: 13.5px; line-height: 1.6; margin-top: 8px; }
+.pace .dsell { margin-top: 12px; }
