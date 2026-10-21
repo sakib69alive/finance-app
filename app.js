@@ -110,7 +110,7 @@ const statusLabel = s => ({ delivered: L('ডেলিভারড', 'Delivered'
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v15'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v16'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 function newBatch(o = {}) {
   return {
@@ -588,36 +588,43 @@ function pace(b, c) {
 function paceCard(b, c) {
   const p = pace(b, c);
   if (!p) {
-    return c.items.length ? `<button type="button" class="paceset" data-action="edit-batch">⏱ ${L('কত দিনে টার্গেট বেচবেন? ডেডলাইন সেট করুন (ঐচ্ছিক)', 'Set a deadline for your target (optional)')}</button>` : '';
+    return c.items.length ? `<button type="button" class="paceset" data-action="edit-batch">${L('কত দিনে টার্গেট বেচবেন? ডেডলাইন সেট করুন (ঐচ্ছিক)', 'Set a deadline for your target (optional)')}</button>` : '';
   }
   const over = p.daysLeft <= 0;
   const timePct = clamp(p.dayNo / p.days * 100, 0, 100);
-  const diff = p.soldToday - p.targetToday;
-  const line = (label, target, sold) => {
+  const tile = (label, target, sold) => {
     const d = sold - target;
-    return `<div class="pline"><span>${label}</span><span>${L('টার্গেট', 'Target')} <b>${target}</b> · ${L('বিক্রি', 'Sold')} <b>${sold}</b></span>
-      <span class="pdiff ${d >= 0 ? 'pos' : 'neg'}">${d >= 0 ? (d > 0 ? `+${d} ${L('বেশি', 'extra')}` : '✓') : `${d} ${L('কম', 'short')}`}</span></div>`;
+    const ok = d >= 0;
+    const pill = ok ? (d > 0 ? L(`${d} বেশি`, `${d} extra`) : L('পূরণ', 'Done')) : L(`${-d} বাকি`, `${-d} to go`);
+    return `<div class="ptile"><small>${label}</small>
+      <div class="pbig"><b>${sold}</b><span>/ ${target}</span></div>
+      <span class="ppill ${ok ? 'ok' : 'no'}">${pill}</span></div>`;
   };
-  let advice;
-  if (p.reached) advice = L('🎉 টার্গেট পূরণ হয়ে গেছে। এখন যা বিক্রি হবে সবই বাড়তি লাভ।', '🎉 Target reached. Everything you sell now is extra profit.');
-  else if (!p.enough) advice = L(`স্টকে কুলাবে না: টার্গেটে যেতে প্রায় ${p.needUnits}টা লাগবে, আছে ${c.remainingUnits}টা। আরও মাল আনুন, দাম বাড়ান, বা টার্গেট কমান।`, `Not enough stock: about ${p.needUnits} more sales needed, you have ${c.remainingUnits}. Restock, raise prices, or lower the target.`);
-  else if (over) advice = L(`সময় শেষ, টার্গেটে পৌঁছাতে আরও প্রায় ${p.needUnits}টা বিক্রি লাগবে। ${p.needDays != null ? `এই গতিতে আরও ${p.needDays} দিন লাগবে।` : 'ডেডলাইন বাড়ান।'}`, `Time is up. About ${p.needUnits} more sales needed.${p.needDays != null ? ` At this pace, ${p.needDays} more days.` : ''}`);
-  else if (p.perDay <= 0) advice = L(`এখনও বিক্রি শুরু হয়নি। ${p.daysLeft} দিনে টার্গেট ধরতে প্রতিদিন প্রায় ${p.targetToday}টা বেচতে হবে।`, `No sales yet. To hit target in ${p.daysLeft} days, sell about ${p.targetToday} per day.`);
-  else if (p.extra > 0) advice = L(`এই গতিতে (গড়ে দিনে ${(Math.round(p.perDay * 10) / 10)}টা) টার্গেটে পৌঁছাতে আরও প্রায় ${p.needDays} দিন লাগবে, আপনার হাতে আছে ${p.daysLeft} দিন। তাই ${p.extra} দিন বাড়ানো ভালো। শেষ দিনে হাতে থাকবে আনুমানিক ${fmt(p.projCash)} (টার্গেট ${fmt(c.target)})।`,
-    `At your pace (${Math.round(p.perDay * 10) / 10}/day) you need ~${p.needDays} more days but have ${p.daysLeft}. Consider adding ${p.extra} days. Expected cash at the end: ${fmt(p.projCash)} (target ${fmt(c.target)}).`);
-  else advice = L(`ভালো চলছে! এই গতিতে ${p.needDays} দিনেই টার্গেট ধরবেন, হাতে আছে ${p.daysLeft} দিন।`, `On track. At this pace you hit target in ${p.needDays} days, with ${p.daysLeft} left.`);
-  const mg = p.margin > 0 && !p.reached ? L(` প্রতি বিক্রিতে গড়ে লাভ ${fmt(p.margin)}।`, ` Avg profit per sale ${fmt(p.margin)}.`) : '';
+  const rate = Math.round(p.perDay * 10) / 10;
+  let note, tone = '';
+  if (p.reached) note = L('টার্গেট পূরণ হয়েছে। এখন থেকে প্রতিটা বিক্রিই বাড়তি লাভ।', 'Target reached. Every sale from here is extra profit.');
+  else if (!p.enough) { tone = 'warn'; note = L(`স্টকে টার্গেট ধরা যাবে না। আরও প্রায় ${p.needUnits}টা বিক্রি লাগবে, স্টকে আছে ${c.remainingUnits}টা। মাল আনুন, দাম বাড়ান বা টার্গেট কমান।`, `Stock won't reach the target: about ${p.needUnits} more sales needed, ${c.remainingUnits} in stock. Restock, raise prices or lower the target.`); }
+  else if (over) { tone = 'warn'; note = p.needDays != null ? L(`সময় শেষ। আরও প্রায় ${p.needUnits}টা বিক্রি লাগবে, এই গতিতে ${p.needDays} দিন।`, `Time is up. About ${p.needUnits} more sales needed, around ${p.needDays} days at this pace.`) : L('সময় শেষ। ডেডলাইন বাড়িয়ে নিন।', 'Time is up. Extend the deadline.'); }
+  else if (p.perDay <= 0) note = L(`এখনও বিক্রি শুরু হয়নি। ${p.daysLeft} দিনে টার্গেট ধরতে দিনে প্রায় ${p.targetToday}টা বেচতে হবে।`, `No sales yet. To hit the target in ${p.daysLeft} days, aim for about ${p.targetToday} a day.`);
+  else if (p.extra > 0) { tone = 'warn'; note = L(`এই গতিতে ডেডলাইনে পৌঁছানো কঠিন। ${p.extra} দিন বাড়ালে টার্গেট ধরা যাবে।`, `Hard to make the deadline at this pace. Adding ${p.extra} days gets you there.`); }
+  else note = L('ঠিক পথে আছেন। এই গতি ধরে রাখলে ডেডলাইনের আগেই টার্গেট ধরবেন।', 'You are on track. Keep this pace and you reach the target before the deadline.');
+  const rows = p.reached ? '' : `<div class="prows">
+      <div><span>${L('বর্তমান গতি', 'Current pace')}</span><b>${rate} ${L('টা/দিন', '/day')}</b></div>
+      <div><span>${L('টার্গেটে লাগবে', 'Needed to finish')}</span><b>${p.needDays != null ? `${p.needDays} ${L('দিন', 'days')}` : '—'}</b></div>
+      <div><span>${L('শেষ দিনে হাতে থাকবে', 'Cash at deadline')}</span><b>${fmt(p.projCash)}</b></div>
+      <div><span>${L('প্রতি বিক্রিতে লাভ', 'Profit per sale')}</span><b>${fmt(p.margin)}</b></div>
+    </div>`;
+  const add = p.extra > 0 ? p.extra : 7;
   return `<section class="card pace">
-    <div class="card-head"><h2>⏱ ${L('টার্গেট টাইমলাইন', 'Target timeline')}</h2>
+    <div class="card-head"><h2>${L('টার্গেট টাইমলাইন', 'Target timeline')}</h2>
       <span class="daychip ${over ? 'late' : ''}">${over ? L('সময় শেষ', 'Time up') : L(`${p.daysLeft} দিন বাকি`, `${p.daysLeft} days left`)}</span></div>
+    <div class="ptime"><span>${L(`দিন ${Math.min(p.dayNo, p.days)} / ${p.days}`, `Day ${Math.min(p.dayNo, p.days)} of ${p.days}`)}</span><span>${Math.round(timePct)}%</span></div>
     <div class="bar sm"><i style="width:${timePct.toFixed(1)}%"></i></div>
-    <p class="hint" style="margin:0 0 8px">${L(`দিন ${Math.min(p.dayNo, p.days)} / ${p.days}`, `Day ${Math.min(p.dayNo, p.days)} of ${p.days}`)}</p>
-    ${over ? '' : line(L('আজ', 'Today'), p.targetToday, p.soldToday)}
-    ${p.targetYest != null ? line(L('গতকাল', 'Yesterday'), p.targetYest, p.soldYest) : ''}
-    <p class="advice">${advice}${mg}</p>
+    <div class="ptiles">${over ? '' : tile(L('আজ', 'Today'), p.targetToday, p.soldToday)}${p.targetYest != null ? tile(L('গতকাল', 'Yesterday'), p.targetYest, p.soldYest) : ''}</div>
+    ${rows}
+    <p class="advice ${tone}">${note}</p>
     <div class="dsell">
-      <button type="button" class="btn sm" data-action="add-days" data-n="3">${L('+৩ দিন', '+3 days')}</button>
-      <button type="button" class="btn sm" data-action="add-days" data-n="7">${L('+৭ দিন', '+7 days')}</button>
+      <button type="button" class="btn primary sm" data-action="add-days" data-n="${add}">${L(`+${add} দিন বাড়ান`, `Add ${add} days`)}</button>
       <button type="button" class="btn sm" data-action="edit-batch">${L('দিন বদলান', 'Change days')}</button>
     </div>
   </section>`;
