@@ -112,7 +112,7 @@ function newBatch(o = {}) {
     id: uid(), name: o.name || 'My business', createdAt: Date.now(),
     capital: toNum(o.capital), target: toNum(o.target),
     returnRate: o.returnRate ?? 5, codRate: o.codRate ?? 1, allocBy: o.allocBy || 'value',
-    budget: { ...DEFAULT_BUDGET }, products: [], expenses: [], sales: [],
+    budget: { ...DEFAULT_BUDGET }, limits: {}, warnAt: 80, products: [], expenses: [], sales: [],
   };
 }
 function migrate(s) {
@@ -149,6 +149,85 @@ function save() {
   }
 }
 const activeBatch = () => state.batches.find(b => b.id === state.activeBatchId) || null;
+
+/* ---------- প্রোডাক্টের ছবি: IndexedDB-তে (localStorage-এ বড় ছবি ধরে না) ---------- */
+const IMG_MAX_BYTES = 25 * 1024 * 1024, IMG_SIDE = 1280;
+const imgURL = new Map(); // productId → দেখানোর URL
+let imgDB = null;
+function idb() {
+  if (!imgDB) {
+    imgDB = new Promise((res, rej) => {
+      if (!window.indexedDB) return rej(new Error('no-idb'));
+      const r = indexedDB.open('hisabi-images', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('img');
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+    imgDB.catch(() => { imgDB = null; });
+  }
+  return imgDB;
+}
+async function imgTx(mode, fn) {
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('img', mode);
+    const req = fn(tx.objectStore('img'));
+    tx.oncomplete = () => res(req && req.result);
+    tx.onerror = tx.onabort = () => rej(tx.error || new Error('tx'));
+  });
+}
+function setImgURL(id, blob) {
+  if (imgURL.has(id)) URL.revokeObjectURL(imgURL.get(id));
+  if (blob) imgURL.set(id, URL.createObjectURL(blob)); else imgURL.delete(id);
+}
+async function putImage(id, blob) { await imgTx('readwrite', s => s.put(blob, id)); setImgURL(id, blob); }
+async function deleteImage(id) { await imgTx('readwrite', s => s.delete(id)); setImgURL(id, null); }
+async function allImages() {
+  const keys = await imgTx('readonly', s => s.getAllKeys());
+  const out = [];
+  for (const k of keys) out.push([k, await imgTx('readonly', s => s.get(k))]);
+  return out;
+}
+// চালুর সময় ছবি লোড; মুছে ফেলা প্রোডাক্টের ছবি পরিষ্কার
+async function loadImages() {
+  try {
+    const ids = new Set(state.batches.flatMap(b => b.products.map(p => p.id)));
+    const all = await allImages();
+    all.forEach(([k, blob]) => { if (ids.has(k) && blob) setImgURL(k, blob); });
+    const stale = all.map(([k]) => k).filter(k => !ids.has(k));
+    if (stale.length) imgTx('readwrite', s => { stale.forEach(k => s.delete(k)); }).catch(() => {});
+    if (imgURL.size && !sheetOpen) render();
+  } catch (e) { /* ছবি ছাড়াই অ্যাপ চলবে */ }
+}
+// ছবি ছোট করে JPEG বানায়, যাতে জায়গা কম লাগে
+function compressImage(file) {
+  return new Promise((res, rej) => {
+    if (file.type && !file.type.startsWith('image/')) return rej(new Error('type'));
+    if (file.size > IMG_MAX_BYTES) return rej(new Error('size'));
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => {
+      URL.revokeObjectURL(url);
+      const k = Math.min(1, IMG_SIDE / Math.max(im.naturalWidth, im.naturalHeight, 1));
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(im.naturalWidth * k));
+      cv.height = Math.max(1, Math.round(im.naturalHeight * k));
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.drawImage(im, 0, 0, cv.width, cv.height);
+      cv.toBlob(b => (b ? res(b) : rej(new Error('read'))), 'image/jpeg', 0.85);
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); rej(new Error(file.type ? 'read' : 'type')); };
+    im.src = url;
+  });
+}
+const blobToDataURL = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
+const avatar = (p, cls = 'avatar') => (imgURL.has(p.id)
+  ? `<span class="${cls} has-img"><img src="${imgURL.get(p.id)}" alt=""></span>`
+  : `<span class="${cls}">${p.emoji || '📦'}</span>`);
+let pendingImg; // ফর্মে বাছাই করা ছবি: undefined = বদলায়নি, null = মুছতে হবে
+let pendingPrev = '';
 
 /* =========================================================
    হিসাবের ইঞ্জিন
@@ -256,7 +335,16 @@ function compute(b) {
   };
 }
 
-/* ---------- পরামর্শ ---------- */
+/* ---------- বাজেট সীমা: ৳ দেওয়া থাকলে সেটাই, নইলে মূলধনের % ---------- */
+const limitOf = (b, k) => (toNum((b.limits || {})[k]) > 0 ? toNum(b.limits[k]) : toNum(b.capital) * toNum(b.budget[k]) / 100);
+const warnRatio = b => clamp(toNum(b.warnAt) || 80, 10, 100) / 100;
+// রিজার্ভ খরচ না, হাতে রাখা অব্যবহৃত মূলধন
+const budgetActual = c => ({
+  product: c.cat.product, shipping: c.cat.shipping, ads: c.cat.ads, packaging: c.cat.packaging,
+  courier: c.cat.courier, other: c.cat.other + c.cat.returns, reserve: Math.max(0, c.unspent),
+});
+
+/* ---------- পরামর্শ (অফলাইন, নিয়মভিত্তিক বিজনেস গাইড) ---------- */
 function insights(b, c) {
   const out = [];
   const cap = c.capital;
@@ -274,19 +362,25 @@ function insights(b, c) {
     'No costs (ads, shipping, packaging) added yet. Without them, the cost per unit will look lower than it really is.');
 
   if (cap > 0) {
+    const act = budgetActual(c), wr = warnRatio(b);
     for (const key of ['product', 'shipping', 'ads', 'packaging', 'courier', 'other']) {
-      const actual = key === 'other' ? c.cat.other + c.cat.returns : c.cat[key];
-      const rec = cap * toNum(b.budget[key]) / 100;
-      if (actual > rec * 1.1 && actual - rec > 50) {
-        push('warn',
-          `${bl(key)}-এ গেছে ${fmt(actual)} (মূলধনের ${pct(actual / cap * 100)}), প্রস্তাবিত ${fmt(rec)} (${b.budget[key]}%)। ${key === 'ads' ? 'পরের ব্যাচে অ্যাড কম রাখলে প্রতি ইউনিটের খরচ কমবে।' : ''}`,
-          `${bl(key)}: ${fmt(actual)} spent (${pct(actual / cap * 100)} of capital), suggested ${fmt(rec)} (${b.budget[key]}%). ${key === 'ads' ? 'Lower ads next batch to cut the cost per unit.' : ''}`);
+      const actual = act[key], lim = limitOf(b, key);
+      if (lim <= 0 || actual <= 0) continue;
+      const used = pct(actual / lim * 100);
+      const nextBn = key === 'ads' ? 'নতুন অ্যাড চালানোর আগে আগের অ্যাডে কত বিক্রি এসেছে দেখুন।' : 'এই খাতে আর খরচের আগে দেখুন সত্যিই দরকার কিনা।';
+      const nextEn = key === 'ads' ? 'Review sales results before spending more on ads.' : 'Check it is really needed before spending more here.';
+      if (actual > lim) {
+        push('danger', `${bl(key)} সীমা ছাড়িয়েছে: খরচ ${fmt(actual)}, সীমা ${fmt(lim)} (${fmt(actual - lim)} বেশি)। বাড়তি প্রতিটা টাকা প্রতি ইউনিটের খরচ বাড়ায়, লাভ কমায়। ${nextBn} পরিকল্পিত হলে বাজেট পরিকল্পনায় সীমা বাড়ান।`,
+          `${bl(key)} is over its limit: ${fmt(actual)} spent vs ${fmt(lim)} (${fmt(actual - lim)} over). Every extra taka raises cost per unit and cuts profit. ${nextEn} If it was planned, raise the limit in Budget plan.`);
+      } else if (key !== 'product' && actual >= lim * wr) {
+        push('warn', `${bl(key)} সীমার ${used} খরচ হয়ে গেছে (${fmt(actual)} / ${fmt(lim)}), বাকি মাত্র ${fmt(lim - actual)}। ${nextBn}`,
+          `${bl(key)} has used ${used} of its limit (${fmt(actual)} of ${fmt(lim)}), only ${fmt(lim - actual)} left. ${nextEn}`);
       }
     }
-    const resRec = cap * toNum(b.budget.reserve) / 100;
+    const resRec = limitOf(b, 'reserve');
     if (c.unspent >= 0 && c.unspent < resRec && c.spent > 0) {
-      push('warn', `জরুরি রিজার্ভ কম: অব্যবহৃত মূলধন ${fmt(c.unspent)}, অন্তত ${fmt(resRec)} হাতে রাখা ভালো।`,
-        `Low reserve: ${fmt(c.unspent)} of capital unspent. Better to keep at least ${fmt(resRec)} aside.`);
+      push('warn', `জরুরি রিজার্ভ কম: অব্যবহৃত মূলধন ${fmt(c.unspent)}, ঠিক করা ন্যূনতম ${fmt(resRec)}। হঠাৎ রিটার্ন বা বাড়তি চার্জ এলে টাকা কম পড়তে পারে। নতুন খরচ থামিয়ে আগে বিক্রি থেকে টাকা তুলুন।`,
+        `Low reserve: ${fmt(c.unspent)} of capital unspent, your minimum is ${fmt(resRec)}. A surprise return or fee could leave you short. Hold new spending until sales bring cash in.`);
     }
   }
 
@@ -305,6 +399,18 @@ function insights(b, c) {
     const extra = fmt(c.gap / (c.remainingUnits * c.factor));
     push('info', `এখনকার দামে সব বেচলে শেষে হবে প্রায় ${fmt(c.projected)}। টার্গেটে যেতে আরও ${fmt(c.gap)} দরকার, মানে প্রতি ইউনিটে গড়ে ${extra} বেশি নিতে হবে।`,
       `At current prices you'll end with about ${fmt(c.projected)}. You need ${fmt(c.gap)} more, about ${extra} extra per unit.`);
+  }
+  // টার্গেটে পৌঁছাতে আরও কয়টা সফল ডেলিভারি লাগবে (এখনকার দামে)
+  const left = c.items.filter(x => x.remaining > 0);
+  if (c.need > 0 && left.length) {
+    const perSale = sum(left.map(x => x.remaining * x.planned * (1 - c.cod))) / sum(left.map(x => x.remaining));
+    if (perSale > 0) {
+      const n = Math.ceil(c.need / perSale), canSell = Math.round(c.remainingUnits * (1 - c.r));
+      if (c.gap > 1) push('warn', `টার্গেটে যেতে এখনকার দামে আরও প্রায় ${cnt(n)} সফল ডেলিভারি লাগবে, কিন্তু স্টক ${c.remainingUnits} থেকে ${pct(c.r * 100)} রিটার্ন ধরে পাওয়া যাবে প্রায় ${cnt(canSell)}। এই হিসাবে টার্গেট কঠিন: খরচ কমান, দাম বাড়ান, বা টার্গেট আবার দেখুন।`,
+        `At current prices you need about ${n} more successful deliveries, but your ${c.remainingUnits} units give about ${canSell} after ${pct(c.r * 100)} returns. The target looks difficult under these assumptions: cut costs, raise prices, or review the target.`);
+      else push('info', `টার্গেটে যেতে এখনকার দামে আরও প্রায় ${cnt(n)} সফল ডেলিভারি দরকার (হাতে ${c.remainingUnits} ইউনিট আছে)।`,
+        `You need about ${n} more successful deliveries at current prices to reach the target (${c.remainingUnits} units in stock).`);
+    }
   }
   if (c.pendingOrders) push('info', `কুরিয়ারে ${cnt(c.pendingOrders)} অর্ডারের ${fmt(c.pendingNet)} আসা বাকি।`, `${fmt(c.pendingNet)} from ${c.pendingOrders} order(s) is still with the courier.`);
   if (c.cat.ads > 0 && c.deliveredOrders > 0) {
@@ -446,7 +552,7 @@ function viewHome(b, c) {
   const ins = insights(b, c);
   const rows = c.items.map(x => `
     <button type="button" class="prow" data-action="open-product" data-id="${x.p.id}">
-      <span class="avatar">${x.p.emoji || '📦'}</span>
+      ${avatar(x.p)}
       <span class="pmain"><b>${esc(x.p.name)}</b><small>${L('খরচ', 'Cost')} ${fmt(x.unit)}/${L('ইউনিট', 'unit')} · ${L('স্টক', 'Stock')} ${x.remaining}</small></span>
       <span class="pend"><b>${fmt(x.planned)}</b><small>${x.myPrice > 0 ? L('আপনার দাম', 'Your price') : L('বেচবেন', 'Sell at')}</small></span>
     </button>`).join('');
@@ -455,7 +561,7 @@ function viewHome(b, c) {
   <section class="hero">
     <div class="hero-top">
       <div>
-        <div class="hero-label">${L('টার্গেট', 'Target')}</div>
+        <div class="hero-label">${L('টার্গেট (মূলধনসহ শেষে হাতে ক্যাশ)', 'Target (final cash incl. capital)')}</div>
         <div class="hero-target">${fmt(c.target)}</div>
         <div class="hero-sub">${L('মূলধন', 'Capital')} ${fmt(c.capital)} · ${L('লক্ষ্য লাভ', 'Goal profit')} ${fmt(c.targetProfit)}${c.capital > 0 ? ` (${pct(c.targetProfit / c.capital * 100)})` : ''}</div>
       </div>
@@ -479,11 +585,15 @@ function viewHome(b, c) {
     ${stat(L('বিক্রি (নেট)', 'Sales (net)'), fmt(c.revenue), L(`${cnt(c.deliveredOrders)} অর্ডার ডেলিভারড`, `${c.deliveredOrders} order${c.deliveredOrders === 1 ? '' : 's'} delivered`))}
     ${stat(L('স্টকে আছে', 'In stock'), fmt(c.stockValue), L(`${c.remainingUnits} ইউনিট (খরচ মূল্যে)`, `${c.remainingUnits} units (at cost)`))}
     ${stat(c.profit >= 0 ? L('লাভ', 'Profit') : L('ক্ষতি', 'Loss'), fmt(c.profit), L('বিক্রি হওয়া ইউনিটে', 'On units sold'), c.profit >= 0 ? 'pos' : 'neg')}
+    ${stat(L('পাওনা (কুরিয়ারে)', 'Receivable (courier)'), fmt(c.pendingNet), L('এখনও ক্যাশ না', 'Not cash yet'))}
+    ${stat(L('রিজার্ভ', 'Reserve'), fmt(Math.max(0, c.unspent)), L(`ন্যূনতম ${fmt(limitOf(b, 'reserve'))} · খরচ না`, `Min ${fmt(limitOf(b, 'reserve'))} · not an expense`), c.unspent < limitOf(b, 'reserve') ? 'neg' : '')}
   </section>
 
   <section class="card">
-    <h2 class="card-title">${icon('spark', 20)} ${L('পরামর্শ', 'Suggestions')}</h2>
-    <ul class="insights">${ins.map(i => `<li class="insight ${i.lvl}">${esc(i.t)}</li>`).join('')}</ul>
+    <h2 class="card-title">${icon('spark', 20)} ${L('বিজনেস গাইড', 'Business guide')}</h2>
+    ${ins[0] && ins[0].lvl !== 'good' ? `<div class="next-act"><small>${L('এখন যা করবেন', 'Do this next')}</small>${esc(ins[0].t)}</div>` : ''}
+    <ul class="insights">${ins.slice(ins[0] && ins[0].lvl !== 'good' ? 1 : 0).map(i => `<li class="insight ${i.lvl}">${esc(i.t)}</li>`).join('')}</ul>
+    <p class="hint">${L('এই পরামর্শ আপনার দেওয়া হিসাব থেকে, ফোনেই তৈরি (ইন্টারনেট লাগে না)। লাভের নিশ্চয়তা নয়।', 'Built on this device from your own numbers (no internet). Not a guarantee of profit.')}</p>
   </section>
 
   ${c.items.length ? `<section class="card">
@@ -492,7 +602,7 @@ function viewHome(b, c) {
   </section>` : ''}
 
   <section class="card">
-    <div class="card-head"><h2>${L('টাকা কোথায় গেল', 'Where the money went')}</h2><button type="button" class="link" data-action="edit-budget">${L('বাজেট % বদলান', 'Edit budget %')}</button></div>
+    <div class="card-head"><h2>${L('টাকা কোথায় গেল', 'Where the money went')}</h2><button type="button" class="link" data-action="edit-budget">${L('বাজেট ও সীমা বদলান', 'Edit budget & limits')}</button></div>
     ${budgetBlock(b, c)}
   </section>
 
@@ -535,27 +645,28 @@ function stepsCard(b, c) {
 
 function budgetBlock(b, c) {
   const cap = c.capital;
-  const actual = {
-    product: c.cat.product, shipping: c.cat.shipping, ads: c.cat.ads, packaging: c.cat.packaging,
-    courier: c.cat.courier, other: c.cat.other + c.cat.returns, reserve: Math.max(0, c.unspent),
-  };
+  const actual = budgetActual(c), wr = warnRatio(b);
   const colorOf = k => `var(--c-${k})`;
   const total = Math.max(cap, c.spent);
   const stack = BUDGET_KEYS.filter(k => actual[k] > 0)
     .map(k => `<span style="width:${(actual[k] / total * 100).toFixed(2)}%;background:${colorOf(k)}"></span>`).join('');
   const rowsHtml = BUDGET_KEYS.map(k => {
-    const rec = cap * toNum(b.budget[k]) / 100;
+    const rec = limitOf(b, k);
+    const fixed = toNum((b.limits || {})[k]) > 0;
     const a = actual[k];
     const ratio = rec > 0 ? a / rec : (a > 0 ? 2 : 0);
+    const over = k !== 'reserve' && a > rec;
+    const near = k !== 'reserve' && !over && a > 0 && ratio >= wr;
     let status;
     if (k === 'reserve') status = a >= rec ? `<span class="ok">${L('ঠিক আছে', 'OK')}</span>` : `<span class="bad">${fmt(rec - a)} ${L('কম', 'short')}</span>`;
-    else status = a > rec ? `<span class="bad">${fmt(a - rec)} ${L('বেশি', 'over')}</span>` : `${fmt(rec - a)} ${L('বাকি', 'left')}`;
-    const over = k !== 'reserve' && a > rec;
+    else if (over) status = `<span class="bad">${fmt(a - rec)} ${L('বেশি', 'over')}</span>`;
+    else status = near ? `<span class="nearc">${pct(ratio * 100)} ${L('খরচ', 'used')} · ${fmt(rec - a)} ${L('বাকি', 'left')}</span>` : `${fmt(rec - a)} ${L('বাকি', 'left')}`;
+    const limTxt = fixed ? `${k === 'reserve' ? L('ন্যূনতম', 'min') : L('সীমা', 'limit')} ${fmt(rec)}` : `${L('সীমা', 'limit')} ${toNum(b.budget[k])}%`;
     return `<div class="brow">
       <div class="brow-top"><i class="dot" style="--c:${colorOf(k)}"></i><span class="grow">${bl(k)}</span>
         <span class="amt">${fmt(a)} <small>/ ${fmt(rec)}</small></span></div>
-      <div class="bbar"><span class="${over ? 'over' : ''}" style="--c:${colorOf(k)};width:${(clamp(ratio, 0, 1) * 100).toFixed(1)}%"></span></div>
-      <div class="brow-meta"><span>${cap > 0 ? pct(a / cap * 100) : '0%'} · ${L('প্রস্তাবিত', 'suggested')} ${toNum(b.budget[k])}%</span>${status}</div>
+      <div class="bbar"><span class="${over ? 'over' : near ? 'near' : ''}" style="--c:${colorOf(k)};width:${(clamp(ratio, 0, 1) * 100).toFixed(1)}%"></span></div>
+      <div class="brow-meta"><span>${cap > 0 ? pct(a / cap * 100) : '0%'} · ${limTxt}</span>${status}</div>
     </div>`;
   }).join('');
   return `<div class="stack">${stack}</div>
@@ -570,7 +681,7 @@ function viewProducts(b, c) {
     const pendW = x.units ? x.pending / x.units * 100 : 0;
     return `<div class="pcard" role="button" tabindex="0" data-action="open-product" data-id="${x.p.id}">
       <div class="pc-head">
-        <span class="avatar">${x.p.emoji || '📦'}</span>
+        ${avatar(x.p)}
         <span class="pmain"><b>${esc(x.p.name)}</b><small>${L('স্টক', 'Stock')} ${x.remaining}/${x.units} · ${L('বিক্রি', 'Sold')} ${x.delivered}${x.pending ? ` · ${L('পথে', 'In transit')} ${x.pending}` : ''}</small></span>
         <span class="price-pill">${fmt(x.planned)}</span>
       </div>
@@ -599,6 +710,7 @@ function productDetail(id) {
   const order = ['product', 'shipping', 'ads', 'packaging', 'courier', 'returns', 'other'];
   const brk = order.filter(k => x.byCat[k] > 0.004).map(k => `<div><i class="dot" style="--c:var(--c-${k})"></i>
       <span>${cl(k)}</span><b>${fmt(x.units ? x.byCat[k] / x.units : 0)}</b><em>${L('মোট', 'total')} ${fmt(x.byCat[k])}</em></div>`).join('');
+  const top = order.filter(k => x.byCat[k] > 0).sort((a, z) => x.byCat[z] - x.byCat[a])[0];
   const min = Math.max(0, Math.floor(x.breakeven * 0.7 / 10) * 10);
   const max = ceil10(Math.max(x.goalPrice * 2, x.breakeven * 2, 100));
   const startPrice = x.planned;
@@ -607,10 +719,11 @@ function productDetail(id) {
     ? `${L('কেনা', 'Bought')} ${CUR[p.currency]}${esc(p.priceInput)}${p.priceMode === 'total' ? L(' মোট', ' total') : perU} × ${L('রেট', 'rate')} ${esc(p.rate)}`
     : `${L('কেনা', 'Bought')} ${fmt(toNum(p.unitCost))}${perU}`;
   openSheet(`
-    <div class="sheet-head"><span class="avatar lg">${p.emoji || '📦'}</span>
+    <div class="sheet-head">${avatar(p, 'avatar lg')}
       <h3>${esc(p.name)}<small>${x.units} ${L('ইউনিট', 'units')} · ${buyLine}</small></h3>
       <button type="button" class="icon-btn" data-action="edit-product" data-id="${p.id}" aria-label="${L('এডিট', 'Edit')}">${icon('edit', 19)}</button>
       <button type="button" class="icon-btn" data-action="close-sheet" aria-label="${L('বন্ধ করুন', 'Close')}">${icon('x', 20)}</button></div>
+    ${imgURL.has(p.id) ? `<img class="pd-photo" src="${imgURL.get(p.id)}" alt="${esc(p.name)}">` : ''}
 
     <div class="bignum"><small>${L('সব খরচ মিলিয়ে প্রতি ইউনিট পড়ছে', 'All-in cost per unit')}</small><b>${fmt(x.unit)}</b>
       <div class="brk">${brk || `<div><span></span><span>${L('এখনও কোনো খরচ নেই', 'No costs yet')}</span></div>`}</div></div>
@@ -625,6 +738,9 @@ function productDetail(id) {
         `টার্গেট দাম = খরচ ${fmt(x.unit)} + লাভ ${fmt(x.profitPart)} + রিটার্ন/COD বাফার ${fmt(x.goalPrice - x.unit - x.profitPart)} (রাউন্ড করে)। বাকি ${cnt(x.remaining)} এই দামে বেচলে টার্গেট পূরণ হবে।`,
         `Target price = cost ${fmt(x.unit)} + profit ${fmt(x.profitPart)} + return/COD buffer ${fmt(x.goalPrice - x.unit - x.profitPart)} (rounded). Sell the remaining ${x.remaining} at this price to hit the target.`)}</p>`
       : `<p class="explain">${L('এই প্রোডাক্টের সব ইউনিট বিক্রি/পথে আছে।', 'All units of this product are sold or in transit.')}</p>`}
+    ${top ? `<p class="explain">${L(
+      `জানা খরচ: কেনা দাম আর আপনার লেখা খরচ মিলিয়ে প্রতি ইউনিট ${fmt(x.unit)}। সবচেয়ে বড় খরচ ${cl(top)} (${pct(x.byCat[top] / x.total * 100)})। আনুমানিক: রিটার্ন/ড্যামেজ ${pct(c.r * 100)} আর COD ${pct(c.cod * 100)} (ব্যাচ সেটিংসে বদলানো যায়)। লাভের নিশ্চয়তা নয়।`,
+      `Known costs: purchase price plus the costs you recorded, ${fmt(x.unit)} per unit. Biggest cost: ${cl(top)} (${pct(x.byCat[top] / x.total * 100)}). Estimates: returns/damage ${pct(c.r * 100)} and COD ${pct(c.cod * 100)} (change in batch settings). Not a guarantee of profit.`)}</p>` : ''}
 
     ${x.remaining > 0 ? `<form class="sim" data-live="sim" data-id="${p.id}" onsubmit="return false">
       <h4>${L('দাম বদলিয়ে দেখুন', 'Try a different price')}</h4>
@@ -671,12 +787,17 @@ function productForm(p) {
   const v = p || { emoji: '📦', priceMode: 'unit', currency: 'BDT' };
   const cur = v.currency || 'BDT';
   const rate = v.rate || state.settings.rates[cur] || '';
+  pendingImg = undefined;
   return `${sheetHead(isNew ? L('নতুন প্রোডাক্ট', 'New product') : L('প্রোডাক্ট এডিট', 'Edit product'), isNew && !activeBatch().products.length ? L('ধাপ ২: কী এনেছেন, কয়টা, কত দামে', 'Step 2: what you bought, how many, at what price') : '')}
   <form data-form="product" data-live="product" data-id="${p ? p.id : ''}" autocomplete="off">
     <label class="field"><span>${L('প্রোডাক্টের নাম', 'Product name')}</span>
       <input class="input" name="name" maxlength="60" value="${esc(v.name || '')}" placeholder="${L('যেমন: মিনি পোর্টেবল ফ্যান', 'e.g. Mini portable fan')}"></label>
     <div class="field"><span class="flabel">${L('আইকন', 'Icon')}</span><div class="emoji-row">${EMOJIS.map(em =>
       `<label class="emo"><input type="radio" name="emoji" value="${em}" ${em === v.emoji ? 'checked' : ''}><span>${em}</span></label>`).join('')}</div></div>
+    <div class="field"><span class="flabel">${L('ছবি (ঐচ্ছিক)', 'Photo (optional)')}</span>
+      <div class="img-pick" data-img-pick data-pid="${p ? p.id : ''}">${imgPickInner(p ? imgURL.get(p.id) : '', v.emoji)}</div>
+      <input type="file" accept="image/*" data-img-input hidden>
+      <div class="hint">${L('ফোনের গ্যালারি/ক্যামেরা বা কম্পিউটারের ফোল্ডার থেকে বাছুন। ছবি শুধু এই ডিভাইসে থাকে।', 'Pick from your phone gallery/camera or a folder on your computer. Photos stay on this device only.')}</div></div>
     <label class="field"><span>${L('১. কয়টা ইউনিট (পিস) কিনেছেন?', '1. How many units (pieces) did you buy?')}</span>
       <input class="input" name="units" inputmode="numeric" value="${esc(v.units ?? '')}" placeholder="${L('যেমন: 5', 'e.g. 5')}">${hintLine(L('শুধু সংখ্যা লিখুন। এই সংখ্যা দিয়েই প্রতি ইউনিটের খরচ বের হবে।', 'Just a number. The cost per unit is worked out from this.'))}</label>
     <div class="field"><span class="flabel" data-price-label>${L('২. কেনা দাম', '2. Purchase price')}</span>
@@ -697,6 +818,37 @@ function productForm(p) {
     <button class="btn primary block" type="submit">${isNew ? L('যোগ করুন', 'Add') : L('সেভ করুন', 'Save')}</button>
   </form>`;
 }
+function imgPickInner(url, emoji) {
+  return `${url ? `<span class="avatar lg has-img"><img src="${url}" alt=""></span>` : `<span class="avatar lg">${emoji || '📦'}</span>`}
+    <div class="img-btns"><button type="button" class="btn sm" data-action="pick-img">${icon('upload', 16)} ${url ? L('ছবি বদলান', 'Change photo') : L('ছবি বাছুন', 'Choose photo')}</button>
+    ${url ? `<button type="button" class="btn sm" data-action="remove-img">${icon('trash', 16)} ${L('সরান', 'Remove')}</button>` : ''}</div>`;
+}
+function showImgPreview() {
+  const box = $('[data-img-pick]');
+  if (!box) return;
+  if (pendingPrev) { URL.revokeObjectURL(pendingPrev); pendingPrev = ''; }
+  if (pendingImg) pendingPrev = URL.createObjectURL(pendingImg);
+  const url = pendingImg === undefined ? imgURL.get(box.dataset.pid) : pendingPrev;
+  const f = box.closest('form');
+  box.innerHTML = imgPickInner(url, f && f.elements.emoji.value);
+}
+document.addEventListener('change', async e => {
+  if (!e.target.matches || !e.target.matches('[data-img-input]')) return;
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const f = e.target.closest('form');
+  try {
+    pendingImg = await compressImage(file);
+    showImgPreview();
+    $$('.form-error', f).forEach(n => n.remove());
+  } catch (err) {
+    const why = err.message === 'size' ? L(`ছবিটা অনেক বড় (${Math.round(file.size / 1048576)}MB)। ${IMG_MAX_BYTES / 1048576}MB-এর ছোট ছবি দিন।`, `That image is too large (${Math.round(file.size / 1048576)}MB). Pick one under ${IMG_MAX_BYTES / 1048576}MB.`)
+      : err.message === 'type' ? L('এটা ছবি না। JPG, PNG বা WebP ছবি বাছুন।', 'That is not an image. Pick a JPG, PNG or WebP photo.')
+      : L('ছবিটা খোলা যায়নি (ফরম্যাট সাপোর্ট নেই বা ফাইল নষ্ট)। অন্য ছবি বা JPG চেষ্টা করুন।', 'Could not read that image (unsupported format or damaged file). Try another photo or a JPG.');
+    fail(f, why);
+  }
+});
 function productCalc(f) {
   const units = Math.floor(toNum(f.elements.units.value));
   const cur = f.elements.currency.value || 'BDT';
@@ -775,7 +927,7 @@ function viewSales(b, c) {
     const p = pmap.get(s.productId);
     const gross = Math.max(0, toNum(s.qty) * toNum(s.price) - toNum(s.discount));
     return `<div class="lwrap"><button type="button" class="lrow" data-action="edit-sale" data-id="${s.id}">
-      <span class="lic">${p ? p.emoji || '📦' : '❔'}</span>
+      ${p ? avatar(p, 'lic') : '<span class="lic">❔</span>'}
       <span class="lmain"><b>${esc(p ? p.name : L('মুছে ফেলা প্রোডাক্ট', 'Deleted product'))} × ${toNum(s.qty)}</b>
         <small><span class="badge ${s.status}">${statusLabel(s.status)}</span> ${esc(s.note || '')}</small></span>
       <span class="lend"><b class="${s.status === 'returned' ? 'neg' : ''}">${s.status === 'returned' ? fmt(-toNum(s.returnCost)) : fmt(gross)}</b><small>${fmtDate(s.date)}</small></span>
@@ -848,8 +1000,8 @@ function viewMore(b, c) {
     <div class="menu">
       ${mi('edit-batch', 'sliders', L('ব্যাচ সেটিংস', 'Batch settings'), `${L('মূলধন', 'Capital')} ${fmt(c.capital)} · ${L('টার্গেট', 'Target')} ${fmt(c.target)} · ${L('বাফার', 'Buffer')} ${toNum(b.returnRate)}%`)}
       ${mi('batches', 'layers', L('সব ব্যাচ', 'All batches'), L(`${cnt(state.batches.length)} ব্যাচ · নতুন ব্যাচ শুরু করুন`, `${state.batches.length} batch(es) · start a new one`))}
-      ${mi('edit-budget', 'pie', L('বাজেট পরিকল্পনা', 'Budget plan'), L('কোন খাতে মূলধনের কত % রাখবেন', 'How much of capital goes where'))}
-      ${mi('calculator', 'calc', L('কেনার আগে হিসাব', 'Plan before buying'), L('প্রোডাক্ট আনার আগেই খরচ ও দাম দেখুন', 'See cost and price before you import'))}
+      ${mi('edit-budget', 'pie', L('বাজেট পরিকল্পনা', 'Budget plan'), L('খাতভিত্তিক % বা ৳ সীমা ও সতর্কতা', 'Limits per category in % or ৳, with warnings'))}
+      ${mi('calculator', 'calc', L('ব্যবসার পরিকল্পনা', 'Business planner'), L('মূলধনের ভাগ, দাম, টার্গেটে কয়টা বিক্রি লাগবে', 'Capital split, price, sales needed for your target'))}
     </div>
     <div class="section-title">${L('অ্যাপ', 'App')}</div>
     <div class="menu">
@@ -875,7 +1027,11 @@ function budgetForm(b) {
     ${BUDGET_KEYS.map(k => `<div class="field">
       <span class="flabel"><i class="dot" style="--c:var(--c-${k})"></i>${bl(k)} <span class="muted" style="font-weight:500">· ${bh(k)}</span></span>
       <div class="row2"><div class="input-wrap"><input class="input" name="${k}" inputmode="decimal" value="${esc(b.budget[k])}"><span class="suffix">%</span></div>
-      <div class="input-wrap"><input class="input" data-taka="${k}" value="${fmt(cap * toNum(b.budget[k]) / 100)}" readonly tabindex="-1"></div></div></div>`).join('')}
+      <div class="input-wrap has-prefix"><span class="prefix">৳</span><input class="input" name="lim_${k}" inputmode="decimal" value="${esc((b.limits || {})[k] || '')}"
+        placeholder="${Math.round(cap * toNum(b.budget[k]) / 100)}" aria-label="${bl(k)} ${k === 'reserve' ? L('ন্যূনতম ৳', 'minimum ৳') : L('সর্বোচ্চ ৳', 'maximum ৳')}"></div></div></div>`).join('')}
+    <div class="hint" style="margin:-4px 0 14px">${L('৳ ঘর খালি রাখলে % থেকে সীমা ধরা হবে। ৳ লিখলে সেটাই সীমা (রিজার্ভের জন্য ন্যূনতম)।', 'Leave ৳ empty to use the %. Type a taka amount to set a fixed limit (a minimum for the reserve).')}</div>
+    <label class="field"><span>${L('কত % খরচ হলে আগাম সতর্ক করবে', 'Warn me when a category reaches')}</span>
+      <div class="input-wrap"><input class="input" name="warnAt" inputmode="decimal" value="${esc(b.warnAt ?? 80)}"><span class="suffix">%</span></div></label>
     <div class="preview" data-preview></div>
     <button class="btn primary block" type="submit">${L('সেভ করুন', 'Save')}</button>
     <button type="button" class="btn block mt8" data-action="reset-budget">${L('প্রস্তাবিত ভাগে ফিরুন', 'Reset to suggested split')}</button>
@@ -885,13 +1041,15 @@ function budgetForm(b) {
 function calcForm(b) {
   const r = toNum(b.returnRate), cod = toNum(b.codRate);
   const f = (name, label, ph, val = '') => `<label class="field"><span>${label}</span>${moneyInput(name, val, ph)}</label>`;
-  return `${sheetHead(L('কেনার আগে হিসাব', 'Plan before buying'), L('কিছু সেভ হবে না, শুধু দেখার জন্য', 'Nothing is saved, just for planning'))}
+  return `${sheetHead(L('ব্যবসার পরিকল্পনা', 'Business planner'), L('কিছু সেভ হবে না, শুধু দেখার জন্য', 'Nothing is saved, just for planning'))}
   <form data-live="calc" onsubmit="return false" autocomplete="off">
-    ${f('capital', L('মূলধন', 'Capital'), '10000', toNum(b.capital) || '')}
+    <div class="row2">${f('capital', L('মূলধন', 'Capital'), '10000', toNum(b.capital) || '')}
+      ${f('target', L('শেষে হাতে ক্যাশ চান (মূলধনসহ)', 'Final cash wanted (incl. capital)'), '12000', toNum(b.target) || '')}</div>
     <div class="row2">${f('buy', L('প্রতি ইউনিট কেনা দাম', 'Buy price per unit'), '1000')}
       <label class="field"><span>${L('কয়টা ইউনিট', 'Units')}</span><input class="input" name="units" inputmode="numeric" placeholder="5"></label></div>
     <div class="row2">${f('ship', L('শিপিং/কার্গো (মোট)', 'Shipping/cargo (total)'), '1000')}${f('ads', L('অ্যাড বাজেট (মোট)', 'Ad budget (total)'), '2000')}</div>
-    <div class="row2">${f('pack', L('প্যাকেজিং (প্রতি ইউনিট)', 'Packaging (per unit)'), '50')}${f('other', L('অন্যান্য (মোট)', 'Other (total)'), '500')}</div>
+    <div class="row2">${f('pack', L('প্যাকেজিং (প্রতি ইউনিট)', 'Packaging (per unit)'), '50')}${f('courier', L('কুরিয়ার, নিজে দিলে (প্রতি অর্ডার)', 'Courier you pay (per order)'), '0')}</div>
+    <div class="row2">${f('other', L('অন্যান্য (মোট)', 'Other (total)'), '500')}${f('sell', L('যে দামে বেচতে চান (ঐচ্ছিক)', 'Your selling price (optional)'), '')}</div>
     <div class="row2">
       <label class="field"><span>${L('লক্ষ্য লাভ', 'Goal profit')}</span><div class="input-wrap"><input class="input" name="margin" inputmode="decimal" value="20"><span class="suffix">%</span></div></label>
       <label class="field"><span>${L('রিটার্ন + COD', 'Return + COD')}</span><div class="row2" style="gap:6px">
@@ -900,6 +1058,15 @@ function calcForm(b) {
     </div>
     <div class="preview" data-preview></div>
   </form>`;
+}
+
+// প্ল্যানার থেকে মূলধনের ভাগ (৳); রিজার্ভ = বাকি মূলধন
+function plannerSplit(f) {
+  const g = n => toNum(f.elements[n].value);
+  const units = Math.floor(g('units')), cap = g('capital');
+  const v = { product: units * g('buy'), shipping: g('ship'), ads: g('ads'), packaging: units * g('pack'), courier: units * g('courier'), other: g('other') };
+  v.reserve = cap - sum(Object.values(v));
+  return { cap, v, rows: BUDGET_KEYS.map(k => [k, v[k]]), ok: cap > 0 && units > 0 && v.reserve >= 0 };
 }
 
 function batchesSheet() {
@@ -1091,6 +1258,19 @@ const ACTIONS = {
     runLive(f, null);
   },
   calculator: () => openSheet(calcForm(activeBatch())),
+  'planner-apply': el => {
+    const { cap, v, ok } = plannerSplit(el.closest('form'));
+    if (!ok || !confirm(L('বাজেট পরিকল্পনার % এই ভাগে বদলাবে। মূলধন, টার্গেট আর ৳ সীমা একই থাকবে। চালিয়ে যাবেন?',
+      'This replaces your budget plan % with this split. Capital, target and ৳ limits stay the same. Continue?'))) return;
+    const vals = {};
+    BUDGET_KEYS.forEach(k => { if (k !== 'reserve') vals[k] = Math.round(v[k] / cap * 1000) / 10; });
+    vals.reserve = Math.max(0, Math.round((100 - sum(Object.values(vals))) * 10) / 10);
+    activeBatch().budget = vals;
+    closeSheet();
+    commit(L('বাজেট সেভ হয়েছে', 'Budget saved'));
+  },
+  'pick-img': () => { const i = $('[data-img-input]'); if (i) i.click(); },
+  'remove-img': () => { pendingImg = null; showImgPreview(); },
   'install-app': async () => {
     if (deferredInstall) {
       deferredInstall.prompt();
@@ -1137,7 +1317,7 @@ const FORMS = {
       if (first) openSheet(productForm(null)); // প্রথমবার হলে সরাসরি প্রোডাক্ট যোগের ধাপে
     }
   },
-  product: f => {
+  product: async f => {
     const b = activeBatch();
     const name = f.elements.name.value.trim();
     const pc = productCalc(f);
@@ -1159,8 +1339,15 @@ const FORMS = {
     });
     if (pc.cur !== 'BDT') state.settings.rates[pc.cur] = pc.rate;
     if (!existing) b.products.push(p);
-    if (existing) { commit(SAVED()); productDetail(p.id); }
-    else { closeSheet(); commit(L('প্রোডাক্ট যোগ হয়েছে', 'Product added')); }
+    let imgErr = false;
+    if (pendingImg !== undefined) {
+      const blob = pendingImg;
+      pendingImg = undefined;
+      try { await (blob ? putImage(p.id, blob) : deleteImage(p.id)); } catch (e) { imgErr = true; }
+    }
+    const msg = imgErr ? L('প্রোডাক্ট সেভ হয়েছে, কিন্তু ছবি সেভ করা যায়নি (জায়গা কম হতে পারে)', 'Product saved, but the photo could not be stored (storage may be full)') : null;
+    if (existing) { commit(msg || SAVED()); productDetail(p.id); }
+    else { closeSheet(); commit(msg || L('প্রোডাক্ট যোগ হয়েছে', 'Product added')); }
   },
   expense: f => {
     const b = activeBatch();
@@ -1210,7 +1397,10 @@ const FORMS = {
     const vals = Object.fromEntries(BUDGET_KEYS.map(k => [k, clamp(toNum(f.elements[k].value), 0, 100)]));
     const total = sum(Object.values(vals));
     if (Math.abs(total - 100) > 0.01) return fail(f, L(`সব মিলিয়ে ঠিক ১০০% হতে হবে (এখন ${pct(total)})`, `Must total exactly 100% (now ${pct(total)})`));
-    activeBatch().budget = vals;
+    const b = activeBatch();
+    b.budget = vals;
+    b.limits = Object.fromEntries(BUDGET_KEYS.map(k => [k, toNum(f.elements['lim_' + k].value) > 0 ? toNum(f.elements['lim_' + k].value) : '']));
+    b.warnAt = clamp(toNum(f.elements.warnAt.value) || 80, 10, 100);
     closeSheet();
     commit(L('বাজেট সেভ হয়েছে', 'Budget saved'));
   },
@@ -1314,7 +1504,7 @@ const LIVE = {
     BUDGET_KEYS.forEach(k => {
       const v = toNum(f.elements[k].value);
       total += v;
-      $(`[data-taka="${k}"]`, f).value = fmt(cap * v / 100);
+      f.elements['lim_' + k].placeholder = Math.round(cap * v / 100);
     });
     const pv = $('[data-preview]', f);
     const ok = Math.abs(total - 100) < 0.01;
@@ -1327,11 +1517,34 @@ const LIVE = {
   calc: f => {
     const g = n => toNum(f.elements[n].value);
     const units = Math.floor(g('units')), buy = g('buy'), cap = g('capital');
-    const ship = g('ship'), ads = g('ads'), pack = g('pack'), other = g('other');
+    const ship = g('ship'), ads = g('ads'), pack = g('pack'), other = g('other'), courier = g('courier');
+    const target = g('target'), mySell = g('sell');
     const m = g('margin') / 100, r = clamp(g('ret'), 0, 90) / 100, cod = clamp(g('cod'), 0, 50) / 100;
     const pv = $('[data-preview]', f);
     if (units <= 0 || buy <= 0) { pv.innerHTML = `<span class="muted">${L('কেনা দাম আর ইউনিট সংখ্যা দিলে হিসাব দেখাবে।', 'Enter buy price and units to see the numbers.')}</span>`; return; }
-    const total = units * buy + ship + ads + units * pack + other;
+    const total = units * buy + ship + ads + units * pack + units * courier + other;
+    const plan = plannerSplit(f);
+    const allocRows = plan.rows.map(([k, v]) => `<div><span>${bl(k)}</span><span>${fmt(v)} <small class="muted">${cap > 0 ? pct(v / cap * 100) : ''}</small></span></div>`).join('');
+    const okSales = units * (1 - r);
+    let goalHtml = '';
+    if (target > 0 && cap > 0) {
+      const inc = target - cap;
+      const needCash = target - cap + total; // বিক্রি থেকে নেট যত টাকা আসতে হবে
+      const sellT = okSales > 0 ? ceil10(needCash / (okSales * (1 - cod))) : 0;
+      goalHtml = `<hr class="sep">${L('টার্গেট', 'Target')}: <b>${fmt(target)}</b> · ${L('বাড়াতে হবে', 'increase needed')} <b>${fmt(inc)}</b> (${pct(inc / cap * 100)})<br>
+        ${L(`টার্গেটের জন্য বিক্রি দাম (${pct(r * 100)} রিটার্ন ধরে)`, `Price to hit target (with ${pct(r * 100)} returns)`)}: <b class="pos">${fmt(sellT)}</b>`;
+      if (mySell > 0) {
+        const perOrder = mySell * (1 - cod);
+        const n = Math.ceil(needCash / perOrder);
+        const end = cap - total + okSales * perOrder;
+        const ok = end >= target - 1;
+        goalHtml += `<br>${L(`${fmt(mySell)} দামে সব বেচলে শেষে আনুমানিক`, `At ${fmt(mySell)}, estimated final cash`)}: <b class="${end >= target ? 'pos' : 'neg'}">${fmt(end)}</b><br>
+          ${L(`টার্গেটে লাগবে প্রায় ${cnt(n)} সফল ডেলিভারি, রিটার্ন বাদে পাওয়া যাবে প্রায় ${cnt(Math.round(okSales))}।`, `Needs about ${n} successful deliveries; after returns you'd have about ${Math.round(okSales)}.`)}
+          <div class="sim-goal ${ok ? 'ok' : 'no'} mt8">${ok
+            ? L('✓ এই হিসাবে টার্গেট সম্ভব মনে হচ্ছে (নিশ্চয়তা নয়)।', '✓ The target looks achievable under these assumptions (not guaranteed).')
+            : L('✗ এই হিসাবে টার্গেট কঠিন। খরচ কমান, দাম বাড়ান, বেশি ইউনিট আনুন, বা টার্গেট আবার দেখুন।', '✗ The target looks difficult under these assumptions. Cut costs, raise the price, buy more units, or review the target.')}</div>`;
+      }
+    } else goalHtml = `<hr class="sep"><span class="muted">${L('মূলধন ও "শেষে হাতে ক্যাশ" দিলে টার্গেটের দাম আর কয়টা বিক্রি লাগবে দেখাবে।', 'Add capital and final cash wanted to see the target price and sales needed.')}</span>`;
     const perUnit = total / units;
     const breakeven = perUnit / (1 - cod);
     const sell = ceil10(perUnit * (1 + m) / ((1 - r) * (1 - cod)));
@@ -1348,7 +1561,12 @@ const LIVE = {
       ${cap > 0 ? (left >= 0
         ? L(`মূলধনে কুলাবে, <b>${fmt(left)}</b> বাকি থাকবে।`, `Fits your capital, <b>${fmt(left)}</b> left over.`)
         : `<b class="neg">${L(`মূলধনে ${fmt(-left)} কম পড়বে।`, `Capital falls ${fmt(-left)} short.`)}</b>`) : ''}
-      ${cap > 0 && maxUnits > 0 ? `<br><span class="muted">${L(`এই মূলধনে সর্বোচ্চ প্রায় ${cnt(maxUnits)} আনা যাবে (শিপিং/অ্যাড একই থাকলে)।`, `This capital buys up to about ${maxUnits} units (same shipping/ads).`)}</span>` : ''}`;
+      ${cap > 0 && maxUnits > 0 ? `<br><span class="muted">${L(`এই মূলধনে সর্বোচ্চ প্রায় ${cnt(maxUnits)} আনা যাবে (শিপিং/অ্যাড একই থাকলে)।`, `This capital buys up to about ${maxUnits} units (same shipping/ads).`)}</span>` : ''}
+      ${goalHtml}
+      ${cap > 0 ? `<hr class="sep"><b>${L('মূলধন কোথায় কত যাবে', 'How the capital splits')}</b>
+        <div class="ledger">${allocRows}</div>
+        <span class="muted">${L('রিজার্ভ = বাকি মূলধন, এটা খরচ না। রিটার্ন/COD % আনুমানিক, বাকিগুলো আপনার দেওয়া।', 'Reserve = capital left over; it is not an expense. Return/COD % are estimates; the rest are your inputs.')}</span>
+        ${plan.ok ? `<button type="button" class="btn block mt8" data-action="planner-apply">${icon('pie', 18)} ${L('এই ভাগ বাজেট পরিকল্পনায় বসান', 'Use this split as my budget plan')}</button>` : ''}` : ''}`;
   },
 };
 function runLive(f, t) {
@@ -1395,7 +1613,10 @@ function guideSheet() {
 
 /* ---------- ব্যাকআপ ---------- */
 async function exportBackup() {
-  const data = JSON.stringify({ app: 'hisabi', exportedAt: new Date().toISOString(), state });
+  // ছবিগুলোও ব্যাকআপে যায় (state-এর বাইরে, তাই পুরোনো ব্যাকআপও চলে)
+  const images = {};
+  try { for (const [k, blob] of await allImages()) if (blob && imgURL.has(k)) images[k] = await blobToDataURL(blob); } catch (e) { /* ছবি ছাড়াই */ }
+  const data = JSON.stringify({ app: 'hisabi', exportedAt: new Date().toISOString(), state, images });
   const name = `hisabi-backup-${today()}.json`;
   const done = () => { state.settings.lastBackup = Date.now(); commit(L('ব্যাকআপ তৈরি হয়েছে', 'Backup created')); };
   let file = null;
@@ -1435,6 +1656,12 @@ $('#import-file').addEventListener('change', e => {
       state.settings.lang = lang;
       tab = 'home'; trail = ['home'];
       commit(L('ব্যাকআপ থেকে ফেরত আনা হয়েছে', 'Backup restored'));
+      const imgs = obj.images && typeof obj.images === 'object' ? Object.entries(obj.images) : [];
+      if (imgs.length) {
+        Promise.all(imgs.map(([id, d]) => (typeof d === 'string' && d.startsWith('data:image/')
+          ? fetch(d).then(r => r.blob()).then(bl => putImage(id, bl)).catch(() => false) : false)))
+          .then(r => { render(); if (r.includes(false)) toast(L('কিছু ছবি ফেরত আনা যায়নি', 'Some photos could not be restored'), 'danger'); });
+      }
     } catch (err) {
       toast(L('ফাইলটা সঠিক ব্যাকআপ না', 'That file is not a valid backup'), 'danger');
     }
@@ -1480,6 +1707,7 @@ document.addEventListener('input', onLive);
 document.addEventListener('change', onLive);
 
 render();
+loadImages();
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
