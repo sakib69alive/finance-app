@@ -46,8 +46,8 @@ function inRoundRect(x, y, x0, y0, x1, y1, r) {
   return (x - cx) ** 2 + (y - cy) ** 2 <= r * r;
 }
 
-const C1 = [122, 102, 255], C2 = [91, 69, 230];
-const IVORY = [255, 255, 255], APRICOT = [156, 240, 207];
+const C1 = [29, 29, 27], C2 = [52, 51, 47];
+const IVORY = [169, 164, 245], APRICOT = [246, 217, 139];
 
 // rounded: ব্যাকগ্রাউন্ডের কোণা গোল কিনা; box: বারগুলো কোন জায়গায় থাকবে (0..1)
 function draw(size, { rounded, box }) {
