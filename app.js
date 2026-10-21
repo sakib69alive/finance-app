@@ -110,7 +110,7 @@ const statusLabel = s => ({ delivered: L('ডেলিভারড', 'Delivered'
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v19'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v20'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 function newBatch(o = {}) {
   return {
@@ -653,6 +653,27 @@ function heroDetail(b, c) {
   const p = pace(b, c);
   const cats = ['product', ...EXPENSE_CATS, 'returns'].filter(k => c.cat[k] > 0)
     .map(k => row(`− ${cicon(k)} ${cl(k)}`, fmt(c.cat[k]))).join('');
+  const prodBlocks = c.items.length ? c.items.map(x => {
+    const buy = x.units ? x.purchase / x.units : 0;
+    const other = x.total - x.purchase;
+    return `<div class="fbp">
+      <div class="fbp-head">${avatar(x.p)}<b>${esc(x.p.name)}</b></div>
+      <div class="ledger fb">
+        ${row(`${L('কেনা', 'Bought')}: ${x.units} × ${fmt(buy)}`, fmt(x.purchase))}
+        ${row(L('অন্য খরচ (ভাগ হয়ে এসেছে)', 'Other costs (allocated)'), fmt(other))}
+        ${row(`= ${L('মোট খরচ', 'Total cost')}`, fmt(x.total), 'sub')}
+        ${row(L('প্রতি ইউনিটে সব খরচসহ', 'All-in cost per unit'), fmt(x.unit))}
+        ${row(L('বেচার দাম (প্রতিটা)', 'Selling price (each)'), fmt(x.planned))}
+        ${row(`${L('বিক্রি হয়েছে', 'Sold')}: ${x.delivered}${x.pending ? ` (+${x.pending} ${L('পথে', 'in transit')})` : ''}`, fmt(x.revenue))}
+        ${row(x.profit >= 0 ? L('লাভ', 'Profit') : L('ক্ষতি', 'Loss'), fmt(x.profit), x.profit >= 0 ? 'pos' : 'neg')}
+        ${row(`${L('স্টকে বাকি', 'In stock')}: ${x.remaining} × ${fmt(x.unit)}`, fmt(x.remaining * x.unit))}
+      </div></div>`;
+  }).join('') : `<p class="hint">${L('এখনও কোনো প্রোডাক্ট নেই।', 'No products yet.')}</p>`;
+  const pn = id => { const q = b.products.find(p => p.id === id); return q ? q.name : L('সব প্রোডাক্টে ভাগ', 'Split across all'); };
+  const expRows = b.expenses.length
+    ? [...b.expenses].sort(byDateDesc).map(e => row(`${cicon(e.category)} ${esc(e.note || cl(e.category))}<small>${fmtDate(e.date)} · ${esc(pn(e.productId))}</small>`, fmt(toNum(e.amount)), 'two')).join('')
+      + row(`= ${L('এই তালিকার মোট', 'Listed total')}`, fmt(sum(b.expenses.map(e => toNum(e.amount)))), 'total')
+    : row(L('এখনও কোনো খরচ যোগ করা হয়নি', 'No costs added yet'), '—');
   const prog = c.target > 0 ? Math.round(clamp(c.cash / c.target, 0, 9.99) * 100) : 0;
   return `${sheetHead(L('পুরো হিসাব', 'Full breakdown'), esc(b.name))}
   <div class="fb-top"><small>${L('এখন হাতে ক্যাশ', 'Cash in hand now')}</small><b>${fmt(c.cash)}</b>
@@ -667,7 +688,15 @@ function heroDetail(b, c) {
     ${row(`= ${L('হাতে ক্যাশ', 'Cash in hand')}`, fmt(c.cash), 'total')}
   </div>
 
-  <h4 class="fb-h"><i>2</i>${L('সম্পদ', 'Assets')}</h4>
+  <h4 class="fb-h"><i>2</i>${L('প্রতিটা প্রোডাক্টের হিসাব', 'Each product')}</h4>
+  ${prodBlocks}
+
+  <h4 class="fb-h"><i>3</i>${L('খরচ কোথায় গেল (তালিকা)', 'Where the costs went')}</h4>
+  <div class="ledger fb">
+    ${expRows}
+  </div>
+
+  <h4 class="fb-h"><i>4</i>${L('সম্পদ', 'Assets')}</h4>
   <div class="ledger fb">
     ${row(L('হাতে ক্যাশ', 'Cash in hand'), fmt(c.cash))}
     ${row(`+ ${L('স্টকে আছে (খরচ মূল্যে)', 'Stock (at cost)')}`, fmt(c.stockValue))}
@@ -676,7 +705,7 @@ function heroDetail(b, c) {
     ${row(`${L('মোট সম্পদ − মূলধন', 'Worth − capital')} = ${nw >= 0 ? L('লাভ', 'profit') : L('ক্ষতি', 'loss')}`, fmt(nw), nw >= 0 ? 'pos' : 'neg')}
   </div>
 
-  <h4 class="fb-h"><i>3</i>${L('বিক্রি', 'Sales')}</h4>
+  <h4 class="fb-h"><i>5</i>${L('বিক্রি', 'Sales')}</h4>
   <div class="ledger fb">
     ${row(L('ডেলিভারড অর্ডার', 'Delivered orders'), c.deliveredOrders)}
     ${row(L('কুরিয়ারে (পেন্ডিং)', 'Pending with courier'), `${c.pendingOrders} · ${fmt(c.pendingNet)}`)}
@@ -685,7 +714,7 @@ function heroDetail(b, c) {
     ${row(L('স্টকে বাকি', 'Units left'), c.remainingUnits)}
   </div>
 
-  <h4 class="fb-h"><i>4</i>${L('টার্গেট', 'Target')}</h4>
+  <h4 class="fb-h"><i>6</i>${L('টার্গেট', 'Target')}</h4>
   <div class="ledger fb">
     ${row(L('লক্ষ্য লাভ', 'Goal profit'), `${fmt(c.targetProfit)}${c.capital > 0 ? ` (${pct(c.targetProfit / c.capital * 100)})` : ''}`)}
     ${row(L('আরও তুলতে হবে', 'Still to bring in'), fmt(Math.max(0, c.target - c.cash)))}
