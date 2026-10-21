@@ -525,3 +525,14 @@ hr.sep { border: 0; border-top: 1.5px dashed var(--border); margin: 10px 0; }
 
 .bar { height: 8px; border-radius: 99px; background: var(--border); overflow: hidden; margin-top: 12px; }
 .bar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+
+.dcard { border-top: 1px solid var(--border); padding: 10px 0 12px; margin-top: 8px; }
+.dcard .prow { padding: 4px 0; }
+.bar.sm { height: 6px; margin: 6px 0 8px; }
+.dline { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); padding: 2px 0; font-variant-numeric: tabular-nums; }
+.dline b { color: var(--text); }
+.dsell { display: flex; gap: 8px; margin-top: 10px; }
+.dsell .btn { flex: 1; padding-left: 6px; padding-right: 6px; }
+.dsell .btn:last-child { flex: 1.6; }
+.dline b.pos { color: var(--good); }
+.dline b.neg { color: var(--danger); }

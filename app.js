@@ -106,7 +106,7 @@ const statusLabel = s => ({ delivered: L('ডেলিভারড', 'Delivered'
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v9'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v10'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 function newBatch(o = {}) {
   return {
@@ -581,6 +581,8 @@ function viewHome(b, c) {
     <button type="button" class="qbtn" data-action="add-product"><span class="qi">${icon('box')}</span>${L('প্রোডাক্ট', 'Product')}</button>
   </div>
 
+  ${productDash(c)}
+
   <section class="stat-grid">
     ${stat(L('মোট খরচ', 'Total spent'), fmt(c.spent), c.capital > 0 ? L(`মূলধনের ${pct(c.spent / c.capital * 100)}`, `${pct(c.spent / c.capital * 100)} of capital`) : '&nbsp;')}
     ${stat(L('বিক্রি (নেট)', 'Sales (net)'), fmt(c.revenue), L(`${cnt(c.deliveredOrders)} অর্ডার ডেলিভারড`, `${c.deliveredOrders} order${c.deliveredOrders === 1 ? '' : 's'} delivered`))}
@@ -621,6 +623,45 @@ function viewHome(b, c) {
         <div><span>${L('মোট সম্পদ − মূলধন', 'Worth − capital')} = ${nw >= 0 ? L('লাভ', 'profit') : L('ক্ষতি', 'loss')}</span><span class="${nw >= 0 ? 'pos' : 'neg'}">${fmt(nw)}</span></div>
       </div>
     </details>
+  </section>`;
+}
+
+// হোমের প্রোডাক্ট ড্যাশবোর্ড: প্রতিটার লাইভ স্টক, আসল খরচ, কত দামে বেচতে হবে + এক প্রেসে বিক্রি
+function productDash(c) {
+  if (!c.items.length) return '';
+  const left = c.items.filter(x => x.remaining > 0);
+  const toBreakEven = sum(left.map(x => x.remaining * x.breakeven));
+  const toTarget = sum(left.map(x => x.remaining * x.goalPrice));
+  const cards = c.items.map(x => {
+    const soldPct = x.units ? clamp((x.delivered + x.pending) / x.units * 100, 0, 100) : 0;
+    const out = x.remaining < 1;
+    return `<div class="dcard">
+      <button type="button" class="prow" data-action="open-product" data-id="${x.p.id}">
+        ${avatar(x.p)}
+        <span class="pmain"><b>${esc(x.p.name)}</b>
+          <small>${L('স্টক', 'Stock')} ${x.remaining}/${x.units} · ${L('বিক্রি', 'Sold')} ${x.delivered}${x.pending ? ` · ${L('পথে', 'Transit')} ${x.pending}` : ''}</small></span>
+        <span class="pend"><b>${fmt(x.planned)}</b><small>${x.myPrice > 0 ? L('আপনার দাম', 'Your price') : L('বেচবেন', 'Sell at')}</small></span>
+      </button>
+      <div class="bar sm"><i style="width:${soldPct.toFixed(1)}%"></i></div>
+      <div class="dline"><span>${L('সব খরচসহ প্রতিটা পড়ছে', 'All-in cost each')} <b>${fmt(x.unit)}</b></span>
+        <span>${x.profit >= 0 ? L('লাভ', 'Profit') : L('লস', 'Loss')} <b class="${x.profit >= 0 ? 'pos' : 'neg'}">${fmt(x.profit)}</b></span></div>
+      <div class="dline"><span>${L('বাকি স্টক বেচলে আসবে', 'Remaining stock brings')} <b>${fmt(x.remaining * x.planned * c.factor)}</b></span></div>
+      <div class="dsell">
+        <button type="button" class="btn primary sm" data-action="quick-sell" data-id="${x.p.id}" data-qty="1" ${out ? 'disabled' : ''}>${L('+১ বিক্রি', '+1 sold')}</button>
+        <button type="button" class="btn sm" data-action="quick-sell" data-id="${x.p.id}" data-qty="2" ${x.remaining < 2 ? 'disabled' : ''}>${L('+২ বিক্রি', '+2 sold')}</button>
+        <button type="button" class="btn sm" data-action="add-sale" data-product="${x.p.id}" ${out ? 'disabled' : ''}>${L('ডিসকাউন্ট / অন্যটা', 'Discount / other')}</button>
+      </div>
+    </div>`;
+  }).join('');
+  return `<section class="card">
+    <div class="card-head"><h2>${L('প্রোডাক্ট ড্যাশবোর্ড', 'Product dashboard')}</h2><span class="muted">${L('লাইভ', 'Live')}</span></div>
+    <div class="minis">
+      <div class="mini"><small>${L('বাকি স্টক', 'Units left')}</small><b>${c.remainingUnits}</b></div>
+      <div class="mini"><small>${L('খরচ উঠাতে', 'To break even')}</small><b>${fmt(toBreakEven)}</b></div>
+      <div class="mini"><small>${L('টার্গেটের জন্য', 'For target')}</small><b>${fmt(toTarget)}</b></div>
+    </div>
+    <p class="hint">${L('বাকি সব স্টক বেচে এত টাকা তুলতে হবে। নিচে প্রতিটা প্রোডাক্টের হিসাব, বিক্রি হলেই বাটন চাপুন।', 'Money to bring in by selling all remaining stock. Tap a button below whenever you sell.')}</p>
+    ${cards}
   </section>`;
 }
 
@@ -967,6 +1008,11 @@ function viewSales(b, c) {
         : `<button type="button" class="btn primary" data-action="add-product">${icon('plus', 18)} ${L('প্রোডাক্ট যোগ করুন', 'Add product')}</button>`)}`;
 }
 
+// ডিসকাউন্ট ৳ বা % যেটাই হোক, মোট দাম থেকে কত টাকা কাটা যাবে
+function saleDiscount(f, qty, price) {
+  const v = Math.max(0, toNum(f.elements.discount.value));
+  return f.elements.dmode.value === 'pct' ? qty * price * Math.min(v, 100) / 100 : v;
+}
 function availableFor(c, productId, editing) {
   const x = c.items.find(i => i.p.id === productId);
   if (!x) return 0;
@@ -994,7 +1040,10 @@ function saleForm(s, presetProduct) {
         <button type="button" data-action="qty-step" data-d="1" aria-label="+">+</button></div></div>
       <label class="field"><span>${L('প্রতিটার দাম', 'Price each')}</span>${moneyInput('price', price)}</label>
     </div>
-    <label class="field"><span>${L('ডিসকাউন্ট (মোট থেকে)', 'Discount (on total)')}</span>${moneyInput('discount', v.discount || '', '0')}</label>
+    <div class="field"><span class="flabel">${L('ডিসকাউন্ট (ঐচ্ছিক)', 'Discount (optional)')}</span>
+      ${seg('dmode', [['amt', L('৳ টাকা অফ', '৳ off')], ['pct', L('% ছাড়', '% off')]], v.discountMode || 'amt')}
+      <input class="input mt8" name="discount" inputmode="decimal" value="${esc(v.discountValue ?? (v.discount || ''))}" placeholder="0">
+      <div class="hint">${L('মোট দাম থেকে কাটা হবে। যেমন ১০% বা ৳৫০।', 'Taken off the total, e.g. 10% or ৳50.')}</div></div>
     <label class="field ${v.status === 'returned' ? '' : 'hidden'}" data-return><span>${L('রিটার্নে কত টাকা খরচ গেল (কুরিয়ার চার্জ ইত্যাদি)', 'Cost of the return (courier fee etc.)')}</span>${moneyInput('returnCost', v.returnCost || '', L('যেমন: 120', 'e.g. 120'))}</label>
     <div class="preview" data-preview></div>
     <div class="row2">
@@ -1234,6 +1283,16 @@ const ACTIONS = {
     if (!activeBatch().products.length) return toast(L('আগে প্রোডাক্ট যোগ করুন', 'Add a product first'));
     openSheet(saleForm(null, el.dataset.product));
   },
+  // হোমের বাটন: একটা প্রেসেই ডেলিভারড বিক্রি লিখে ফেলে (পরিকল্পিত দামে)
+  'quick-sell': el => {
+    const b = activeBatch(), x = compute(b).items.find(i => i.p.id === el.dataset.id);
+    const qty = Math.min(Math.floor(toNum(el.dataset.qty)) || 1, x ? x.remaining : 0);
+    if (!x || qty < 1) return toast(L('স্টকে নেই', 'Out of stock'));
+    undoable(L(`${cnt(qty)}টা বিক্রি যোগ হয়েছে`, `${qty} sold`), () => {
+      b.sales.push({ id: uid(), createdAt: Date.now(), cod: toNum(b.codRate), productId: x.p.id, qty, price: x.planned,
+        status: 'delivered', discount: 0, returnCost: 0, date: today(), note: '' });
+    });
+  },
   'edit-sale': el => openSheet(saleForm(activeBatch().sales.find(s => s.id === el.dataset.id))),
   'delete-sale': el => {
     const b = activeBatch();
@@ -1401,8 +1460,10 @@ const FORMS = {
       if (qty > avail) return fail(f, L(`স্টকে আছে মাত্র ${cnt(avail)}, এর বেশি বিক্রি দেওয়া যাবে না`, `Only ${avail} in stock`), 'qty');
     }
     const s = existing || { id: uid(), createdAt: Date.now(), cod: toNum(b.codRate) };
+    const dmode = f.elements.dmode.value === 'pct' ? 'pct' : 'amt';
     Object.assign(s, {
-      productId, qty, price, status, discount: toNum(f.elements.discount.value),
+      productId, qty, price, status, discount: saleDiscount(f, qty, price),
+      discountMode: dmode, discountValue: toNum(f.elements.discount.value),
       returnCost: status === 'returned' ? toNum(f.elements.returnCost.value) : 0,
       date: f.elements.date.value || today(), note: f.elements.note.value.trim(),
     });
@@ -1483,7 +1544,7 @@ const LIVE = {
     $('[data-return]', f).classList.toggle('hidden', status !== 'returned');
     const qty = Math.floor(toNum(f.elements.qty.value));
     const price = toNum(f.elements.price.value);
-    const disc = toNum(f.elements.discount.value);
+    const disc = saleDiscount(f, qty, price);
     const pv = $('[data-preview]', f);
     pv.className = 'preview';
     if (!x) { pv.innerHTML = ''; return; }
