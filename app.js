@@ -106,7 +106,7 @@ const statusLabel = s => ({ delivered: L('ডেলিভারড', 'Delivered'
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v12'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v13'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 function newBatch(o = {}) {
   return {
@@ -1048,6 +1048,7 @@ function viewMore(b, c) {
       ${mi('edit-budget', 'pie', L('বাজেট পরিকল্পনা', 'Budget plan'), L('খাতভিত্তিক % বা ৳ সীমা ও সতর্কতা', 'Limits per category in % or ৳, with warnings'))}
       ${mi('calculator', 'calc', L('ব্যবসার পরিকল্পনা', 'Business planner'), L('মূলধনের ভাগ, দাম, টার্গেটে কয়টা বিক্রি লাগবে', 'Capital split, price, sales needed for your target'))}
     </div>
+    <button type="button" class="btn danger block mt12" data-action="delete-batch" data-id="${b.id}">${icon('trash', 18)} ${L(`"${esc(b.name)}" ব্যাচ ডিলিট করুন`, `Delete batch "${esc(b.name)}"`)}</button>
     <div class="section-title">${L('অ্যাপ', 'App')}</div>
     <div class="menu">
       ${isStandalone() ? '' : mi('install-app', 'download', L('ফোনে ইনস্টল করুন', 'Install on phone'), L('একবার ইনস্টল করলে অফলাইনে চলবে', 'Works offline once installed'))}
@@ -1118,11 +1119,11 @@ function batchesSheet() {
   return `${sheetHead(L('সব ব্যাচ', 'All batches'), L('প্রতিটা ইনভেস্টমেন্ট রাউন্ড আলাদা ব্যাচ', 'Each investment round is its own batch'))}
     <div class="blist">${state.batches.map(b => {
       const c = compute(b);
-      return `<button type="button" class="lrow" data-action="switch-batch" data-id="${b.id}">
+      return `<div class="lwrap"><button type="button" class="lrow" data-action="switch-batch" data-id="${b.id}">
         <span class="lic">${b.id === state.activeBatchId ? `<span class="check-mark">${icon('check', 20)}</span>` : '📒'}</span>
         <span class="lmain"><b>${esc(b.name)}</b><small>${L('মূলধন', 'Capital')} ${fmt(c.capital)} → ${L('টার্গেট', 'target')} ${fmt(c.target)}</small></span>
         <span class="lend"><b>${c.target > 0 ? Math.round(clamp(c.cash / c.target, 0, 9.99) * 100) : 0}%</b><small>${L('পূরণ', 'done')}</small></span>
-      </button>`;
+      </button>${delBtn('delete-batch', b.id)}</div>`;
     }).join('')}</div>
     <button type="button" class="btn primary block mt12" data-action="new-batch">${icon('plus', 18)} ${L('নতুন ব্যাচ', 'New batch')}</button>`;
 }
