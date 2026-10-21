@@ -453,7 +453,7 @@ details.more[open] summary::before { content: "− "; }
 .steplist .sb b { font-size: 14.5px; }
 .steplist .sb small { color: var(--muted); line-height: 1.45; }
 .steplist li.done .sn { background: var(--good); color: #fff; }
-.steplist li.done .sb b { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(110, 101, 82, .45); }
+.steplist li.done .sb b { color: var(--muted); }
 .steplist li.now { background: var(--accent-soft); }
 .steplist li.now .sn { background: var(--ink); color: #fff; }
 .steplist li.now .btn { align-self: flex-start; margin-top: 8px; }
