@@ -110,7 +110,7 @@ const statusLabel = s => ({ delivered: L('ডেলিভারড', 'Delivered'
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v20'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v21'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 function newBatch(o = {}) {
   return {
@@ -1311,7 +1311,9 @@ function batchesSheet() {
 let sheetOpen = false;
 function openSheet(html) {
   const root = $('#sheet-root');
-  root.innerHTML = `<div class="backdrop" data-action="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div>`;
+  root.innerHTML = `<div class="backdrop" data-action="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div><div class="sheet-body">${html}</div></div>`;
+  // মোবাইল ব্রাউজারের ঠিকানা-বারের কারণে vh ভুল হয়, তাই আসল উচ্চতা দিয়ে সীমা
+  $('.sheet', root).style.maxHeight = Math.floor(window.innerHeight * 0.92) + 'px';
   root.classList.add('open');
   document.body.classList.add('lock');
   requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add('show')));
