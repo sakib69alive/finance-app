@@ -283,6 +283,7 @@ LIVE['hg-expense'] = (f, t) => {
   // যারা টাকা দিয়েছে তাদের চিপ থেকে সমান ভাগ (নিজে ঘরে লিখলে অটো বন্ধ)
   if (t && t.name && t.name.startsWith('pay_')) f.dataset.ppAuto = '';
   if (t && t.name === 'each') f.dataset.eachAuto = '';
+  if (t && t.name === 'total' && f.dataset.eachAuto !== '1' && f.elements.each && f.elements.each.value) { f.dataset.eachAuto = '1'; f.dataset.ppAuto = '1'; }
   const eachV = f.elements.each && f.dataset.eachAuto !== '1' ? toMinor(f.elements.each.value) : 0;
   if (t && t.name && (t.name === 'each' || (t.name.startsWith('pp_') && eachV))) {
     ev.participants.forEach(p => {
@@ -294,10 +295,10 @@ LIVE['hg-expense'] = (f, t) => {
   if (t && t.name && ((t.name.startsWith('pp_') && !eachV) || (t.name === 'total' && f.dataset.ppAuto === '1'))) {
     const ticked = ev.participants.filter(p => f.elements['pp_' + p.id] && f.elements['pp_' + p.id].checked).map(p => p.id);
     const tot = toMinor(f.elements.total.value);
-    const dist = hgDist(tot, Object.fromEntries(ticked.map(id => [id, 1])), ev.participants.map(p => p.id));
+    const dist = hgDist(tot, Object.fromEntries(ticked.map(id => [id, 1])), ev.participants.map(p => p.id), 100);
     ev.participants.forEach(p => { const i = f.elements['pay_' + p.id]; if (i) i.value = dist[p.id] ? fromMinor(dist[p.id]) : ''; });
     f.dataset.ppAuto = '1';
-    if (f.elements.each) { f.elements.each.value = ticked.length && tot ? fromMinor(Math.floor(tot / ticked.length)) : ''; f.dataset.eachAuto = '1'; }
+    if (f.elements.each) { f.elements.each.value = ticked.length && tot ? fromMinor(Math.floor(tot / ticked.length / 100) * 100) : ''; f.dataset.eachAuto = '1'; }
   }
   const method = personalOn ? 'selected' : f.elements.method.value;
   $$('[data-vals]', f).forEach(d => d.classList.toggle('hidden', d.dataset.vals !== method));

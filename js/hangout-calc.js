@@ -18,7 +18,16 @@ const hgMoney = m => {
 const hgSum = a => a.reduce((x, y) => x + y, 0);
 
 /* ---------- ভাগের মূল যন্ত্র: Largest Remainder, মোট কখনো এক পয়সাও বাড়ে-কমে না ---------- */
-function hgDist(total, weights, ids) {
+// unit = ভাগের একক (পয়সা)। 100 দিলে প্রত্যেকের ভাগ পুরো টাকা হয়; যে পয়সা বাকি থাকে তা প্রথম জনের ভাগে যায়
+function hgDist(total, weights, ids, unit) {
+  if (unit > 1 && total >= unit) {
+    const base = hgDist(Math.floor(total / unit), weights, ids);
+    const first = ids.find(id => weights[id] > 0);
+    const out = {};
+    ids.forEach(id => { out[id] = base[id] * unit; });
+    out[first] += total - Math.floor(total / unit) * unit;
+    return out;
+  }
   const out = {};
   ids.forEach(id => { out[id] = 0; });
   const use = ids.filter(id => weights[id] > 0);
@@ -48,7 +57,7 @@ function hgSplit(total, method, allIds, spec) {
   if (method === 'equal' || method === 'selected') {
     if (!incl.length) return fail('no_participants');
     const w = {}; incl.forEach(id => { w[id] = 1; });
-    return { ok: true, alloc: hgDist(total, w, ids), error: null };
+    return { ok: true, alloc: hgDist(total, w, ids, 100), error: null };
   }
   if (method === 'percent') {
     const w = {}; let s = 0;
@@ -58,7 +67,7 @@ function hgSplit(total, method, allIds, spec) {
       w[id] = v; s += v;
     }
     if (Math.abs(s - 100) > 0.001) return fail('percent_sum', { sum: s });
-    return { ok: true, alloc: hgDist(total, w, ids), error: null };
+    return { ok: true, alloc: hgDist(total, w, ids, 100), error: null };
   }
   if (method === 'ratio') {
     const w = {}; let s = 0;
@@ -68,7 +77,7 @@ function hgSplit(total, method, allIds, spec) {
       w[id] = v; s += v;
     }
     if (!(s > 0)) return fail('ratio_empty');
-    return { ok: true, alloc: hgDist(total, w, ids), error: null };
+    return { ok: true, alloc: hgDist(total, w, ids, 100), error: null };
   }
   if (method === 'exact' || method === 'custom') {
     const a = {}; let s = 0;
