@@ -615,7 +615,9 @@ Object.assign(ACTIONS, {
     const f = el.closest('form'), ev = hgCur(); if (!f || !ev) return;
     const total = toMinor(f.elements.total.value);
     const others = hgSum(ev.participants.filter(p => p.id !== el.dataset.p && f.elements['pay_' + p.id]).map(p => toMinor(f.elements['pay_' + p.id].value)));
-    f.elements['pay_' + el.dataset.p].value = total > others ? fromMinor(total - others) : '';
+    if (total <= others) { toast(L('বাকি নেই: মোট টাকা আগেই দেওয়া হয়ে গেছে। কারও অঙ্ক কমালে বাকিটা বসবে।', 'Nothing left: the total is already covered. Lower one amount first.')); return; }
+    f.dataset.ppAuto = '';
+    f.elements['pay_' + el.dataset.p].value = fromMinor(total - others);
     runLive(f, f.elements['pay_' + el.dataset.p]);
   },
   'hg-pay-allchips': el => {
