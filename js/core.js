@@ -80,7 +80,7 @@ const LOGO = '<svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradien
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v55'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v58'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 // boot.js লোডের আগে খালি শেল; আসল ডেটা boot.js-এ মডিউল রেজিস্টার হওয়ার পরে আসে
 let state = { settings: { lang: 'bn' }, batches: [] };
@@ -213,6 +213,14 @@ const blobToDataURL = blob => new Promise((res, rej) => { const r = new FileRead
    ========================================================= */
 const MODULES = {};
 const registerModule = def => { MODULES[def.id] = def; };
+// পিন-লক করা মডিউল (def.pin): এই সেশনে একবার পিন দিলে খোলে, অ্যাপ বন্ধ করলে আবার লক
+const unlockedMods = new Set();
+const modLocked = m => !!m.pin && !unlockedMods.has(m.id);
+function unlockSheet(id) {
+  return `${sheetHead(L('পিন দিন', 'Enter PIN'), MODULES[id].name())}<form data-form="unlock" autocomplete="off"><input type="hidden" name="id" value="${id}">
+    <label class="field"><span>${L('৪ সংখ্যার পিন', '4-digit PIN')}</span><input class="input" name="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+    <button class="btn primary block mt12" type="submit">${L('খুলুন', 'Unlock')}</button></form>`;
+}
 const moduleList = () => Object.values(MODULES);
 const currentModule = () => MODULES[state.settings.module] || moduleList()[0];
 const tabIds = () => currentModule().tabs.map(t => t.id);
@@ -243,7 +251,7 @@ const moduleSwitcher = () => {
 const helpBtn = () => `<button type="button" class="icon-btn txt" data-action="guide" aria-label="${L('সাহায্য', 'Help')}">?</button>`;
 function moduleCards(cur) {
   return `<div class="pickcards">${moduleList().map(m => `<button type="button" class="pickcard ${m.id === cur ? 'on' : ''}" data-action="switch-module" data-id="${m.id}">
-      <span class="pk-ic">${m.emoji || ''}</span><span class="pk-t"><b>${m.name()}</b><small>${m.tagline ? m.tagline() : ''}</small></span>
+      <span class="pk-ic">${m.emoji || ''}</span><span class="pk-t"><b>${m.pin ? '🔒 ' : ''}${m.name()}</b><small>${m.tagline ? m.tagline() : ''}</small></span>
       ${m.id === cur ? `<span class="pk-ok">${icon('check', 20)}</span>` : '<span class="pk-go">›</span>'}</button>`).join('')}</div>`;
 }
 function modulesSheet() {
@@ -266,7 +274,8 @@ function render() {
     $('#view').innerHTML = onboardHtml();
     return;
   }
-  const m = currentModule();
+  let m = currentModule();
+  if (modLocked(m)) { state.settings.module = moduleList().find(x => !modLocked(x)).id; m = currentModule(); tab = m.tabs[0].id; trail = [tab]; }
   if (!m.ready()) {
     $('#topbar').innerHTML = '';
     $('#tabbar').innerHTML = '';
@@ -429,6 +438,7 @@ const ACTIONS = {
   guide: () => { const m = currentModule(); if (m.guide) openSheet(m.guide()); },
   modules: () => openSheet(modulesSheet()),
   'switch-module': el => {
+    if (modLocked(MODULES[el.dataset.id])) { openSheet(unlockSheet(el.dataset.id)); return; }
     state.settings.module = el.dataset.id;
     state.settings.onboarded = true;
     tab = currentModule().tabs[0].id; trail = [tab];
@@ -437,7 +447,15 @@ const ACTIONS = {
     window.scrollTo(0, 0);
   },
 };
-const FORMS = {};
+const FORMS = {
+  unlock: f => {
+    const id = f.elements.id.value;
+    if (f.elements.pin.value.trim() !== MODULES[id].pin) return fail(f, L('পিন ভুল', 'Wrong PIN'), 'pin');
+    unlockedMods.add(id);
+    closeSheet();
+    ACTIONS['switch-module']({ dataset: { id } });
+  },
+};
 const LIVE = {};
 function runLive(f, t) {
   const fn = LIVE[f.dataset.live];

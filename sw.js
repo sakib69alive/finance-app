@@ -1,8 +1,8 @@
 // অফলাইনে চালানোর জন্য সার্ভিস ওয়ার্কার।
 // অ্যাপ আপডেট করলে VERSION বাড়ান, তাহলে ফোনে নতুন ফাইল যাবে।
-const VERSION = 'hisabi-v55';
+const VERSION = 'hisabi-v58';
 const ASSETS = [
-  './', './index.html', './styles.css', './js/core.js', './js/trade.js', './js/hangout-calc.js', './js/hangout.js', './js/hangout-forms.js', './js/hangout-flows.js', './js/hangout-report.js', './js/hangout-pdf.js', './js/hangout-ui.js', './js/hangout-house.js', './js/hangout-house-cats.js', './js/bazar-calc.js', './js/bazar.js', './js/teacher-calc.js', './js/teacher.js', './js/teacher-money.js', './js/teacher-sheets.js', './js/teacher-forms.js', './js/demo.js', './js/boot.js', './manifest.webmanifest',
+  './', './index.html', './styles.css', './js/core.js', './js/trade.js', './js/hangout-calc.js', './js/hangout.js', './js/hangout-forms.js', './js/hangout-flows.js', './js/hangout-report.js', './js/hangout-pdf.js', './js/hangout-ui.js', './js/hangout-house.js', './js/hangout-house-cats.js', './js/bazar-calc.js', './js/bazar.js', './js/teacher-calc.js', './js/teacher.js', './js/teacher-money.js', './js/teacher-sheets.js', './js/teacher-forms.js', './js/realestate-data.js', './js/realestate-calc.js', './js/realestate.js', './js/realestate-ext.js', './js/demo.js', './js/boot.js', './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',
   './icons/maskable-512.png', './icons/apple-touch-icon.png',
 ];

@@ -132,3 +132,32 @@ Money is stored as integer paisa and **always as the actual amount**. The module
 ## Demo data (js/demo.js)
 
 One-time button (bottom of screen) that replaces all data with demo data for every module (records tagged `demo: true`). It disappears after use or after the close button. To remove the feature: delete `js/demo.js` and its entries in `index.html` and `sw.js`; to remove the data: filter out records with `demo: true`.
+
+## Module: realestate (Shopno Bilash Properties: projects, units, sales, collections, costs)
+
+Files: `js/realestate-calc.js` (pure whole-taka calculation layer: sale price, sqft split, dues, summary, website-data merge, sample removal; unit tested),
+`js/realestate.js` (screens, forms, actions, `registerModule`), `js/realestate-data.js` (`RE_WEB_SEED`, a read-only export of the Shopno Bilash website database taken 2026-10-22).
+Run the tests with `node tests/realestate-calc.test.js`.
+
+Data lives only in `state.realestate` (`projects`, `units`, `customers`, `contractors`, `sales`, `bookings`, `costs`, `shares`, `pays`, `company`, `web`). Money is whole taka.
+Dues, paid, state and the dashboard are never stored: they are recomputed from `pays` (`kind: sale | booking | share`, `ref` = the sale/booking/share-part id; voided payments are kept with `void: true`).
+A cost share (`shares`) splits one cost across the buyers of current sales by sqft (`reSplit`, parts always add up to the total).
+
+- Importing the website data is idempotent (matched by id), so pressing it again never duplicates and never overwrites edits.
+- The website database now holds mostly sample records (the real projects, units, customers, payments were deleted there), so every imported record carries `sample: true` and shows 🧪. "Remove sample records" deletes them but keeps any sample buyer/unit/contractor/project that a real record still uses.
+- Buyer and contractor names no longer exist on the website, so they were imported with an empty `name` and show as "Unnamed buyer N"; fill them in from the People tab.
+- Not from the website (kept out on purpose): login credentials, password hashes, audit log, legal page texts.
+
+### realestate: Finance_App_Spec.pdf coverage (added 2026-10-23)
+
+`js/realestate-ext.js` adds the screens; **all 17 calculation rules of spec §4 live in `js/realestate-calc.js`** (tests: `node tests/realestate-calc.test.js`).
+Added: accounts and other income, budgets (80% warn / 100% critical, "Actual (live)"), stock ledger with low-stock alert, construction phases and tasks with phase cost,
+leads (activity log, convert to buyer), shareholders/landowners (a unit is owner-allocated or landowner share, never two parties), vendors and purchases,
+instalment schedules (oldest-first allocation, paid/overdue/partially-paid/due/upcoming), cost-allocation goals with fines and adjustments (original payable never changed),
+the 7 transaction statuses (only verified/completed/no-status count), reports (cash flow, categories, contractors, contributions, receivables, collections), CSV export, alerts, local activity log.
+
+**Left out on purpose because they need a server or several users (nothing here can do them offline on one phone):**
+login, users, roles and permissions (§2); customer / shareholder / landowner portals (§3.11); push notifications and reminders (alerts show inside the app only);
+IP address in the audit log (the log is local: who/what/when on this phone); public website property listings and parking pages; live sync with the website;
+multi-person approval workflow (a single "status" field is used instead); documents with visibility rules per portal user.
+Not built yet but possible offline: parking spaces, invoices, document photos. Say if you want them.
