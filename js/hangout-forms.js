@@ -210,7 +210,17 @@ function hgExpenseForm(e, preset, scope0) {
     ${isNew ? `<div class="qtitles ${scope === 'personal' ? 'hidden' : ''}" data-qcat>${ev.cats.filter(k => !['discount', 'vat', 'service', 'other_charges'].includes(k.k)).slice(0, 6).map(k => `<button type="button" class="qchip" data-action="hg-title-chip" data-k="${k.k}" data-t="${esc(isEN() ? k.en : k.bn)}">${esc(isEN() ? k.en : k.bn)}</button>`).join('')}</div>` : ''}
     <label class="field"><span>2. ${L('মোট কত টাকা?', 'How much in total?')}</span>${moneyInput('total', hgTaka(v.total), '0')}</label>
     <div class="eachstrip hidden" data-each></div>
-    <div class="field"><span class="flabel">3. ${L('টাকা কে দিয়েছে?', 'Who paid?')}</span>
+    ${isNew ? `<div class="qtitles ${scope === 'personal' ? '' : 'hidden'}" data-qpers>${[['কোক', 'Coke'], ['চা', 'Tea'], ['নাস্তা', 'Snack'], ['রিকশা', 'Rickshaw']].map(([bn, en]) => `<button type="button" class="qchip" data-action="hg-title-chip" data-k="" data-t="${L(bn, en)}">${L(bn, en)}</button>`).join('')}</div>` : ''}
+    <div class="field"><span class="flabel">3. ${L('খরচটা কার?', 'Whose cost is it?')}</span>
+      <div class="hg-methods"><label class="chip"><input type="radio" name="scope" value="group" ${scope === 'group' ? 'checked' : ''}><span>👥 ${L('সবার মধ্যে ভাগ', 'Shared by the group')}</span></label>
+        <label class="chip"><input type="radio" name="scope" value="personal" ${scope === 'personal' ? 'checked' : ''}><span>👤 ${L('শুধু একজনের (ব্যক্তিগত)', 'Only one person (personal)')}</span></label></div>
+      <div class="hg-multi ${scope === 'personal' ? '' : 'hidden'}" data-personal><span class="hint">${L('কার খরচ? (যেমন কেউ একা কোক খেল, শুধু তার হিসাবে যাবে, অন্য কারও ভাগে নয়)', 'Whose cost? (e.g. someone had a coke alone: it goes only to them)')}</span>${hgSelect('forWho', people.map(p => [p.id, esc(p.name)]), forWho)}</div></div>
+    <div class="field ${scope === 'personal' ? 'hidden' : ''}" data-groupbox><span class="flabel">4. ${L('কাদের মধ্যে ভাগ হবে? (সমান ভাগ)', 'Who shares it? (split equally)')}</span>
+      <div class="hg-incl ${advOpen ? 'hidden' : ''}" data-incl><div class="chips">${people.map(p => `<label class="chip"><input type="checkbox" name="inc_${p.id}" ${inclNow.includes(p.id) ? 'checked' : ''}><span>${esc(p.name)}${p.joinedOn ? ` <small>(${L('থেকে', 'from')} ${fmtDate(p.joinedOn)})</small>` : ''}</span></label>`).join('')}</div>
+        <div class="hint">${L('যারা এই খরচে ছিল না তাদের টিক তুলে দিন।', 'Untick anyone who was not part of this.')}</div></div>
+      <div class="preview" data-split></div>
+      <div class="preview" data-budget></div></div>
+    <div class="field"><span class="flabel">5. ${L('টাকা কে দিয়েছে?', 'Who paid?')}</span>
       <div data-one>${hgSelect('payOne', people.map(p => [p.id, esc(p.name)]), onePayer)}</div>
       ${hgCheckRow('multi', L('একজনের বেশি দিয়েছে', 'More than one person paid'), multi)}
       <div class="hg-multi ${multi ? '' : 'hidden'}" data-multi><span class="hint">${L('১) যারা টাকা দিয়েছে তাদের ট্যাপ করুন, সমান ভাগ নিজে বসে যাবে। ২) আলাদা হলে নিচের ঘরে নিজে লিখুন।', '1) Tap everyone who paid and the amount is split equally for you. 2) If it differs, type it below.')}</span>
@@ -220,16 +230,6 @@ function hgExpenseForm(e, preset, scope0) {
         <span class="hint" data-eachhint>${L('উপরে টিক দেওয়া সবাই যদি একই অঙ্ক দিয়ে থাকে, এখানে সেই অঙ্ক লিখুন, সবার ঘরে বসে যাবে।', 'If everyone ticked paid the same amount, type it here and it fills for all of them.')}</span>
         ${people.map(p => `<div class="payrow"><span class="pn">${esc(p.name)}</span><div class="pi">${moneyInput('pay_' + p.id, hgTaka(payOf(p.id)), '0')}</div><button type="button" class="qchip" data-action="hg-pay-rest" data-p="${p.id}">${L('বাকিটা', 'Rest')}</button></div>`).join('')}
         <div class="preview" data-paysum></div></div></div>
-    ${isNew ? `<div class="qtitles ${scope === 'personal' ? '' : 'hidden'}" data-qpers>${[['কোক', 'Coke'], ['চা', 'Tea'], ['নাস্তা', 'Snack'], ['রিকশা', 'Rickshaw']].map(([bn, en]) => `<button type="button" class="qchip" data-action="hg-title-chip" data-k="" data-t="${L(bn, en)}">${L(bn, en)}</button>`).join('')}</div>` : ''}
-    <div class="field"><span class="flabel">4. ${L('খরচটা কার?', 'Whose cost is it?')}</span>
-      <div class="hg-methods"><label class="chip"><input type="radio" name="scope" value="group" ${scope === 'group' ? 'checked' : ''}><span>👥 ${L('সবার মধ্যে ভাগ', 'Shared by the group')}</span></label>
-        <label class="chip"><input type="radio" name="scope" value="personal" ${scope === 'personal' ? 'checked' : ''}><span>👤 ${L('শুধু একজনের (ব্যক্তিগত)', 'Only one person (personal)')}</span></label></div>
-      <div class="hg-multi ${scope === 'personal' ? '' : 'hidden'}" data-personal><span class="hint">${L('কার খরচ? (যেমন কেউ একা কোক খেল, শুধু তার হিসাবে যাবে, অন্য কারও ভাগে নয়)', 'Whose cost? (e.g. someone had a coke alone: it goes only to them)')}</span>${hgSelect('forWho', people.map(p => [p.id, esc(p.name)]), forWho)}</div></div>
-    <div class="field ${scope === 'personal' ? 'hidden' : ''}" data-groupbox><span class="flabel">5. ${L('কাদের মধ্যে ভাগ হবে? (সমান ভাগ)', 'Who shares it? (split equally)')}</span>
-      <div class="hg-incl ${advOpen ? 'hidden' : ''}" data-incl><div class="chips">${people.map(p => `<label class="chip"><input type="checkbox" name="inc_${p.id}" ${inclNow.includes(p.id) ? 'checked' : ''}><span>${esc(p.name)}${p.joinedOn ? ` <small>(${L('থেকে', 'from')} ${fmtDate(p.joinedOn)})</small>` : ''}</span></label>`).join('')}</div>
-        <div class="hint">${L('যারা এই খরচে ছিল না তাদের টিক তুলে দিন।', 'Untick anyone who was not part of this.')}</div></div>
-      <div class="preview" data-split></div>
-      <div class="preview" data-budget></div></div>
     <details class="more" data-carrybox open><summary><span class="ds-t">👥 ${L('এই খরচের পর কার কত বাকি', 'After this expense')}</span><small>${L('আগের বাকিসহ', 'Including earlier dues')}</small></summary><div class="carry" data-carry></div></details>
     <details class="more ${scope === 'personal' ? 'hidden' : ''}" data-groupbox ${advOpen ? 'open' : ''}><summary><span class="ds-t">⚖️ ${L('অন্যভাবে ভাগ করুন', 'Split differently')}</span><small>${L('শতাংশ, নির্দিষ্ট টাকা বা অনুপাত', 'Percent, exact amounts or ratio')}</small></summary>
       <div class="hg-methods">${['selected', 'exact', 'percent', 'ratio', 'custom'].map(m => `<label class="chip"><input type="radio" name="method" value="${m}" ${method === m ? 'checked' : ''}><span>${m === 'selected' ? L('সমান ভাগ', 'Equal') : HG_METHODS[m][isEN() ? 1 : 0]}</span></label>`).join('')}</div>
