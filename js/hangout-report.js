@@ -270,6 +270,8 @@ function hgViewMore() {
     <div class="menu">${menuItem('hg-backup', 'download', L('Hangout ব্যাকআপ নিন', 'Back up Hangout data'), L('ইভেন্ট, বন্ধু, রসিদের ছবিসহ, আলাদা ফাইলে', 'Events, friends and receipt photos in a separate file'))}
       ${menuItem('hg-import', 'upload', L('Hangout ব্যাকআপ রিস্টোর', 'Restore Hangout backup'), L('ডুপ্লিকেট ছাড়া মিলিয়ে নিন, বা বদলে দিন', 'Merge without duplicates, or replace'))}
       ${hasPrev ? menuItem('hg-undo-import', 'undo', L('শেষ রিস্টোর ফেরান', 'Undo last restore'), L('রিস্টোরের আগের কপিতে ফিরুন', 'Go back to the copy from before restoring')) : ''}</div>
+    <div class="section-title">${L('ডেমো ডেটা (সাময়িক)', 'Demo data (temporary)')}</div>
+    <div class="menu">${hg().events.some(e => e.demo) ? menuItem('hg-demo-clear', 'trash', L('ডেমো ডেটা মুছুন', 'Remove demo data'), L('শুধু ডেমো ইভেন্ট ও বন্ধু যাবে, আপনার ডেটা থাকবে', 'Only the demo events and friends go; your data stays')) : menuItem('hg-demo-load', 'plus', L('ডেমো ডেটা আনুন', 'Load demo data'), L('দেখে পরীক্ষা করার জন্য নমুনা ইভেন্ট', 'Sample events for inspection'))}</div>
     ${dead.length ? `<div class="section-title">${L('সম্প্রতি মোছা ইভেন্ট', 'Recently deleted events')} · ${dead.length}</div><div class="list">${dead.map(e => `<div class="lrow"><span class="lic">🗑️</span><span class="lmain"><b>${esc(e.name)}</b><small>${hgFmtTime(e.del)}</small></span>
       <button type="button" class="btn sm" data-action="hg-restore-event" data-id="${e.id}">${L('ফেরত', 'Restore')}</button><button type="button" class="btn sm danger" data-action="hg-purge-event" data-id="${e.id}">${icon('trash', 16)}</button></div>`).join('')}</div>` : ''}
     <div class="section-title">${L('টেমপ্লেট', 'Templates')}</div>

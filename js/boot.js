@@ -4,6 +4,7 @@
    চালু করা: সব মডিউল রেজিস্টার হওয়ার পরে ডেটা লোড, প্রথম রেন্ডার, সার্ভিস ওয়ার্কার
    ========================================================= */
 state = load();
+if (typeof hgSeedDemoOnce === 'function') hgSeedDemoOnce(); // সাময়িক ডেমো ডেটা (js/hangout-demo.js)
 render();
 loadImages();
 
