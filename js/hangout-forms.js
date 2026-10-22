@@ -323,10 +323,23 @@ LIVE['hg-expense'] = (f, t) => {
     const before = hgEventCalc(Object.assign({}, ev, { expenses: base }));
     const tmp = { id: '__tmp', title: '', category: f.elements.cat.value, date: f.elements.date.value || today(), total: r.total, payers: r.payers, method: r.method, spec: r.spec, mode: 'split', personal: r.personal || null };
     const after = hgEventCalc(Object.assign({}, ev, { expenses: base.concat(tmp) }));
-    const side = n => n > 0 ? `<b class="pos">${L('পাবে', 'gets')} ${hgM(n)}</b>` : n < 0 ? `<b class="neg">${L('দেবে', 'owes')} ${hgM(-n)}</b>` : `<b>${L('মিটেছে', 'even')}</b>`;
-    const rowsHtml = ev.participants.filter(p => before.final[p.id] !== 0 || after.final[p.id] !== 0).map(p => `<div class="crow"><span>${esc(p.name)}${hgIsLater(p, before) ? ' ⏳' : ''}</span><span class="cb">${before.final[p.id] === after.final[p.id] ? '' : side(before.final[p.id]) + ' →'}</span><span class="ca">${side(after.final[p.id])}</span></div>`).join('');
-    carry.innerHTML = rowsHtml || `<p class="hint">${L('সবার হিসাব মিটে থাকবে ✓', 'Everyone will be even ✓')}</p>`;
-    if (rowsHtml && ev.participants.some(p => before.final[p.id] !== 0)) carry.insertAdjacentHTML('afterbegin', `<p class="hint" style="margin-top:0">${L('আগের বাকি এবারের ভাগের সাথে যোগ হয়েছে। ⏳ = পরের বিলে দেবে বলেছিল।', 'Earlier dues are added to this share. ⏳ = said they would pay with the next bill.')}</p>`);
+    const side = n => n > 0 ? `<b class="pos">${L('পাবে', 'gets')} ${hgM(n)}</b>` : n < 0 ? `<b class="neg">${L('দেবে', 'owes')} ${hgM(-n)}</b>` : `<b>${L('মিটেছে ✓', 'even ✓')}</b>`;
+    const delta = n => n === 0 ? '<span class="mut">—</span>' : `<span class="${n > 0 ? 'pos' : 'neg'}">${n > 0 ? '+' : '−'}${hgM(Math.abs(n))}</span>`;
+    const paidNow = Object.fromEntries(ev.participants.map(p => [p.id, r.payers.filter(x => x.pid === p.id).reduce((q, x) => q + x.amt, 0)]));
+    const who = ev.participants.filter(p => before.final[p.id] !== 0 || after.final[p.id] !== 0 || r.split.alloc[p.id] || paidNow[p.id]);
+    const hadDues = ev.participants.some(p => before.final[p.id] !== 0);
+    const rowsHtml = who.map(p => {
+      const sh = r.split.alloc[p.id] || 0, pd = paidNow[p.id] || 0;
+      return `<div class="crow"><div class="cn"><b>${esc(p.name)}${hgIsLater(p, before) ? ' ⏳' : ''}</b><small>${sh ? L(`ভাগ ${hgM(sh)}`, `share ${hgM(sh)}`) : L('এই খরচে নেই', 'not in this one')}${pd ? L(` · দিয়েছে ${hgM(pd)}`, ` · paid ${hgM(pd)}`) : ''}</small></div>
+        <div class="cc"><small>${L('আগে', 'Before')}</small>${before.final[p.id] === 0 ? '<span class="mut">—</span>' : side(before.final[p.id])}</div>
+        <div class="cc"><small>${L('এবার', 'This')}</small>${delta(after.final[p.id] - before.final[p.id])}</div>
+        <div class="cc cn2"><small>${L('এখন', 'After')}</small>${side(after.final[p.id])}</div></div>`;
+    }).join('');
+    const nPay = who.filter(p => after.final[p.id] < 0).length, nGet = who.filter(p => after.final[p.id] > 0).length;
+    carry.innerHTML = rowsHtml
+      ? `<p class="hint" style="margin-top:0">${L('এই খরচ সেভ করলে প্রত্যেকের হিসাব কেমন দাঁড়াবে। <b>এখন = আগে + এবার</b>। সবুজ = টাকা পাবে, লাল = টাকা দেবে।', 'What each balance becomes when you save. <b>After = Before + This</b>. Green = gets money, red = owes money.')}${hadDues ? L(' আগের বাকি এবারের ভাগের সাথে যোগ হয়েছে। ⏳ = পরের বিলে দেবে বলেছিল।', ' Earlier dues are included. ⏳ = said they would pay with the next bill.') : ''}</p>${rowsHtml}
+        <div class="csum">${L(`<b>${nPay} জন</b> দেবে, <b>${nGet} জন</b> পাবে`, `<b>${nPay}</b> will owe, <b>${nGet}</b> will get`)}</div>`
+      : `<p class="hint">${L('সবার হিসাব মিটে থাকবে ✓', 'Everyone will be even ✓')}</p>`;
   }
   // বাজেট থাকলে: এই খরচের পর ওই খাত আর মোট বাজেটের কী অবস্থা হবে
   const plan = ev.plan && hgPlanCalc(ev, hgEventCalc(ev), today());

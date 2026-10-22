@@ -1,6 +1,6 @@
 // অফলাইনে চালানোর জন্য সার্ভিস ওয়ার্কার।
 // অ্যাপ আপডেট করলে VERSION বাড়ান, তাহলে ফোনে নতুন ফাইল যাবে।
-const VERSION = 'hisabi-v33';
+const VERSION = 'hisabi-v34';
 const ASSETS = [
   './', './index.html', './styles.css', './js/core.js', './js/trade.js', './js/hangout-calc.js', './js/hangout.js', './js/hangout-forms.js', './js/hangout-flows.js', './js/hangout-report.js', './js/hangout-ui.js', './js/hangout-demo.js', './js/boot.js', './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',

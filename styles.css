@@ -929,3 +929,17 @@ details.more > :not(summary) { padding-bottom: 12px; }
 .stl .stl-a.pos b { color: var(--good); } .stl .stl-a.neg b { color: var(--danger); }
 .stl.total { background: var(--surface-2); border-radius: 12px; padding: 10px; border-top: 0; margin-top: 4px; }
 .card.attn .arow .btn { white-space: nowrap; }
+
+/* ===== "এই খরচের পর": আগে · এবার · এখন ===== */
+details.more[open] > summary::before { content: none; }
+.carry .crow { display: grid; grid-template-columns: 1.25fr 1fr .9fr 1fr; gap: 6px; align-items: start; padding: 10px 0; border-top: 1px solid var(--border); font-size: 12.5px; }
+.carry .crow:first-of-type { border-top: 0; }
+.carry .crow .cn b { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.carry .crow .cn small { color: var(--muted); font-size: 11px; line-height: 1.35; display: block; margin-top: 2px; }
+.carry .crow .cc { display: flex; flex-direction: column; gap: 2px; text-align: right; font-variant-numeric: tabular-nums; }
+.carry .crow .cc small { color: var(--faint); font-size: 10.5px; font-weight: 700; }
+.carry .crow .cc b, .carry .crow .cc span { font-size: 12.5px; }
+.carry .crow .cn2 { background: var(--surface); border-radius: 10px; padding: 4px 6px; }
+.carry .crow .mut { color: var(--faint); }
+.carry .crow .pos { color: var(--good); } .carry .crow .neg { color: var(--danger); }
+.carry .csum { margin-top: 6px; padding-top: 8px; border-top: 1.5px dashed var(--border); font-size: 13px; color: var(--muted); }
