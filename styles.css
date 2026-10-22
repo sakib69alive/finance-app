@@ -1067,7 +1067,7 @@ form[data-simple="1"] .simplehide { display: none !important; }
 .field.credit .field:last-child { margin-bottom: 0; }
 
 .mnav { display: flex; align-items: center; justify-content: space-between; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 4px; margin: 0 0 12px; }
-.mnav b { font-size: 15px; } .mnav button { width: 42px; height: 38px; border-radius: 12px; font-size: 22px; color: var(--accent); background: var(--surface-2); }
+.mnav b { font-size: 15px; } .mnav button { width: 42px; height: 38px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; color: var(--accent); background: var(--surface-2); }
 .pcard { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 12px; margin-top: 10px; }
 .pc-top { display: flex; align-items: center; gap: 10px; } .pc-i { flex: none; width: 38px; height: 38px; border-radius: 12px; background: var(--surface-2); display: grid; place-items: center; font-size: 19px; }
 .pc-n { flex: 1; min-width: 0; display: flex; flex-direction: column; } .pc-n b { font-size: 15px; overflow-wrap: anywhere; } .pc-n small, .pc-a small { color: var(--muted); font-size: 12px; }
@@ -1088,7 +1088,7 @@ button.hg-day.rowbtn { display: flex; }
 .tcnote { text-align: center; color: var(--faint); font-size: 12px; line-height: 1.6; padding: 18px 12px 4px; }
 .tcmn { display: flex; align-items: center; justify-content: space-between; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 4px; margin: 0 0 12px; }
 .tcmn b { font-size: 15px; }
-.tcmn .icon-btn { width: 42px; height: 38px; border-radius: 12px; font-size: 22px; color: var(--accent); background: var(--surface-2); }
+.tcmn .icon-btn { width: 42px; height: 38px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; color: var(--accent); background: var(--surface-2); }
 button.tcstat { text-align: left; width: 100%; font: inherit; color: inherit; cursor: pointer; } button.tcstat:active { transform: scale(.98); }
 .tcb { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); line-height: 1.5; }
 .tcb.paid, .tcb.done { background: var(--good-soft); color: var(--good); }
@@ -1117,3 +1117,5 @@ button.tcstat { text-align: left; width: 100%; font: inherit; color: inherit; cu
 #demo-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; z-index: 40; display: flex; align-items: center; gap: 8px; background: var(--ink); color: #fff; border-radius: 999px; padding: 6px 8px 6px 14px; box-shadow: 0 8px 24px rgba(0,0,0,.25); font-size: 13px; font-weight: 700; white-space: nowrap; }
 #demo-bar button { height: 34px; padding: 0 14px; border-radius: 999px; background: #F6D98B; color: #1D1D1B; font-weight: 800; font-size: 13px; }
 #demo-bar button[data-demo="hide"] { width: 34px; padding: 0; background: rgba(255,255,255,.15); color: #fff; }
+
+.mnav button .ic, .tcmn .icon-btn .ic { display: block; }

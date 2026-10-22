@@ -74,7 +74,7 @@ function tcExpRow(x, e, td) {
     <span class="lmain"><b>${esc(lb.t)}</b><small>${esc(lb.s)} ${tcBadge(st.status)}${e.recurId ? ' · 🔁' : ''}${e.reusable ? ' · ' + L('পুনর্ব্যবহারযোগ্য', 'reusable') : ''}</small></span>
     <span class="lend"><b>${tcM(e.amt)}</b>${st.rem > 0 && st.paid > 0 ? `<small class="neg">${L('বাকি', 'due')} ${tcM(st.rem)}</small>` : ''}</span></button>`;
 }
-const tcMonthNav = (act = 'tc-ym') => `<div class="tcmn"><button type="button" class="icon-btn" data-action="${act}" data-d="-1" aria-label="${L('আগের মাস', 'Previous month')}">‹</button><b>${tcYmLabel(tcUi.ym)}</b><button type="button" class="icon-btn" data-action="${act}" data-d="1" aria-label="${L('পরের মাস', 'Next month')}">›</button></div>`;
+const tcMonthNav = (act = 'tc-ym') => `<div class="tcmn"><button type="button" class="icon-btn" data-action="${act}" data-d="-1" aria-label="${L('আগের মাস', 'Previous month')}">${icon('prev', 20)}</button><b>${tcYmLabel(tcUi.ym)}</b><button type="button" class="icon-btn" data-action="${act}" data-d="1" aria-label="${L('পরের মাস', 'Next month')}">${icon('next', 20)}</button></div>`;
 
 /* ---------- টপবার ---------- */
 function tcTopbar() {
@@ -101,9 +101,9 @@ function tcHome() {
     <section class="card">${empty('🎓', L('শুরু করুন', 'Get started'), `<p class="hint">${L('চাকরি, প্রাইভেট শিক্ষার্থী বা কোচিংয়ের ব্যাচ যোগ করুন। প্রতি মাসে নতুন করে লিখতে হবে না: মাস বদলালে এক ট্যাপে ফি, বেতন আর নিয়মিত খরচ তৈরি হয়।', 'Add a job, private students or a coaching batch. You never retype each month: one tap creates the new month\'s fees, salary and regular costs.')}</p>`,
       `<button type="button" class="btn primary block mt8" data-action="tc-stu-add">${icon('plus', 18)} ${L('শিক্ষার্থী যোগ', 'Add student')}</button><button type="button" class="btn block mt8" data-action="tc-job-add">💼 ${L('চাকরি যোগ', 'Add job')}</button><button type="button" class="btn block mt8" data-action="tc-bat-add">🏫 ${L('কোচিং ব্যাচ যোগ', 'Add coaching batch')}</button>`)}</section>`);
   return tcPage(`${tcMonthNav()}
-  <section class="hero"><div class="hero-top"><div><div class="hero-label">${L('প্রকৃত লাভ', 'Net profit')} · ${tcYmLabel(ym)}</div>
+  <section class="hero tappable" data-action="tc-detail" data-k="profit" role="button" tabindex="0" aria-label="${L('পুরো হিসাব দেখুন', 'See the full breakdown')}"><div class="hero-top"><div><div class="hero-label">${L('প্রকৃত লাভ', 'Net profit')} · ${tcYmLabel(ym)}</div>
       <div class="hero-target">${tcM(m.profit)}</div><div class="hero-sub">${L('অর্জিত আয় − খরচ', 'Earned income − expenses')}</div></div></div>
-    <div class="hero-chips"><div><small>${L('অর্জিত আয়', 'Earned')}</small><b>${tcM(m.earned)}</b></div><div><small>${L('প্রাপ্ত', 'Received')}</small><b>${tcM(m.received)}</b></div><div><small>${L('খরচ', 'Expenses')}</small><b>${tcM(m.expense)}</b></div></div></section>
+    <div class="hero-chips"><div><small>${L('অর্জিত আয়', 'Earned')}</small><b>${tcM(m.earned)}</b></div><div><small>${L('প্রাপ্ত', 'Received')}</small><b>${tcM(m.received)}</b></div><div><small>${L('খরচ', 'Expenses')}</small><b>${tcM(m.expense)}</b></div></div><div class="hero-more">${L('ট্যাপ করে পুরো হিসাব দেখুন', 'Tap for the full breakdown')} ${icon('chev', 16)}</div></section>
   ${plan && ym <= tcYmAdd(curYm, 1) ? `<section class="card attn"><div class="card-head"><h2>🗓️ ${L('নতুন মাসের হিসাব', 'New month\'s books')}</h2><span class="achips"><em class="i">${plan}</em></span></div>
     <p class="hint" style="margin:0 0 8px">${L(`${tcYmLabel(ym)}-এর ${plan}টা ফি/বেতন/খরচ তৈরি হয়নি। দেখে নিয়ে এক ট্যাপে তৈরি করুন; আগের মাসের হিসাব বদলাবে না।`, `${plan} fee/salary/cost item(s) for ${tcYmLabel(ym)} are not created yet. Review and create them in one tap; earlier months stay unchanged.`)}</p>
     <button type="button" class="btn sm primary" data-action="tc-roll" data-ym="${ym}">${L('দেখুন ও তৈরি করুন', 'Review & create')}</button></section>` : ''}
@@ -151,7 +151,7 @@ function tcCalHtml() {
     const date = tcDate(ym, d), c = cal[date];
     cells.push(`<button type="button" class="tcc ${date === tcUi.sdate ? 'sel' : ''} ${date === td ? 'td' : ''}" data-action="tc-pick" data-date="${date}"><span>${d}</span>${c ? `<i class="${c.conflict ? 'w' : ''}">${c.n}</i>` : ''}</button>`);
   }
-  return `<div class="tcmn"><button type="button" class="icon-btn" data-action="tc-cm" data-d="-1" aria-label="${L('আগের মাস', 'Previous month')}">‹</button><b>${tcYmLabel(ym)}</b><button type="button" class="icon-btn" data-action="tc-cm" data-d="1" aria-label="${L('পরের মাস', 'Next month')}">›</button></div>
+  return `<div class="tcmn"><button type="button" class="icon-btn" data-action="tc-cm" data-d="-1" aria-label="${L('আগের মাস', 'Previous month')}">${icon('prev', 20)}</button><b>${tcYmLabel(ym)}</b><button type="button" class="icon-btn" data-action="tc-cm" data-d="1" aria-label="${L('পরের মাস', 'Next month')}">${icon('next', 20)}</button></div>
     <div class="tcal"><div class="tcw">${TC_DAYS.map(d => `<span>${tcN(TC_DAYN, d)}</span>`).join('')}</div><div class="tcg">${cells.join('')}</div></div>`;
 }
 function tcSched() {
@@ -161,7 +161,7 @@ function tcSched() {
   let body = '';
   const dayBlock = () => {
     const all = tcDay(t, tcUi.sdate), es = all.filter(flt), conf = all.filter(e => e.conflict).length;
-    return `<div class="tcmn"><button type="button" class="icon-btn" data-action="tc-sd" data-d="-1" aria-label="${L('আগের দিন', 'Previous day')}">‹</button><b>${tcUi.sdate === td ? L('আজ', 'Today') + ' · ' : ''}${fmtDate(tcUi.sdate)} · ${tcN(TC_DAYN, tcDayKey(tcUi.sdate))}</b><button type="button" class="icon-btn" data-action="tc-sd" data-d="1" aria-label="${L('পরের দিন', 'Next day')}">›</button></div>
+    return `<div class="tcmn"><button type="button" class="icon-btn" data-action="tc-sd" data-d="-1" aria-label="${L('আগের দিন', 'Previous day')}">${icon('prev', 20)}</button><b>${tcUi.sdate === td ? L('আজ', 'Today') + ' · ' : ''}${fmtDate(tcUi.sdate)} · ${tcN(TC_DAYN, tcDayKey(tcUi.sdate))}</b><button type="button" class="icon-btn" data-action="tc-sd" data-d="1" aria-label="${L('পরের দিন', 'Next day')}">${icon('next', 20)}</button></div>
       ${tcUi.sdate !== td ? `<button type="button" class="link" data-action="tc-today">${L('আজকে ফিরুন', 'Back to today')}</button>` : ''}
       ${conf ? `<div class="bsum warn"><b>⚠️ ${L('সময়ের সংঘাত', 'Time clash')}</b><span>${L(`${conf}টা ক্লাস একই সময়ে পড়ছে। একটা স্থগিত বা সময় বদলে নিন।`, `${conf} class(es) overlap. Postpone or move one.`)}</span></div>` : ''}
       <div class="mt12">${es.length ? es.map(tcSessRow).join('') : empty('📅', L('এই দিনে ক্লাস নেই', 'No classes this day'), `<p class="hint">${L('শিক্ষার্থী বা ব্যাচে ক্লাসের দিন ও সময় দিলে এখানে আসবে।', 'Classes appear here once you give days and times to students or batches.')}</p>`)}</div>`;

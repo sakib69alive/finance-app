@@ -77,10 +77,17 @@ function demoBuild() {
   const bday = mkEv('ডেমো: জন্মদিন (আর্কাইভ)', 'birthday_home', d(-60), 'archived', ['রাফি', 'সুমি']);
   X(bday, 'কেক', 'cake', d(-60), M(1800), [{ pid: bday.participants[0].id, amt: M(1800) }], 'equal', { incl: bday.participants.map(p => p.id), values: {} });
 
-  const daily = mkEv('ডেমো: দৈনিক বাজার খরচ', 'daily', d(-5), 'active', []);
-  const ds = (title, cat, date, total, o) => { const x = hgSimpleExpense(daily, Object.assign({ title, category: cat, date, total: M(total) }, o)); daily.expenses.push(x); return x; };
-  ds('সবজি', 'vegetables', d(-4), 180); ds('মাছ', 'meat', d(-3), 420); ds('চাল ডাল', 'staples', d(-2), 950, { pays: [{ id: uid(), amt: M(500), date: d(-2), method: 'cash', note: '', createdAt: Date.now() }] });
-  daily.dues.push({ id: uid(), dir: 'owe', who: 'মুদি দোকান', title: 'বাকিতে কেনা', amt: M(450), date: d(-2), payments: [], expenseId: null, createdAt: Date.now() }, { id: uid(), dir: 'get', who: 'প্রতিবেশী', title: 'ধার দিয়েছি', amt: M(1000), date: d(-6), payments: [{ id: uid(), amt: M(400), date: d(-1), createdAt: Date.now() }], expenseId: null, createdAt: Date.now() });
+  const shop = mkEv('ডেমো: ঈদের শপিং', 'shopping', d(-8), 'active', ['রিমি', 'তানভীর']);
+  const SH = shop.participants.map(p => p.id), SP = n => shop.participants.find(p => p.name === n).id;
+  X(shop, 'রিমির শাড়ি', 'shopping', d(-7), M(3200), [{ pid: SH[0], amt: M(3200) }], 'selected', { incl: [SP('রিমি')], values: {} }, { desc: 'লাল জামদানি, নিউমার্কেট' });
+  X(shop, 'তানভীরের পাঞ্জাবি', 'shopping', d(-6), M(2400), [{ pid: SP('তানভীর'), amt: M(2400) }], 'selected', { incl: [SP('তানভীর')], values: {} });
+  X(shop, 'সবার জন্য মিষ্টি ও উপহার', 'shopping', d(-4), M(1800), [{ pid: SH[0], amt: M(1800) }], 'equal', { incl: SH, values: {} });
+  X(shop, 'অটো ভাড়া', 'other', d(-6), M(300), [{ pid: SH[0], amt: M(300) }], 'equal', { incl: SH, values: {} });
+  shop.plan = { mode: 'total', total: M(15000), each: 0, people: 3, split: { shopping: 85, other: 5 }, tpl: 'shopping' };
+  shop.dues.push({ id: uid(), dir: 'owe', who: 'নিউমার্কেটের দোকানদার', title: 'জুতা বাকিতে', amt: M(900), date: d(-5), payments: [], expenseId: null, createdAt: Date.now(), demo: true });
+  const trv = mkEv('ডেমো: অফিসে যাতায়াত (মাস)', 'transport', d(-12), 'active', []);
+  const ts = (title, cat, date, total) => { const x = hgSimpleExpense(trv, { title, category: cat, date, total: M(total) }); trv.expenses.push(x); };
+  ts('বাস ভাড়া', 'transport', d(-10), 220); ts('সিএনজি', 'transport', d(-7), 380); ts('বাইকের তেল', 'fuel', d(-5), 600); ts('পার্কিং', 'toll', d(-2), 100);
 
   const house = mkEv('ডেমো: মাসিক সংসার খরচ', 'household', d(-70), 'active', []);
   const hs = (title, cat, date, total, info, pays) => { const x = hgSimpleExpense(house, { title, category: cat, date, total: M(total), info, pays: pays || [] }); house.expenses.push(x); return x; };
@@ -101,7 +108,7 @@ function demoBuild() {
   house.dues.push({ id: uid(), dir: 'owe', who: 'ভাই', title: 'ধার নেওয়া টাকা', amt: M(3000), date: tcDate(ymN(0), 5), payments: [], expenseId: null, createdAt: Date.now() });
   house.hh.people = [{ id: uid(), name: 'মা' }, { id: uid(), name: 'আরিফ' }];
 
-  S.hangout = { schema: HG_SCHEMA, friends, events: [trip, adda, rest, bday, daily, house] };
+  S.hangout = { schema: HG_SCHEMA, friends, events: [trip, adda, rest, bday, shop, trv, house] };
 
   /* ---------- শিক্ষক ---------- */
   const t = tcBlank(); S.teacher = t;
@@ -172,9 +179,7 @@ function demoBarSync() {
   bar.innerHTML = `<span>🧪 ডেমো ডেটা</span><button type="button" data-demo="load">${isEN() ? 'Load demo (once)' : 'ডেমো লোড (একবার)'}</button><button type="button" data-demo="hide" aria-label="${L('বন্ধ', 'Close')}">✕</button>`;
   document.body.appendChild(bar);
 }
-document.addEventListener('click', e => {
-  const b = e.target.closest && e.target.closest('[data-demo]'); if (!b) return;
-  if (b.dataset.demo === 'hide') { state.settings.demoUsed = true; save(); return demoBarSync(); }
+function demoLoad() {
   if (!confirm(L('এই ফোনের এখনকার সব ডেটা মুছে যাবে, শুধু ডেমো ডেটা থাকবে। এই বাটন আর আসবে না। চালিয়ে যাবেন?', 'All current data on this phone will be erased and only demo data will remain. This button will not come back. Continue?'))) return;
   try {
     const lang = state.settings.lang, S = demoBuild();
@@ -182,5 +187,12 @@ document.addEventListener('click', e => {
     sheetOpen && closeSheet(); tab = 'home'; trail = ['home'];
     save(); render(); loadImages(); toast(L('ডেমো ডেটা লোড হয়েছে', 'Demo data loaded'));
   } catch (err) { toast(L('ডেমো লোড হয়নি: ', 'Demo failed: ') + err.message, 'danger'); }
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-demo]'); if (!b) return;
+  if (b.dataset.demo === 'hide') { state.settings.demoUsed = true; save(); return demoBarSync(); }
+  demoLoad();
 });
+// "আরও"-তে সব সময় থাকা মেনু (বাটন চলে গেলেও ডেমো আবার আনা যায়)
+ACTIONS['demo-load'] = () => demoLoad();
 { const _render = render; render = function () { _render(); demoBarSync(); }; }

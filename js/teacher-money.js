@@ -118,7 +118,7 @@ function tcReportTab() {
   const body = annual ? tcAnnualHtml(+ym.slice(0, 4)) : tcMonthReportHtml(ym);
   return `<div class="page-head"><h1>${L('রিপোর্ট', 'Reports')}</h1></div>
     <div class="seg mb12">${[['month', L('মাসিক', 'Monthly')], ['year', L('বার্ষিক', 'Annual')]].map(([k, l]) => `<button type="button" class="${tcUi.rmode === k ? 'active' : ''}" data-action="tc-rmode" data-v="${k}">${l}</button>`).join('')}</div>
-    ${annual ? `<div class="tcmn"><button type="button" class="icon-btn" data-action="tc-yr" data-d="-1">‹</button><b>${ym.slice(0, 4)}</b><button type="button" class="icon-btn" data-action="tc-yr" data-d="1">›</button></div>` : tcMonthNav()}
+    ${annual ? `<div class="tcmn"><button type="button" class="icon-btn" data-action="tc-yr" data-d="-1">${icon('prev', 20)}</button><b>${ym.slice(0, 4)}</b><button type="button" class="icon-btn" data-action="tc-yr" data-d="1">${icon('next', 20)}</button></div>` : tcMonthNav()}
     <div class="hg-actions three"><button type="button" class="btn primary" data-action="tc-rep-pdf">${icon('doc', 18)} PDF</button><button type="button" class="btn" data-action="tc-rep-copy">${icon('share', 18)} ${L('টেক্সট কপি', 'Copy text')}</button><button type="button" class="btn" data-action="tc-rep-share">${icon('share', 18)} ${L('শেয়ার', 'Share')}</button></div>
     <div class="mt12">${body}</div>`;
 }

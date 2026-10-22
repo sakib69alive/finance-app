@@ -174,7 +174,7 @@ function tcRollHtml() {
   const have = t.charges.filter(c => c.ym === ym).length + t.expenses.filter(e => e.key && e.key.endsWith(':' + ym)).length;
   const grp = [['job', L('চাকরির বেতন', 'Salary')], ['private', L('প্রাইভেট ফি', 'Private fees')], ['batch', L('কোচিং ফি', 'Coaching fees')], ['recur', L('নিয়মিত খরচ', 'Regular costs')]];
   return `${sheetHead(L('নতুন মাসের হিসাব', 'New month\'s books'), L('দেখে নিয়ে তৈরি করুন, আগের মাস অপরিবর্তিত থাকবে', 'Review, then create; earlier months stay unchanged'))}
-    <div class="tcmn"><button type="button" class="icon-btn" data-action="tc-roll-ym" data-d="-1">‹</button><b>${tcYmLabel(ym)}</b><button type="button" class="icon-btn" data-action="tc-roll-ym" data-d="1">›</button></div>
+    <div class="tcmn"><button type="button" class="icon-btn" data-action="tc-roll-ym" data-d="-1">${icon('prev', 20)}</button><b>${tcYmLabel(ym)}</b><button type="button" class="icon-btn" data-action="tc-roll-ym" data-d="1">${icon('next', 20)}</button></div>
     <p class="hint" style="margin:0 0 8px">${have ? L(`ইতিমধ্যে তৈরি আছে: ${have}টা (দ্বিতীয়বার তৈরি হবে না)`, `Already created: ${have} (never created twice)`) : L('এই মাসের কিছু এখনও তৈরি হয়নি।', 'Nothing created for this month yet.')}</p>
     ${plan.length ? `<form data-form="tc-roll" data-ym="${ym}" autocomplete="off">
       ${grp.map(([k, title]) => { const items = plan.map((p, i) => [p, i]).filter(([p]) => p.kind === k); if (!items.length) return '';

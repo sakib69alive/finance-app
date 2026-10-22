@@ -55,10 +55,36 @@ function hgSoloDetail(ev, c) {
   <div class="ledger fb">${dues.length ? dues.map(g => row(`${g.dir === 'owe' ? '📤 ' + L('আমি দেব', 'I owe') : '📥 ' + L('আমি পাব', 'I am owed')}: ${esc(g.who)}<small class="muted"> ${g.dues.map(d => esc(d.title || L('বাকি', 'credit'))).slice(0, 3).join(', ')}</small>`, g.rem > 0 ? `<b class="${g.dir === 'owe' ? 'neg' : 'pos'}">${hgM(g.rem)}</b> <small class="muted">/ ${hgM(g.total)}</small>` : '✅')).join('')
     + row(L('এখনও বাকি আছে', 'Still open'), openDues.length ? `${openDues.length} ${L('জন', 'parties')} · ${hgM(sum(openDues.map(g => g.rem)))}` : L('কিছু না', 'nothing'), 'total') : row(L('কোনো বাকি নেই', 'No credit entries'), '✅')}</div>`;
 }
+// মাসিক সংসার: মাসের A থেকে Z (hgCentralMonth থেকে)
+function hgHouseDetail(ev) {
+  const ym = hgHUi.ym, c = hgCentralMonth(ev, ym, hgToday()), prev = hgCentralMonth(ev, hgMShift(ym, -1), hgToday());
+  const row = (label, val, cls = '') => `<div class="${cls}"><span>${label}</span><span>${val}</span></div>`;
+  const rows = hgMonthExps(ev, ym).sort(hgByDate), m = (ev.hh && ev.hh.months && ev.hh.months[ym]) || {}, inc = (m.inc || []).filter(x => !x.del);
+  const dues = hgDueGroups(ev), openDues = dues.filter(g => g.rem > 0);
+  let n = 0;
+  const h = t => `<h4 class="fb-h"><i>${++n}</i>${t}</h4>`;
+  return `${sheetHead(L('পুরো হিসাব', 'Full breakdown'), `${esc(ev.name)} · ${hgMLabel(ym)}`)}
+  <div class="fb-top"><small>${L('এই মাসে খরচ', 'Spent this month')}</small><b>${hgM(c.spent)}</b><span>${rows.length} ${L('খরচ', 'entries')}${c.remaining != null ? ' · ' + (c.remaining >= 0 ? L('বাকি ', 'left ') : L('বেশি ', 'over ')) + hgM(Math.abs(c.remaining)) : ''}</span></div>
+  ${h(L('মাসের টাকার হিসাব', 'Money for the month'))}
+  <div class="ledger fb">${row(L('মাসের শুরুতে ছিল', 'Had at the start'), hgM(c.start))}${c.extra ? row(L('অতিরিক্ত পাওয়া', 'Extra received'), '+' + hgM(c.extra)) : ''}${c.borrowed ? row(L('ধার নেওয়া', 'Borrowed'), '+' + hgM(c.borrowed)) : ''}
+    ${row(L('এ পর্যন্ত মোট এসেছে', 'Total available'), hgM(c.available))}${row(L('মোট খরচ', 'Total spent'), '−' + hgM(c.spent))}
+    ${row(L('বাকি আছে', 'Left'), c.remaining != null ? `<b class="${c.remaining < 0 ? 'neg' : 'pos'}">${hgM(c.remaining)}</b>` : '—', 'total')}
+    ${c.budget != null ? row(L('মাসিক বাজেট', 'Monthly budget'), `${hgM(c.budget)} <small class="${c.budgetOver ? 'neg' : 'muted'}">${c.budgetOver ? hgM(c.spent - c.budget) + ' ' + L('বেশি', 'over') : hgM(c.budget - c.spent) + ' ' + L('বাকি', 'left')}</small>`) : ''}
+    ${c.proj != null ? row(L('মাস শেষে আনুমানিক', 'Projected month-end'), hgM(c.proj)) : ''}${prev.spent > 0 ? row(hgMLabel(hgMShift(ym, -1)), hgM(prev.spent)) : ''}</div>
+  ${inc.length ? `<div class="ledger fb">${inc.map(x => row(`${x.kind === 'borrow' ? '🤝' : '➕'} ${esc(x.note || (x.kind === 'borrow' ? L('ধার', 'Loan') : L('আয়', 'Income')))}<small class="muted"> ${fmtDate(x.date)}</small>`, hgM(x.amt))).join('')}</div>` : ''}
+  ${h(L('কোন খাতে কত গেল', 'Where it went'))}
+  <div class="ledger fb">${c.catRows.length ? c.catRows.map(r => row(`${hgHHEmoji(r.k)} ${esc(hgCatLabel(ev, r.k))}`, `${hgM(r.spent)}${r.budget ? ' / ' + hgM(r.budget) : ''} <small class="${r.over ? 'neg' : 'muted'}">${pct(c.spent ? r.spent / c.spent * 100 : 0)}</small>`)).join('') : row(L('এখনও কোনো খরচ নেই', 'No spending yet'), '—')}</div>
+  ${h(L('এই মাসের সব খরচ', 'Every entry this month'))}
+  <div class="ledger fb">${rows.length ? rows.map(e => { const rem = hgOblRem(ev, e); return `<div class="two"><span>${hgHHEmoji(e.category)} ${esc(e.title)}<small>${esc(hgCatLabel(ev, e.category))}${e.sub ? ' · ' + esc(e.sub) : ''} · ${fmtDate(e.date)}${hgIsObl(e) ? ' · ' + (rem > 0 ? L('বাকি ', 'due ') + hgM(rem) : L('পরিশোধ', 'paid')) : ''}</small></span><span>${hgM(e.total)}</span></div>`; }).join('') : row(L('কোনো খরচ নেই', 'None'), '—')}</div>
+  ${h(L('বাকি বিল ও ফি (সব মাসের)', 'Unpaid bills & fees (all months)'))}
+  <div class="ledger fb">${c.unpaid.length ? c.unpaid.map(u => row(`${esc(u.e.title)}<small class="muted"> ${hgMLabel(hgExpYm(u.e))}${u.dueDate ? ' · ' + fmtDate(u.dueDate) : ''}</small>`, `<b class="neg">${hgM(u.rem)}</b>`)).join('') + row(L('মোট বকেয়া', 'Total unpaid'), hgM(sum(c.unpaid.map(u => u.rem))), 'total') : row(L('কোনো বকেয়া নেই', 'Nothing unpaid'), '✅')}</div>
+  ${h(L('বাকির খাতা', 'Credit book'))}
+  <div class="ledger fb">${dues.length ? dues.map(g => row(`${g.dir === 'owe' ? '📤 ' + L('আমি দেব', 'I owe') : '📥 ' + L('আমি পাব', 'I am owed')}: ${esc(g.who)}`, g.rem > 0 ? `<b class="${g.dir === 'owe' ? 'neg' : 'pos'}">${hgM(g.rem)}</b>` : '✅')).join('') + row(L('এখনও বাকি', 'Still open'), openDues.length ? hgM(sum(openDues.map(g => g.rem))) : L('কিছু না', 'nothing'), 'total') : row(L('কোনো বাকি নেই', 'No credit entries'), '✅')}</div>`;
+}
 Object.assign(ACTIONS, {
   'hg-hero-detail': () => {
     const ev = hgCur(); if (!ev) return;
     const c = hgEventCalc(ev);
-    openSheet(hgSolo(ev) && !hgIsHouse(ev) ? hgSoloDetail(ev, c) : hgHeroDetail(ev, c));
+    openSheet(hgIsHouse(ev) ? hgHouseDetail(ev) : hgSolo(ev) ? hgSoloDetail(ev, c) : hgHeroDetail(ev, c));
   },
 });

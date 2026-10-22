@@ -62,6 +62,8 @@ const ICONS = {
   grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.8"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.8"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.8"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.8"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   chev: '<path d="m6 9 6 6 6-6"/>',
+  prev: '<path d="m15 5-7 7 7 7"/>',
+  next: '<path d="m9 5 7 7-7 7"/>',
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16v4Z"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
@@ -80,7 +82,7 @@ const LOGO = '<svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradien
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v60'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v63'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 // boot.js লোডের আগে খালি শেল; আসল ডেটা boot.js-এ মডিউল রেজিস্টার হওয়ার পরে আসে
 let state = { settings: { lang: 'bn' }, batches: [] };
@@ -307,6 +309,7 @@ function appSections() {
     <div class="menu">
       ${mi('export', 'download', L('ব্যাকআপ নিন', 'Back up'), last ? `${L('শেষ ব্যাকআপ', 'Last backup')}: ${fmtDate(last.toISOString().slice(0, 10))}` : L('এখনও নেওয়া হয়নি', 'Not yet'))}
       ${mi('import', 'upload', L('ব্যাকআপ থেকে ফেরত আনুন', 'Restore backup'), L('আগের ব্যাকআপ ফাইল দিন', 'Pick a backup file'))}
+      ${typeof demoBuild === 'function' ? mi('demo-load', 'spark', L('ডেমো ডেটা দিয়ে ভরুন', 'Fill with demo data'), L('সব ফিচার দেখতে (এখনকার সব ডেটা মুছে যায়)', 'To see every feature (replaces all current data)')) : ''}
     </div>
     <div class="section-title">${L('ভাষা', 'Language')}</div>
     <div class="seg">${[['bn', 'বাংলা'], ['en', 'English']].map(([v, l]) =>

@@ -134,7 +134,7 @@ function bzHome() {
   const last = bzMarkets().filter(x => x.id !== m.id && x.status === 'done').sort(bzByDate)[0];
   const lc = last && bzMarketCalc(last);
   return `${m.status === 'cancelled' ? `<div class="hg-lock cancelled"><span>${L('এই বাজার বাতিল করা আছে। হিসাবে ধরা হচ্ছে না।', 'This market is cancelled and not counted.')}</span><button type="button" class="btn sm" data-action="bz-reopen">${L('আবার চালু', 'Reopen')}</button></div>` : ''}
-  <section class="hero"><div class="hero-top"><div>
+  <section class="hero tappable" data-action="bz-hero-detail" role="button" tabindex="0" aria-label="${L('পুরো হিসাব দেখুন', 'See the full breakdown')}"><div class="hero-top"><div>
       <div class="hero-label">${esc(m.name)} · ${fmtDate(m.date)}${m.shopper ? ' · ' + esc(m.shopper) : ''}${c.discount ? ' · ' + L('ছাড়', 'off') + ' ' + bzM(c.discount) : ''} <span class="hgb ${m.status === 'done' ? 'pos' : ''}">${bzMst(m.status)}</span></div>
       <div class="hero-target">${bzM(c.actualTotal)}</div>
       <div class="hero-sub">${c.budget != null ? `${L('বাজেট', 'Budget')} ${bzM(c.budget)} · ${c.remaining >= 0 ? `${L('বাকি', 'left')} ${bzM(c.remaining)}` : `${bzM(-c.remaining)} ${L('বেশি', 'over')}`}` : L('বাজেট নির্ধারণ করা হয়নি', 'No budget set')}</div></div>
@@ -143,6 +143,7 @@ function bzHome() {
       <div><small>${L('বাজেট', 'Budget')}</small><b>${c.budget != null ? bzM(c.budget) : '—'}</b></div><div><small>${c.budget != null && c.remaining < 0 ? L('বেশি খরচ', 'Over') : L('বাজেটের বাকি', 'Left')}</small><b>${c.budget != null ? bzM(Math.abs(c.remaining)) : '—'}</b></div><div><small>${c.overpaid > 0 ? L('অগ্রিম', 'Advance') : L('দেনা বাকি', 'Due')}</small><b>${bzM(c.payable || c.overpaid)}</b></div></div>
     <div class="hero-foot"><span>${L('পরিশোধ', 'Paid')} <b>${bzM(c.paid)}</b></span>${c.discount ? `<span>${L('ছাড়', 'Discount')} <b>${bzM(c.discount)}</b></span>` : ''}</div>
     <div class="hero-foot"><span>✅ ${c.done}</span><span>◐ ${c.partial}</span><span>⏳ ${c.todo}</span><span>✕ ${c.na}</span><span>${L('মোট', 'Total')} ${c.total}</span></div>
+    <div class="hero-more">${L('ট্যাপ করে পুরো হিসাব দেখুন', 'Tap for the full breakdown')} ${icon('chev', 16)}</div>
     ${c.total ? '' : `<p class="hint" style="margin:8px 0 0;color:inherit;opacity:.85">${L('তালিকায় এখনও কোনো পণ্য নেই। নিচের "দ্রুত পণ্য যোগ" থেকে পণ্য দিলে আনুমানিক, আসল, বাজেট আর বাকির পুরো হিসাব এখানে আসবে।', 'No items yet. Add items below and the full estimated, actual, budget and dues show here.')}</p>`}</section>
   ${msgs.length ? `<div class="bsum ${c.flags.some(f => f.code === 'budget_over' || f.code === 'cat_over') ? 'bad' : 'warn'}"><b>${c.flags.some(f => f.code === 'budget_over') ? L('বাজেট পার হয়েছে', 'Over budget') : L('খেয়াল রাখুন', 'Keep an eye')}</b><span>${msgs.map(esc).join(' ')}</span></div>` : ''}
   <section class="card"><div class="card-head"><h2>${L('বাজেট ও খরচ', 'Budget & spending')}</h2>${act ? `<button type="button" class="link" data-action="bz-budget">${c.budget != null ? L('বদলান', 'Edit') : L('ঠিক করুন', 'Set')}</button>` : ''}</div>
@@ -331,6 +332,29 @@ function bzPricesHtml() {
     <p class="hint">${L('একই নাম ও একই এককের কেনাকাটা মিলিয়ে দেখানো হয়, তাই ভিন্ন এককে ভুল তুলনা হয় না। এটা আপনার নিজের ইতিহাস, বাজারের চলতি দর নয়।', 'Only purchases with the same name and unit are compared. This is your own history, not live market rates.')}</p>`;
 }
 document.addEventListener('input', e => { const el = e.target.closest && e.target.closest('[data-bz-hq-p]'); if (!el) return; bzUi.hq = el.value; render(); const n = $('[data-bz-hq-p]'); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } });
+
+/* ---------- হোমের হলুদ কার্ডে ট্যাপ: বাজারের A থেকে Z ---------- */
+function bzHeroDetail(m) {
+  const c = bzMarketCalc(m), row = (label, val, cls = '') => `<div class="${cls}"><span>${label}</span><span>${val}</span></div>`;
+  const items = c.rows.slice().sort((a, b) => (a.item.status === 'done' ? 0 : 1) - (b.item.status === 'done' ? 0 : 1));
+  const shops = {}; c.rows.forEach(r => { if (r.net > 0) { const s = r.item.shop || m.shop || L('দোকান লেখা নেই', 'No shop'); shops[s] = (shops[s] || 0) + r.net; } });
+  const pays = (m.payments || []).filter(p => !p.del).sort(bzByDate), todo = c.rows.filter(r => r.item.status === 'todo' || r.item.status === 'partial'), na = c.rows.filter(r => r.item.status === 'na');
+  let n = 0; const h = t => `<h4 class="fb-h"><i>${++n}</i>${t}</h4>`;
+  const line = r => { const it = r.item; return `<div class="two"><span>${(bzCat(it.cat) || {}).e || ''} ${esc(it.name)}<small>${bzCatName(it.cat)} · ${bzQtyStr(it.qty)} ${esc(it.unit || '')}${it.shop ? ' · ' + esc(it.shop) : ''} · ${bzSt(it.status)}${r.diff ? ' · ' + L('পার্থক্য ', 'gap ') + (r.diff > 0 ? '+' : '−') + bzM(Math.abs(r.diff)) : ''}</small></span><span>${it.status === 'done' || it.status === 'partial' ? bzM(r.actual) : '~' + bzM(r.est)}</span></div>`; };
+  return `${sheetHead(L('পুরো হিসাব', 'Full breakdown'), `${esc(m.name)} · ${fmtDate(m.date)}`)}
+  <div class="fb-top"><small>${L('আসল খরচ', 'Actual spent')}</small><b>${bzM(c.actualTotal)}</b><span>${c.done}/${c.total} ${L('কেনা', 'bought')}${m.shopper ? ' · ' + esc(m.shopper) : ''}</span></div>
+  ${h(L('বাজেট ও বাকি', 'Budget & what is left'))}
+  <div class="ledger fb">${row(L('বাজেট', 'Budget'), c.budget != null ? bzM(c.budget) : L('ঠিক করা নেই', 'not set'))}${row(L('আনুমানিক (তালিকা)', 'Estimated (list)'), bzM(c.estTotal))}${row(c.discount ? L('আসল (ছাড়ের পর)', 'Actual (after discount)') : L('আসল', 'Actual'), bzM(c.actualTotal))}${c.discount ? row(L('ছাড়', 'Discount'), '−' + bzM(c.discount)) : ''}
+    ${row(L('দামের পার্থক্য', 'Price gap'), c.diffTotal ? (c.diffTotal > 0 ? '+' : '−') + bzM(Math.abs(c.diffTotal)) : '—')}${c.budget != null ? row(c.remaining >= 0 ? L('বাজেটের বাকি', 'Budget left') : L('বাজেটের বেশি', 'Over budget'), `<b class="${c.remaining < 0 ? 'neg' : 'pos'}">${bzM(Math.abs(c.remaining))}</b>`, 'total') : ''}</div>
+  ${h(L('কী কিনেছি আর কী বাকি (পণ্য ধরে)', 'What was bought and what is left'))}
+  <div class="ledger fb">${items.length ? items.map(line).join('') : row(L('তালিকায় পণ্য নেই', 'No items'), '—')}
+    ${todo.length ? row(L('এখনও কেনা বাকি', 'Still to buy'), `${todo.length} ${L('পণ্য', 'items')} · ~${bzM(sum(todo.map(r => r.est - (r.item.status === 'partial' ? r.actual : 0))))}`, 'total') : (items.length ? row('🎉 ' + L('সব কেনা হয়ে গেছে', 'Everything is bought'), '', 'total') : '')}${na.length ? row(L('পাওয়া যায়নি', 'Not found'), `${na.length}`) : ''}</div>
+  ${c.catRows.length ? h(L('বিভাগ অনুযায়ী', 'By category')) + `<div class="ledger fb">${c.catRows.map(r => row(`${(bzCat(r.k) || {}).e || ''} ${bzCatName(r.k)} <small class="muted">${r.bought}/${r.count}</small>`, `${bzM(r.actual)}${r.budget != null ? ' / ' + bzM(r.budget) : ''} <small class="${r.over ? 'neg' : 'muted'}">${r.over ? bzM(r.actual - r.budget) + ' ' + L('বেশি', 'over') : r.budget != null ? bzM(r.left) + ' ' + L('বাকি', 'left') : ''}</small>`)).join('')}</div>` : ''}
+  ${Object.keys(shops).length ? h(L('দোকান অনুযায়ী', 'By shop')) + `<div class="ledger fb">${Object.entries(shops).sort((a, b) => b[1] - a[1]).map(([s, v]) => row(esc(s), bzM(v))).join('')}</div>` : ''}
+  ${h(L('পেমেন্ট ও বাকি', 'Payments & dues'))}
+  <div class="ledger fb">${pays.map(p => row(`${fmtDate(p.date)}<small class="muted"> ${esc(p.method || '')}</small>`, bzM(p.amt))).join('')}${row(L('মোট বিল', 'Total bill'), bzM(c.actualTotal))}${row(L('পরিশোধ', 'Paid'), bzM(c.paid))}${row(c.overpaid > 0 ? L('অতিরিক্ত/অগ্রিম', 'Extra / advance') : L('দেনা বাকি', 'Due'), `<b class="${c.payable > 0 ? 'neg' : 'pos'}">${bzM(c.payable || c.overpaid)}</b>`, 'total')}</div>`;
+}
+ACTIONS['bz-hero-detail'] = () => { const m = bzCur(); if (m) openSheet(bzHeroDetail(m)); };
 
 /* ---------- মাসিক সংসার খরচ: Hangout-এর household ইভেন্ট, বাজার থেকেই খোলা/বানানো যায় ---------- */
 const bzHouseEvents = () => hg().events.filter(e => !e.del && e.type === 'household' && e.status !== 'archived').sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));

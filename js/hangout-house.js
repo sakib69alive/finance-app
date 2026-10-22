@@ -25,7 +25,7 @@ const hgByDate = (a, b) => (b.date || '').localeCompare(a.date || '') || (b.crea
 const hgMonthExps = (ev, ym) => hgLive(ev).filter(e => hgExpYm(e) === ym);
 const hgPeopleNames = ev => [...new Set(hgHH(ev).people.filter(p => !p.del).map(p => p.name).concat(ev.participants.map(p => p.name)))];
 const hgWhoField = (ev, name, label, v) => `<label class="field"><span>${label}</span><input class="input" name="${name}" maxlength="40" list="hg-ppl" value="${esc(v || '')}"><datalist id="hg-ppl">${hgPeopleNames(ev).map(n => `<option value="${esc(n)}">`).join('')}</datalist></label>`;
-const hgMNav = () => `<div class="mnav"><button type="button" data-action="hg-mnav" data-n="-1" aria-label="${L('আগের মাস', 'Previous month')}">‹</button><b>${hgMLabel(hgHUi.ym)}</b><button type="button" data-action="hg-mnav" data-n="1" aria-label="${L('পরের মাস', 'Next month')}">›</button></div>`;
+const hgMNav = () => `<div class="mnav"><button type="button" data-action="hg-mnav" data-n="-1" aria-label="${L('আগের মাস', 'Previous month')}">${icon('prev', 20)}</button><b>${hgMLabel(hgHUi.ym)}</b><button type="button" data-action="hg-mnav" data-n="1" aria-label="${L('পরের মাস', 'Next month')}">${icon('next', 20)}</button></div>`;
 const HG_ST = { paid: ['পরিশোধিত', 'Paid', 'pos'], partial: ['আংশিক দেওয়া', 'Partly paid', 'warn'], unpaid: ['বাকি', 'Unpaid', 'neg'], overdue: ['তারিখ পার, বাকি', 'Overdue', 'neg'] };
 const hgStBadge = st => `<span class="hgb ${HG_ST[st][2]}">${HG_ST[st][isEN() ? 1 : 0]}</span>`;
 const hgToday = () => today();
@@ -261,9 +261,9 @@ function hgHouseHome(ev, c0) {
   const monthRows = hgMonthExps(ev, ym).sort(hgByDate);
   const urow = u => `<button type="button" class="lrow" data-action="hg-rec-open" data-id="${u.e.id}"><span class="lic">${hgHHEmoji(u.e.category)}</span><span class="lmain"><b>${esc(u.e.title)}</b><small>${hgStBadge(u.status)}${u.dueDate ? ` · ${L('নির্ধারিত', 'due')} ${fmtDate(u.dueDate)}` : ''}</small></span><span class="lend"><b class="neg">${hgM(u.rem)}</b></span></button>`;
   return `${lock}${hgIssuesHtml(ev, c0)}${hgMNav()}
-  <section class="hero"><div class="hero-top"><div><div class="hero-label">${L('এই মাসে খরচ', 'Spent this month')}</div><div class="hero-target">${hgM(c.spent)}</div>
+  <section class="hero tappable" data-action="hg-hero-detail" role="button" tabindex="0" aria-label="${L('পুরো হিসাব দেখুন', 'See the full breakdown')}"><div class="hero-top"><div><div class="hero-label">${L('এই মাসে খরচ', 'Spent this month')}</div><div class="hero-target">${hgM(c.spent)}</div>
       <div class="hero-sub">${c.remaining != null ? (c.remaining >= 0 ? L(`বাকি ${hgM(c.remaining)}`, `${hgM(c.remaining)} left`) : L(`${hgM(-c.remaining)} বেশি গেছে`, `${hgM(-c.remaining)} over`)) : L('মাসের টাকা বা বাজেট এখনও লেখা হয়নি', 'Month money or budget not set yet')}</div></div></div>
-    <div class="hero-chips"><div><small>${L('মোট ছিল', 'Total had')}</small><b>${set ? hgM(base) : '—'}</b></div><div><small>${L('বাকি', 'Left')}</small><b class="${c.remaining != null && c.remaining < 0 ? 'neg' : ''}">${c.remaining != null ? hgM(c.remaining) : '—'}</b></div><div><small>${L('বিল বাকি', 'Bills due')}</small><b>${hgM(c.unpaidMonth)}</b></div></div></section>
+    <div class="hero-chips"><div><small>${L('মোট ছিল', 'Total had')}</small><b>${set ? hgM(base) : '—'}</b></div><div><small>${L('বাকি', 'Left')}</small><b class="${c.remaining != null && c.remaining < 0 ? 'neg' : ''}">${c.remaining != null ? hgM(c.remaining) : '—'}</b></div><div><small>${L('বিল বাকি', 'Bills due')}</small><b>${hgM(c.unpaidMonth)}</b></div></div><div class="hero-more">${L('ট্যাপ করে পুরো হিসাব দেখুন', 'Tap for the full breakdown')} ${icon('chev', 16)}</div></section>
   ${act ? `<div class="quick four"><button type="button" class="qbtn" data-action="hg-add-expense"><span class="qi">${icon('receipt')}</span>${L('খরচ লিখুন', 'Add expense')}</button>
     <button type="button" class="qbtn" data-action="hg-income"><span class="qi">${icon('wallet')}</span>${L('মাসের টাকা', 'Month money')}</button>
     <button type="button" class="qbtn" data-action="hg-due-add"><span class="qi">${icon('clock')}</span>${L('বাকি', 'Credit')}</button>
