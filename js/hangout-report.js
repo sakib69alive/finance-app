@@ -254,15 +254,15 @@ function hgFriendsSheet() {
 }
 function hgGuideSheet() {
   const s = [
-    [L('ইভেন্ট খুলুন', 'Open an event'), L('আড্ডা, রেস্টুরেন্ট, ভ্রমণ বা পিকনিক বেছে বন্ধুদের নাম দিন। টেমপ্লেট খাতগুলো তৈরি করে দেয়।', 'Pick hangout, restaurant, trip or picnic and add the friends. The template prepares the categories.')],
-    [L('খরচ লিখুন', 'Add expenses'), L('কে কত দিয়েছে (একাধিক জনও) আর কে কত ভাগ বহন করবে তা দিন। ভাগের ধরন: সমান, নির্বাচিত, নির্দিষ্ট টাকা, শতাংশ, অনুপাত, কাস্টম। যোগফল না মিললে অ্যাপ ঠিক করতে বলে।', 'Enter who paid (several people allowed) and how it is split: equal, selected, exact, percent, ratio or custom. The app refuses totals that do not add up.')],
-    [L('রেস্টুরেন্ট বিল', 'Restaurant bill'), L('প্রতিটা খাবার যোগ করুন। একজনের, শেয়ার্ড বা একই খাবার কয়েকজনের। ভ্যাট, সার্ভিস চার্জ, ডিসকাউন্ট আলাদা যোগ হয়। আসল বিল লিখলে পার্থক্য দেখায়, গোপনে কারও ঘাড়ে চাপায় না।', 'Add each dish: individual, shared or the same dish for several people. VAT, service charge and discounts are separate. Enter the real bill to see any difference; nothing is charged to anyone silently.')],
-    [L('অ্যাডভান্স, রিফান্ড, পরিশোধ', 'Advance, refund, payments'), L('এগুলো খরচ নয়, আলাদা লেনদেন। ফলে মোট খরচ দ্বিগুণ হয় না। কে কাকে কত দিলে মিটবে তার প্রস্তাব আসে, আসল টাকা দেওয়ার পর "দেওয়া হয়েছে" চাপুন।', 'These are not expenses, so totals are never doubled. The app suggests who pays whom; press "Mark paid" after the real payment.')],
-    [L('মতামত ও সমঝোতা', 'Opinions & agreements'), L('কারও টাকা বাকি থাকলে বা কেউ বেশি দিলে সিদ্ধান্ত রেকর্ড করুন: মওকুফ, আংশিক, অন্যের দায়, উপহার, মতবিরোধ। শুধু "চূড়ান্ত" সিদ্ধান্ত হিসাব বদলায়। মূল হিসাব, মওকুফ, পরিশোধ আর বাকি সবসময় আলাদা দেখায়।', 'Record decisions when someone owes or overpaid: waive, partial, covered by another, gift, dispute. Only Finalized decisions change numbers; original, waived, paid and remaining are always shown separately.')],
-    [L('রিপোর্ট', 'Reports'), L('পূর্ণ মেমো (PDF), সামারি স্লিপ, আর WhatsApp-এর টেক্সট। PDF এর জন্য প্রিন্ট ডায়ালগে "PDF হিসেবে সেভ" বাছুন।', 'Full memo (PDF), summary slip and WhatsApp text. For PDF choose "Save as PDF" in the print dialog.')],
-    [L('ডেটা নিরাপত্তা', 'Your data'), L('সব ডেটা শুধু এই ফোনে। "আরও"-তে Hangout ব্যাকআপ আলাদা ফাইলে হয়, রসিদের ছবিসহ। রিস্টোরে ডুপ্লিকেট হয় না আর ব্যবসার ডেটা ছোঁয়া হয় না।', 'Everything stays on this phone. Back up Hangout data separately in More, receipts included. Restoring never duplicates events and never touches Product Sales.')],
+    ['👥', L('বন্ধুদের নাম দিন', 'Add your friends'), L('ইভেন্ট খুলে কারা ছিল লিখুন।', 'Open an event and type who was there.')],
+    ['🧾', L('খরচ লিখুন', 'Add expenses'), L('কত টাকা, কে দিল, কাদের মধ্যে ভাগ: ৩টা প্রশ্ন, ব্যস।', 'How much, who paid, who shares: three questions.')],
+    ['🍽️', L('রেস্টুরেন্ট বিল', 'Restaurant bill'), L('প্রতিটা খাবারে ট্যাপ করে বলুন কে খেয়েছে। ভ্যাট, ডিসকাউন্ট নিজে ভাগ হয়।', 'Tap who had each dish. VAT and discount are split for you.')],
+    ['🤝', L('মেটানো', 'Settle up'), L('"কে কাকে দেবে" দেখুন। টাকা দিলে "দিয়েছে ✓" চাপুন।', 'See who pays whom. Tap "Paid ✓" once it is done.')],
+    ['📤', L('শেয়ার', 'Share'), L('হলুদ কার্ডে ট্যাপ করলে পুরো হিসাব, আর এক ট্যাপে WhatsApp-এ পাঠানো যায়।', 'Tap the yellow card for the full breakdown; send it on WhatsApp in one tap.')],
   ];
-  return `${sheetHead(L('কিভাবে ব্যবহার করবেন', 'How to use'), L('Hangout & Group Expenses', 'Hangout & Group Expenses'))}<div class="guide">${s.map(([t, b], i) => `<details class="gd" ${i === 0 ? 'open' : ''}><summary><span class="sn">${i + 1}</span><b>${t}</b>${icon('chev', 18)}</summary><div class="gbody"><p>${b}</p></div></details>`).join('')}</div>`;
+  return `${sheetHead(L('৫টা ধাপে সব', 'Everything in 5 steps'), L('পড়তে এক মিনিট', 'One minute to read'))}
+    <div class="quickguide">${s.map(([e, t, d]) => `<div class="qg"><span class="qg-e">${e}</span><div><b>${t}</b><small>${d}</small></div></div>`).join('')}</div>
+    <p class="hint">${L('ভুল হলে নিচে "ফিরিয়ে আনুন" আসে। সব ডেটা শুধু আপনার ফোনে থাকে।', 'If you slip, an Undo appears at the bottom. All data stays on your phone.')}</p>`;
 }
 
 registerModule({

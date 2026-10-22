@@ -192,7 +192,9 @@ function hgExpenseForm(e, preset) {
   const inclNow = v.method === 'equal' ? people.filter(p => p.active || ((v.spec && v.spec.incl) || []).includes(p.id)).map(p => p.id) : (v.spec.incl || []);
   const payOf = pid => (v.payers.find(p => p.pid === pid) || {}).amt;
   const multi = v.payers.length > 1;
-  const onePayer = (v.payers[0] || {}).pid || (ev.participants.find(p => p.org && p.active) || people[0] || {}).id;
+  const lastPay = isNew ? ([...ev.expenses].filter(x => !x.del && x.payers.length).sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0))[0] || { payers: [] }).payers[0] : null;
+  const lastPid = lastPay && people.some(p => p.id === lastPay.pid && p.active) ? lastPay.pid : null;
+  const onePayer = (v.payers[0] || {}).pid || lastPid || (ev.participants.find(p => p.org && p.active) || people[0] || {}).id;
   const val = (pid, m) => { const x = (v.spec.values || {})[pid]; if (x == null) return ''; return (m === 'exact' || m === 'custom') ? hgTaka(x) : x; };
   const meta = v.meta || {};
   const mset = (m, pre, ph, suffix) => `<div class="hg-vals ${method === m ? '' : 'hidden'}" data-vals="${m}">${people.map(p => `<label class="hg-vrow"><span>${esc(p.name)}</span>
@@ -200,7 +202,8 @@ function hgExpenseForm(e, preset) {
   const advOpen = method !== 'selected';
   return `${sheetHead(isNew ? L('নতুন খরচ', 'New expense') : L('খরচ এডিট', 'Edit expense'), esc(ev.name))}
   <form data-form="hg-expense" data-live="hg-expense" data-id="${e ? e.id : ''}" data-rid="${e && e.receipt ? e.receipt : ''}" autocomplete="off">
-    <label class="field"><span>1. ${L('কিসের খরচ?', 'What was it for?')}</span><input class="input" name="title" maxlength="60" value="${esc(v.title)}" placeholder="${L('যেমন: বাসভাড়া, দুপুরের খাবার', 'e.g. Bus fare, lunch')}"></label>
+    <label class="field"><span>1. ${L('কিসের খরচ?', 'What was it for?')}</span><input class="input" name="title" maxlength="60" value="${esc(v.title)}" placeholder="${L('লিখুন বা নিচ থেকে বাছুন', 'Type, or tap one below')}"></label>
+    ${isNew ? `<div class="qtitles">${ev.cats.filter(k => !['discount', 'vat', 'service', 'other_charges'].includes(k.k)).slice(0, 6).map(k => `<button type="button" class="qchip" data-action="hg-title-chip" data-k="${k.k}" data-t="${esc(isEN() ? k.en : k.bn)}">${esc(isEN() ? k.en : k.bn)}</button>`).join('')}</div>` : ''}
     <label class="field"><span>2. ${L('মোট কত টাকা?', 'How much in total?')}</span>${moneyInput('total', hgTaka(v.total), '0')}</label>
     <div class="field"><span class="flabel">3. ${L('টাকা কে দিয়েছে?', 'Who paid?')}</span>
       <div data-one>${hgSelect('payOne', people.map(p => [p.id, esc(p.name)]), onePayer)}</div>

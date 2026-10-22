@@ -47,34 +47,35 @@ function hgWelcome() {
 
 /* ---------- হোম ---------- */
 const hgOweRows = (ev, c) => ev.participants.map(p => ({ p, f: c.final[p.id] }));
+// একসাথে একটাই কাজ দেখায়: কম পড়তে হয়, কী করতে হবে সাথে সাথে বোঝা যায়
 function hgStepsCard(ev, c) {
   const people = ev.participants.length, exps = ev.expenses.filter(e => !e.del).length;
   const allEven = c.gross > 0 && ev.participants.every(p => c.final[p.id] === 0);
   const steps = [
-    { done: people >= 2, t: L('বন্ধুদের যোগ করা', 'Add your friends'), d: L('কারা কারা ছিল, নামগুলো লিখুন (আপনিও)', 'Who was there? Add the names (you too)'), a: 'hg-add-person', btn: L('বন্ধু যোগ করুন', 'Add friend') },
-    { done: exps > 0, t: L('খরচ লিখে রাখা', 'Add an expense'), d: L('কিসে কত খরচ হলো আর কে টাকা দিল', 'What was spent and who paid'), a: 'hg-add-expense', btn: L('খরচ যোগ করুন', 'Add expense'), need: people >= 2 },
-    { done: allEven, t: L('কে কাকে দেবে দেখে মিটিয়ে ফেলা', 'See who pays whom and settle'), d: L('"মেটানো" ট্যাবে সব হিসাব পরিষ্কার দেখাবে', 'The Settle tab shows it all clearly'), a: 'tab', data: 'data-tab="settle"', btn: L('মেটানো দেখুন', 'Open Settle'), need: exps > 0 },
+    { done: people >= 2, t: L('বন্ধুদের নাম যোগ করুন', 'Add your friends'), a: 'hg-add-person', btn: L('বন্ধু যোগ করুন', 'Add friend') },
+    { done: exps > 0, t: L('প্রথম খরচটা লিখুন', 'Add the first expense'), a: 'hg-add-expense', btn: L('খরচ লিখুন', 'Add expense'), need: people >= 2 },
+    { done: allEven, t: L('কে কাকে দেবে দেখে মিটিয়ে নিন', 'See who pays whom'), a: 'tab', data: 'data-tab="settle"', btn: L('মেটানো দেখুন', 'Open Settle'), need: exps > 0 },
   ];
-  if (steps.every(s => s.done)) return '';
+  if (steps.every(s => s.done) || ev.status !== 'active') return '';
   const cur = steps.findIndex(s => !s.done && s.need !== false);
-  const done = steps.filter(s => s.done).length;
-  return `<section class="card steps">
-    <div class="card-head"><h2>${L('শুরু করুন: ধাপে ধাপে', 'Get going, step by step')}</h2><span class="muted" style="font-size:13px;font-weight:700">${L(`${done}/3 শেষ`, `${done}/3 done`)}</span></div>
-    <ol class="steplist">${steps.map((s, i) => `<li class="${s.done ? 'done' : i === cur ? 'now' : 'later'}">
-      <span class="sn">${s.done ? icon('check', 16) : i + 1}</span>
-      <div class="sb"><b>${L('ধাপ', 'Step')} ${i + 1}: ${s.t}</b><small>${s.d}</small>
-        ${i === cur ? `<button type="button" class="btn primary sm" data-action="${s.a}" ${s.data || ''}>${icon('plus', 16)} ${s.btn}</button>` : ''}</div></li>`).join('')}</ol></section>`;
+  if (cur < 0) return '';
+  const s = steps[cur];
+  return `<section class="card nextstep"><div class="ns-dots">${steps.map((x, i) => `<i class="${x.done ? 'd' : i === cur ? 'n' : ''}"></i>`).join('')}</div>
+    <div class="ns-t"><small>${L('এখন এটা করুন', 'Do this next')} · ${cur + 1}/3</small><b>${s.t}</b></div>
+    <button type="button" class="btn primary block" data-action="${s.a}" ${s.data || ''}>${icon('plus', 18)} ${s.btn}</button></section>`;
 }
 function hgWhoPays(ev, c, withClose) {
   const act = ev.status === 'active';
   const allEven = c.gross > 0 && ev.participants.every(p => c.final[p.id] === 0);
+  const share = c.gross > 0 ? `<button type="button" class="btn block mt8" data-action="hg-wa-share">📤 ${L('WhatsApp-এ হিসাব পাঠান', 'Send the summary on WhatsApp')}</button>` : '';
   return `<section class="card"><div class="card-head"><h2>${L('কে কাকে দেবে', 'Who pays whom')}</h2></div>
     ${c.suggestions.length ? c.suggestions.map((s, i) => `<div class="hg-sugg"><span><b>${esc(pName(ev, s.from))}</b> ${L('দেবে', 'pays')} <b>${esc(pName(ev, s.to))}</b></span><b>${hgM(s.amt)}</b>
-        ${act ? `<button type="button" class="btn sm" data-action="hg-pay-sugg" data-i="${i}">${L('দেওয়া হয়েছে', 'Mark paid')}</button>` : ''}</div>`).join('') +
-      `<p class="hint">${L('এগুলো শুধু প্রস্তাব। সত্যিই টাকা দেওয়ার পর "দেওয়া হয়েছে" চাপুন, তখনই হিসাবে ঢুকবে।', 'These are suggestions. Press "Mark paid" after the real payment and it goes into the books.')}</p>`
-      : (allEven ? `<div class="bsum ok"><b>${L('✓ সবার হিসাব মিটে গেছে', '✓ Everyone is even')}</b><span>${L('কাউকে কিছু দিতে হবে না।', 'Nobody owes anything.')}</span></div>${withClose && act ? `<button type="button" class="btn primary block mt8" data-action="hg-settle">${icon('check', 18)} ${L('ইভেন্ট বন্ধ করুন (মিটে গেছে)', 'Close event as settled')}</button>` : ''}`
+        ${act ? `<button type="button" class="btn sm" data-action="hg-pay-sugg" data-i="${i}">${L('দিয়েছে ✓', 'Paid ✓')}</button>` : ''}</div>`).join('') +
+      `<p class="hint">${L('টাকা দেওয়ার পর "দিয়েছে ✓" চাপুন।', 'After the money is paid, tap "Paid ✓".')}</p>${share}`
+      : (allEven ? `<div class="bsum ok"><b>🎉 ${L('সবার হিসাব মিটে গেছে!', 'Everyone is even!')}</b><span>${L('কাউকে কিছু দিতে হবে না।', 'Nobody owes anything.')}</span></div>${withClose && act ? `<button type="button" class="btn primary block mt8" data-action="hg-settle">${icon('check', 18)} ${L('ইভেন্ট বন্ধ করুন', 'Close the event')}</button>` : ''}${share}`
         : `<p class="hint">${ev.participants.length >= 2 ? L('খরচ যোগ করলে এখানে দেখাবে কে কাকে কত দেবে।', 'Add expenses and this shows who pays whom.') : L('আগে বন্ধুদের নাম যোগ করুন।', 'Add your friends first.')}</p>`)}</section>`;
 }
+
 function hgHomeTab(ev, c) {
   const open = sum(ev.participants.map(p => Math.max(0, c.final[p.id])));
   const evenCount = ev.participants.filter(p => c.final[p.id] === 0).length;
@@ -85,16 +86,17 @@ function hgHomeTab(ev, c) {
       <button type="button" class="btn sm" data-action="${ev.status === 'settled' ? 'hg-reopen' : 'hg-restore'}">${ev.status === 'settled' ? L('আবার খুলুন', 'Reopen') : L('রিস্টোর', 'Restore')}</button></div>`;
   const openDecisions = ev.decisions.filter(d => !d.del && !['finalized', 'cancelled'].includes(d.status)).length;
   return `${lock}${hgIssuesHtml(ev, c)}
-  <section class="hero">
+  <section class="hero tappable" data-action="hg-hero-detail" role="button" tabindex="0" aria-label="${L('পুরো হিসাব দেখুন', 'See the full breakdown')}">
     <div class="hero-top"><div>
         <div class="hero-label">${L('মোট খরচ', 'Total spent')}</div>
         <div class="hero-target">${hgM(c.net)}</div>
         <div class="hero-sub">${(HG_TYPES[ev.type] || HG_TYPES.custom).icon} ${hgTypeLabel(ev.type)}${ev.start ? ' · ' + fmtDate(ev.start) : ''}${ev.location ? ' · ' + esc(ev.location) : ''}</div></div>
-      ${ring(progress)}</div>
+      <div class="ringcap">${ring(progress)}<small>${L('মিটেছে', 'settled')}</small></div></div>
     <div class="hero-chips">
       <div><small>${L('বন্ধু', 'Friends')}</small><b>${ev.participants.length}</b></div>
       <div><small>${L('খরচ', 'Expenses')}</small><b>${exps.length}</b></div>
       <div><small>${L('বাকি আছে', 'To settle')}</small><b>${hgM(open)}</b></div></div>
+    <div class="hero-more">${L('ট্যাপ করে পুরো হিসাব দেখুন', 'Tap for the full breakdown')} ${icon('chev', 16)}</div>
   </section>
   ${hgStepsCard(ev, c)}
   ${ev.status === 'active' ? `<div class="quick">
@@ -203,4 +205,64 @@ Object.assign(ACTIONS, {
   'hg-history': () => { const ev = hgCur(); if (ev) openSheet(`${sheetHead(L('ইতিহাস ও সম্প্রতি মোছা', 'History & recently deleted'), esc(ev.name))}${hgSecHistory(ev)}`); },
   'hg-filter-status': el => { hgF.status = el.dataset.v; openSheet(hgEventsSheet()); },
   'hg-open': el => { hgRoute.ev = el.dataset.id; if (sheetOpen) closeSheet(); tab = 'home'; trail = ['home']; render(); window.scrollTo(0, 0); },
+});
+
+/* ---------- হোমের হলুদ কার্ডে ট্যাপ: সব হিসাব এক সিরিয়ালে (ব্যবসা মোডের মতো) ---------- */
+function hgHeroDetail(ev, c) {
+  const row = (label, val, cls = '') => `<div class="${cls}"><span>${label}</span><span>${val}</span></div>`;
+  const exps = ev.expenses.filter(e => !e.del).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const refunds = ev.refunds.filter(r => !r.del), transfers = ev.transfers.filter(t => !t.del);
+  const finalDecs = ev.decisions.filter(d => !d.del && d.status === 'finalized');
+  const evenCount = ev.participants.filter(p => c.final[p.id] === 0).length;
+  const person = p => {
+    const f = c.final[p.id];
+    return `<div class="hgp"><div class="hgp-top"><span class="hgp-av">${esc((p.name || '?').trim().charAt(0).toUpperCase())}</span><div class="hgp-n"><b>${esc(p.name)}</b></div>
+      <div class="hgp-bal ${f > 0 ? 'pos' : f < 0 ? 'neg' : ''}"><small>${f > 0 ? L('পাবে', 'gets') : f < 0 ? L('দেবে', 'owes') : L('মিটেছে', 'even')}</small><b>${hgM(Math.abs(f))}</b></div></div>
+      <div class="ledger fb">
+        ${row(L('টাকা দিয়েছে', 'Paid for the group'), hgM(c.paid[p.id]))}
+        ${row(L('তার ভাগ (খরচ)', 'Their share of the costs'), hgM(c.share[p.id]))}
+        ${c.refundGot[p.id] ? row(L('ফেরত পাওয়া টাকা (রিফান্ড)', 'Refund received'), hgM(c.refundGot[p.id])) : ''}
+        ${c.out[p.id] ? row(L('অন্যদের দিয়েছে', 'Sent to others'), hgM(c.out[p.id])) : ''}
+        ${c.inn[p.id] ? row(L('অন্যদের থেকে পেয়েছে', 'Received from others'), hgM(c.inn[p.id])) : ''}
+        ${c.waivedFor[p.id] || c.waivedBy[p.id] ? row(L('মাফ হয়েছে / মাফ করেছে', 'Forgiven / forgave'), `${hgM(c.waivedFor[p.id])} / ${hgM(c.waivedBy[p.id])}`) : ''}
+        <div class="total"><span>${L('এখন বাকি', 'Left now')}</span><span class="${f > 0 ? 'pos' : f < 0 ? 'neg' : ''}">${f > 0 ? L('পাবে ', 'Gets ') : f < 0 ? L('দেবে ', 'Owes ') : ''}${hgM(Math.abs(f))}</span></div></div></div>`;
+  };
+  return `${sheetHead(L('পুরো হিসাব', 'Full breakdown'), esc(ev.name))}
+  <div class="fb-top"><small>${L('মোট খরচ', 'Total spent')}</small><b>${hgM(c.net)}</b>
+    <span>${ev.participants.length} ${L('জন', 'people')} · ${exps.length} ${L('খরচ', 'expenses')} · ${evenCount}/${ev.participants.length} ${L('জনের মিটেছে', 'settled')}</span></div>
+
+  <h4 class="fb-h"><i>1</i>${L('কে কত দিল, কার কত ভাগ', 'Who paid, who owes')}</h4>
+  ${ev.participants.map(person).join('') || `<p class="hint">${L('কেউ নেই', 'No one yet')}</p>`}
+
+  <h4 class="fb-h"><i>2</i>${L('সব খরচ', 'All expenses')}</h4>
+  <div class="ledger fb">${exps.length ? exps.map(e => `<div class="two"><span>${e.mode === 'bill' ? '🧾' : '💸'} ${esc(e.title)}<small>${fmtDate(e.date)} · ${L('দিয়েছে', 'paid by')} ${e.payers.map(p => esc(pName(ev, p.pid))).join(', ')}</small></span><span>${hgM(e.total)}</span></div>`).join('')
+    + row(`= ${L('মোট', 'Total')}`, hgM(c.gross), 'total')
+    + (c.refundTotal ? row(`− ${L('রিফান্ড', 'Refunds')}`, hgM(c.refundTotal)) + row(`= ${L('নেট খরচ', 'Net cost')}`, hgM(c.net), 'total') : '') : row(L('এখনও কোনো খরচ নেই', 'No expenses yet'), '—')}</div>
+
+  ${transfers.length || refunds.length ? `<h4 class="fb-h"><i>3</i>${L('টাকা দেওয়া-নেওয়া ও রিফান্ড', 'Payments & refunds')}</h4>
+  <div class="ledger fb">${transfers.map(t => `<div class="two"><span>${esc(pName(ev, t.from))} → ${esc(pName(ev, t.to))}<small>${HG_TKIND[t.kind][isEN() ? 1 : 0]} · ${fmtDate(t.date)}</small></span><span>${hgM(t.amt)}</span></div>`).join('')}
+    ${refunds.map(r => `<div class="two"><span>↩️ ${esc((ev.expenses.find(e => e.id === r.expenseId) || {}).title || L('রিফান্ড', 'Refund'))}<small>${L('পেয়েছে', 'received by')} ${esc(pName(ev, r.by))}</small></span><span>${hgM(r.amt)}</span></div>`).join('')}</div>` : ''}
+
+  ${finalDecs.length ? `<h4 class="fb-h"><i>4</i>${L('মাফ ও সমঝোতা (চূড়ান্ত)', 'Agreements (final)')}</h4>
+  <div class="ledger fb">${finalDecs.map(d => { const ap = c.applied.find(x => x.id === d.id); return `<div class="two"><span>${esc(pName(ev, d.pid))}: ${esc(hgDecLabel(d.side, d.type))}<small>${esc(d.reason || '')}</small></span><span>${ap && ap.amt ? hgM(ap.amt) : '—'}</span></div>`; }).join('')}</div>` : ''}
+
+  <h4 class="fb-h"><i>${finalDecs.length ? 5 : (transfers.length || refunds.length ? 4 : 3)}</i>${L('এখন কে কাকে দেবে', 'Who pays whom now')}</h4>
+  <div class="ledger fb">${c.suggestions.length ? c.suggestions.map(s => row(`${esc(pName(ev, s.from))} → ${esc(pName(ev, s.to))}`, hgM(s.amt))).join('') : row(c.gross ? '🎉 ' + L('সবার হিসাব মিটে গেছে', 'Everyone is even') : L('এখনও কোনো খরচ নেই', 'No expenses yet'), '')}</div>
+  ${c.gross ? `<div class="btn-row mt12"><button type="button" class="btn primary" data-action="hg-wa-share">📤 ${L('WhatsApp-এ পাঠান', 'Send on WhatsApp')}</button><button type="button" class="btn" data-action="hg-rep-memo">${icon('doc', 18)} ${L('PDF মেমো', 'PDF memo')}</button></div>` : ''}`;
+}
+Object.assign(ACTIONS, {
+  'hg-hero-detail': () => { const ev = hgCur(); if (ev) openSheet(hgHeroDetail(ev, hgEventCalc(ev))); },
+  'hg-title-chip': el => {
+    const f = el.closest('form'); if (!f) return;
+    if (!f.elements.title.value.trim() || f.elements.title.dataset.chip === '1') { f.elements.title.value = el.dataset.t; f.elements.title.dataset.chip = '1'; }
+    if (f.elements.cat) f.elements.cat.value = el.dataset.k;
+    runLive(f, f.elements.cat);
+    const amt = f.elements.total; if (amt && !amt.value) amt.focus();
+  },
+  'hg-wa-share': async () => {
+    const ev = hgCur(); if (!ev) return; const txt = hgShareText(ev, false);
+    try { if (navigator.share) { await navigator.share({ title: ev.name, text: txt }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+    const w = window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
+    if (!w) toast((await hgCopy(txt)) ? L('টেক্সট কপি হয়েছে, WhatsApp-এ পেস্ট করুন', 'Text copied, paste it into WhatsApp') : L('শেয়ার করা যায়নি', 'Could not share'), '');
+  },
 });

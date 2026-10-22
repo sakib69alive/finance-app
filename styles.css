@@ -819,3 +819,20 @@ details.more summary { padding: 8px 0 12px; font-size: 14.5px; }
 .icon-btn.modbtn { display: inline-flex; flex-direction: row; align-items: center; justify-content: center; gap: 5px; width: auto; padding: 0 10px; white-space: nowrap; }
 .icon-btn.modbtn span { font-size: 12.5px; font-weight: 800; line-height: 1; }
 @media (max-width: 360px) { .icon-btn.modbtn span { display: none; } }
+
+/* ===== আরও সহজ: এক নজরে বোঝা যায় এমন ===== */
+.hero.tappable { cursor: pointer; }
+.hero.tappable:active { transform: scale(.99); }
+.ringcap { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: none; }
+.ringcap small { font-size: 11px; font-weight: 800; opacity: .75; }
+.nextstep { background: var(--accent-soft); display: flex; flex-direction: column; gap: 10px; }
+.ns-dots { display: flex; gap: 6px; }
+.ns-dots i { height: 6px; flex: 1; border-radius: 99px; background: rgba(0,0,0,.1); }
+.ns-dots i.d { background: var(--good); } .ns-dots i.n { background: var(--accent); }
+.ns-t small { display: block; color: var(--accent); font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.ns-t b { font-size: 18px; line-height: 1.35; }
+.qtitles { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 14px; }
+.quickguide { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 8px; }
+.qg { display: flex; gap: 12px; align-items: flex-start; background: var(--surface-2); border-radius: 18px; padding: 12px 14px; }
+.qg-e { font-size: 26px; line-height: 1.2; flex: none; }
+.qg b { display: block; font-size: 15.5px; } .qg small { display: block; color: var(--muted); font-size: 13.5px; line-height: 1.5; margin-top: 2px; }
