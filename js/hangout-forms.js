@@ -215,6 +215,7 @@ function hgExpenseForm(e, preset, scope0) {
       ${hgCheckRow('multi', L('একজনের বেশি দিয়েছে', 'More than one person paid'), multi)}
       <div class="hg-multi ${multi ? '' : 'hidden'}" data-multi><span class="hint">${L('১) যারা টাকা দিয়েছে তাদের ট্যাপ করুন, সমান ভাগ নিজে বসে যাবে। ২) আলাদা হলে নিচের ঘরে নিজে লিখুন।', '1) Tap everyone who paid and the amount is split equally for you. 2) If it differs, type it below.')}</span>
         <div class="chips payerchips">${people.map(p => `<label class="chip"><input type="checkbox" name="pp_${p.id}" ${payOf(p.id) ? 'checked' : ''}><span>${esc(p.name)}</span></label>`).join('')}<button type="button" class="qchip" data-action="hg-pay-allchips">${L('সবাই', 'Everyone')}</button></div>
+        <div class="chips payerchips"><button type="button" class="qchip" data-action="hg-pay-spread" data-spread>${L('⚖️ যে দেয়নি তার অংশ বাকিরা ভাগ করে নিক', '⚖️ Others cover whoever did not pay')}</button></div>
         <div class="payrow eachrow"><span class="pn">${L('প্রত্যেকে', 'Each paid')}</span><div class="pi">${moneyInput('each', '', L('যেমন 4444.40', 'e.g. 4444.40'))}</div></div>
         <span class="hint" data-eachhint>${L('উপরে টিক দেওয়া সবাই যদি একই অঙ্ক দিয়ে থাকে, এখানে সেই অঙ্ক লিখুন, সবার ঘরে বসে যাবে।', 'If everyone ticked paid the same amount, type it here and it fills for all of them.')}</span>
         ${people.map(p => `<div class="payrow"><span class="pn">${esc(p.name)}</span><div class="pi">${moneyInput('pay_' + p.id, hgTaka(payOf(p.id)), '0')}</div><button type="button" class="qchip" data-action="hg-pay-rest" data-p="${p.id}">${L('বাকিটা', 'Rest')}</button></div>`).join('')}
@@ -292,13 +293,25 @@ LIVE['hg-expense'] = (f, t) => {
     });
     f.dataset.ppAuto = '';
   }
-  if (t && t.name && ((t.name.startsWith('pp_') && !eachV) || (t.name === 'total' && f.dataset.ppAuto === '1'))) {
+  // টিক দেওয়া প্রত্যেকে নিজের ভাগ দেয়। কেউ বাদ গেলে বাকিদের অঙ্ক বাড়ে না: ঘাটতি দেখায়।
+  // 'বাকিরা নিক' চালু থাকলে (pmode=spread) না-দেওয়া অংশ টিক-দেওয়াদের মধ্যে সমান ভাগ হয়।
+  if (t && t.name && ((t.name.startsWith('pp_') && !eachV) || t.name === 'pmode' || (t.name.startsWith('inc_') && f.dataset.ppAuto === '1') || (t.name === 'total' && f.dataset.ppAuto === '1'))) {
+    const allIds = ev.participants.map(p => p.id);
     const ticked = ev.participants.filter(p => f.elements['pp_' + p.id] && f.elements['pp_' + p.id].checked).map(p => p.id);
     const tot = toMinor(f.elements.total.value);
-    const dist = hgDist(tot, Object.fromEntries(ticked.map(id => [id, 1])), ev.participants.map(p => p.id), 100);
-    ev.participants.forEach(p => { const i = f.elements['pay_' + p.id]; if (i) i.value = dist[p.id] ? fromMinor(dist[p.id]) : ''; });
+    let grp = ev.participants.filter(p => f.elements['inc_' + p.id] && f.elements['inc_' + p.id].checked).map(p => p.id);
+    if (!grp.length || personalOn) grp = allIds;
+    const spread = f.dataset.pmode === 'spread';
+    const share = hgDist(tot, Object.fromEntries(grp.map(id => [id, 1])), allIds, 100);
+    const flat = hgDist(tot, Object.fromEntries(ticked.map(id => [id, 1])), allIds, 100);
+    const per = Math.floor(tot / (grp.length || 1) / 100) * 100;
+    ev.participants.forEach(p => {
+      const i = f.elements['pay_' + p.id]; if (!i) return;
+      const v = !ticked.includes(p.id) ? 0 : spread ? flat[p.id] : (share[p.id] || per);
+      i.value = v ? fromMinor(v) : '';
+    });
     f.dataset.ppAuto = '1';
-    if (f.elements.each) { f.elements.each.value = ticked.length && tot ? fromMinor(Math.floor(tot / ticked.length / 100) * 100) : ''; f.dataset.eachAuto = '1'; }
+    if (f.elements.each) { const e = spread ? Math.floor(tot / (ticked.length || 1) / 100) * 100 : per; f.elements.each.value = ticked.length && tot ? fromMinor(e) : ''; f.dataset.eachAuto = '1'; }
   }
   const method = personalOn ? 'selected' : f.elements.method.value;
   $$('[data-vals]', f).forEach(d => d.classList.toggle('hidden', d.dataset.vals !== method));

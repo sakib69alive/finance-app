@@ -620,6 +620,14 @@ Object.assign(ACTIONS, {
     f.elements['pay_' + el.dataset.p].value = fromMinor(total - others);
     runLive(f, f.elements['pay_' + el.dataset.p]);
   },
+  'hg-pay-spread': el => {
+    const f = el.closest('form'), ev = hgCur(); if (!f || !ev) return;
+    const on = f.dataset.pmode !== 'spread';
+    f.dataset.pmode = on ? 'spread' : '';
+    el.classList.toggle('on', on);
+    f.dataset.ppAuto = '1'; f.dataset.eachAuto = '1';
+    runLive(f, { name: 'pmode' });
+  },
   'hg-pay-allchips': el => {
     const f = el.closest('form'), ev = hgCur(); if (!f || !ev) return;
     ev.participants.forEach(p => { const c = f.elements['pp_' + p.id]; if (c) c.checked = p.active; });
