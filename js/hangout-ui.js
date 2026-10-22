@@ -121,6 +121,7 @@ function hgSoloHome(ev, c) {
     <div class="hero-top"><div><div class="hero-label">${L('মোট খরচ', 'Total spent')}</div><div class="hero-target">${hgM(c.net)}</div>
       <div class="hero-sub">${(HG_TYPES[ev.type] || HG_TYPES.custom).icon} ${hgTypeLabel(ev.type)}</div></div></div>
     <div class="hero-chips"><div><small>${L('আজ', 'Today')}</small><b>${hgM(todayT)}</b></div><div><small>${L('গড় প্রতিদিন', 'Daily average')}</small><b>${hgM(Math.round(c.net / span))}</b></div><div><small>${L('খরচ', 'Entries')}</small><b>${exps.length}</b></div></div>
+    ${(() => { const pl = hgPlanCalc(ev, c, today()); return pl ? `<div class="hero-foot"><span>${L('বাজেট', 'Budget')} <b>${hgM(pl.total)}</b></span><span>${pl.remaining >= 0 ? L('বাকি', 'Left') : L('বেশি', 'Over')} <b>${hgM(Math.abs(pl.remaining))}</b></span></div>` : ''; })()}
     <div class="hero-more">${L('ট্যাপ করে পুরো হিসাব দেখুন', 'Tap for the full breakdown')} ${icon('chev', 16)}</div></section>
   ${act ? `<div class="quick four"><button type="button" class="qbtn" data-action="hg-add-expense"><span class="qi">${icon('receipt')}</span>${L('খরচ লিখুন', 'Add expense')}</button>
     <button type="button" class="qbtn" data-action="hg-due-add"><span class="qi">${icon('clock')}</span>${L('বাকি', 'Credit')}</button>

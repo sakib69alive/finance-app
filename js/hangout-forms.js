@@ -90,7 +90,7 @@ function hgSecHistory(ev) {
 function hgTypePicker(sel) {
   return `<div class="field"><span class="flabel">${L('কী ধরনের ইভেন্ট?', 'What kind of event?')}</span>
     <p class="hint" style="margin-top:0">${L('ধরন বাছলে খরচের খাত আর আদর্শ বাজেট নিজে সেট হয়। নিচে নিজের মতো বদলানো যাবে।', 'The type sets the categories and the ideal budget. You can change both below.')}</p>
-    ${Object.keys(HG_TYPE_GROUPS).map(g => `<div class="tgrp"><h4>${esc(HG_TYPE_GROUPS[g][isEN() ? 1 : 0])}</h4><div class="tgrid">${Object.keys(HG_TYPES).filter(k => HG_TYPES[k].g === g).map(k => { const t = HG_TYPES[k];
+    ${Object.keys(HG_TYPE_GROUPS).map(g => `<div class="tgrp"><h4>${esc(HG_TYPE_GROUPS[g][isEN() ? 1 : 0])}</h4><div class="tgrid">${Object.keys(HG_TYPES).filter(k => HG_TYPES[k].g === g && (!HG_TYPES[k].hide || k === sel)).map(k => { const t = HG_TYPES[k];
       return `<label class="tcard"><input type="radio" name="type" value="${k}" ${k === sel ? 'checked' : ''}><span class="tc"><span class="tc-top"><span class="tc-i">${t.icon}</span><b>${esc(hgTypeLabel(k))}</b></span><small>${esc(hgTypeDesc(k))}</small><em>${t.cats.filter(c => !['discount', 'vat', 'service', 'other_charges', 'other', 'misc'].includes(c)).slice(0, 3).map(c => esc(HG_CAT[c][isEN() ? 1 : 0])).join(' · ')}</em></span></label>`; }).join('')}</div></div>`).join('')}</div>`;
 }
 function hgEventForm(ev, inline) {

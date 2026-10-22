@@ -161,3 +161,9 @@ login, users, roles and permissions (§2); customer / shareholder / landowner po
 IP address in the audit log (the log is local: who/what/when on this phone); public website property listings and parking pages; live sync with the website;
 multi-person approval workflow (a single "status" field is used instead); documents with visibility rules per portal user.
 Not built yet but possible offline: parking spaces, invoices, document photos. Say if you want them.
+
+## Changes 2026-10-23: daily market and monthly household moved to Bazar
+
+- Hangout's new-event picker no longer offers "Daily market" and "Monthly household" (`hide: true` in `HG_TYPES`). Old events of those types still open and work. Daily market is what the Bazar module is.
+- Bazar Home and More show a "Monthly household" card (`bzHouseCard`): lists household events and creates/opens one. The data still lives in `state.hangout` (type `household`), so the page opens in the Hangout module; use the top-bar module button to return to Bazar.
+- `js/hangout-solo.js`: tapping the yellow card of a transport / shopping / custom event opens a full A-to-Z sheet (budget and what is left, every item bought with category, payer and "for whom", who is in and each share, credit book). Numbers come from `hgEventCalc` and `hgPlanCalc`.
