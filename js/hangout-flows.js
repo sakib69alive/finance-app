@@ -91,36 +91,40 @@ LIVE['hg-bill'] = f => {
 function hgItemForm(it) {
   const ev = hgCur(), d = hgDraft;
   const people = hgPickable(ev, it ? [it.orderedBy].concat(it.sharers || []) : []);
-  const v = it || { name: '', unit: 0, qty: 1, type: 'individual', orderedBy: (people[0] || {}).id, sharers: people.map(p => p.id), weights: {}, status: 'ok' };
-  const multi = it && it.multi;
-  const type = multi ? 'multi' : v.type;
-  return `${sheetHead(it ? L('আইটেম এডিট', 'Edit item') : L('আইটেম যোগ', 'Add item'), esc(d.title || ev.name))}
+  const v = it || { name: '', unit: 0, qty: 1, type: 'individual', orderedBy: null, sharers: [], weights: {}, status: 'ok' };
+  const multi = !!(it && it.multi);
+  const who = it ? (it.type === 'individual' ? [it.orderedBy] : (it.sharers || [])) : [];
+  const hasWeights = !multi && it && it.type === 'shared' && Object.keys(it.weights || {}).length > 0;
+  return `${sheetHead(it ? L('আইটেম এডিট', 'Edit item') : L('খাবার যোগ করুন', 'Add a dish'), esc(d.title || ev.name))}
   <form data-form="hg-item" data-live="hg-item" data-id="${it ? it.id : ''}" autocomplete="off">
-    <label class="field"><span>${L('খাবারের নাম', 'Dish name')}</span><input class="input" name="name" maxlength="50" value="${esc(v.name)}" placeholder="${L('যেমন: বার্গার', 'e.g. Burger')}"></label>
-    <div class="row2"><label class="field"><span>${L('প্রতিটার দাম', 'Unit price')}</span>${moneyInput('unit', hgTaka(v.unit), '0')}</label>
-      <label class="field" data-qtybox><span>${L('কয়টা', 'Quantity')}</span><input class="input" name="qty" inputmode="numeric" value="${esc(v.qty)}"></label></div>
-    <div class="field"><span class="flabel">${L('কার হিসাবে যাবে?', 'Who is it for?')}</span>
-      <div class="hg-methods">${[['individual', L('একজনের', 'One person')], ['shared', L('শেয়ার্ড (ভাগ)', 'Shared')], ['multi', L('একই খাবার কয়েকজন', 'Same dish, several people')]].map(([k, l]) => `<label class="chip"><input type="radio" name="type" value="${k}" ${type === k ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></div>
-    <label class="field" data-grp="individual"><span>${L('অর্ডার করেছে', 'Ordered by')}</span>${hgSelect('orderedBy', people.map(p => [p.id, esc(p.name)]), v.orderedBy)}</label>
-    <div class="field hidden" data-grp="shared"><span class="flabel">${L('কারা শেয়ার করছে (ফাঁকা = সমান ভাগ)', 'Who shares it (blank weight = equal)')}</span>
-      ${people.map(p => `<div class="hg-vrow">${hgCheckRow('sh_' + p.id, esc(p.name), (v.sharers || []).includes(p.id))}<div class="input-wrap"><input class="input" name="w_${p.id}" inputmode="decimal" placeholder="1" value="${esc((v.weights || {})[p.id] && !multi ? v.weights[p.id] : '')}"><span class="suffix">×</span></div></div>`).join('')}</div>
-    <div class="field hidden" data-grp="multi"><span class="flabel">${L('কে কয়টা নিয়েছে (মোট কয়টা নিজে হিসাব হবে)', 'How many each (the total quantity is worked out)')}</span>
-      ${people.map(p => `<label class="hg-vrow"><span>${esc(p.name)}</span><input class="input" name="q_${p.id}" inputmode="numeric" placeholder="0" value="${esc(multi && (v.weights || {})[p.id] ? v.weights[p.id] : '')}"></label>`).join('')}</div>
+    <label class="field"><span>1. ${L('খাবারের নাম', 'Dish name')}</span><input class="input" name="name" maxlength="50" value="${esc(v.name)}" placeholder="${L('যেমন: বার্গার', 'e.g. Burger')}"></label>
+    <div class="row2"><label class="field"><span>2. ${L('একটার দাম', 'Price of one')}</span>${moneyInput('unit', hgTaka(v.unit), '0')}</label>
+      <label class="field" data-qtybox><span>${L('কয়টা', 'How many')}</span><input class="input" name="qty" inputmode="numeric" value="${esc(v.qty)}"></label></div>
+    <div class="field" data-whobox><span class="flabel">3. ${L('কে কে খেয়েছে?', 'Who had it?')}</span>
+      <div class="chips">${people.map(p => `<label class="chip"><input type="checkbox" name="sh_${p.id}" ${who.includes(p.id) ? 'checked' : ''}><span>${esc(p.name)}</span></label>`).join('')}</div>
+      <div class="hint">${L('একজনকে বাছলে তার হিসাবে যাবে। কয়েকজনকে বাছলে সমান ভাগ হবে।', 'Pick one person and it is theirs. Pick several and it is split equally.')}</div></div>
+    <details class="more" ${multi || hasWeights ? 'open' : ''}><summary>${L('কম-বেশি ভাগ বা আলাদা পরিমাণ (দরকার হলে)', 'Unequal shares or different quantities (if needed)')}</summary>
+      ${hgCheckRow('multi', L('একই খাবার কয়েকজন আলাদা পরিমাণে নিয়েছে (কে কয়টা)', 'Same dish, different quantity each (how many each)'), multi)}
+      <div class="hidden" data-grp="multi">${people.map(p => `<label class="hg-vrow"><span>${esc(p.name)}</span><input class="input" name="q_${p.id}" inputmode="numeric" placeholder="0" value="${esc(multi && (v.weights || {})[p.id] ? v.weights[p.id] : '')}"></label>`).join('')}</div>
+      <div data-grp="weights"><span class="hint">${L('অসমান ভাগ: কে কত গুণ (ফাঁকা = সমান)', 'Unequal split: weight per person (blank = equal)')}</span>
+        ${people.map(p => `<label class="hg-vrow"><span>${esc(p.name)}</span><div class="input-wrap"><input class="input" name="w_${p.id}" inputmode="decimal" placeholder="1" value="${esc(!multi && (v.weights || {})[p.id] ? v.weights[p.id] : '')}"><span class="suffix">×</span></div></label>`).join('')}</div></details>
     <div class="field"><span class="flabel">${L('অবস্থা', 'Status')}</span>${seg('status', [['ok', L('ঠিক আছে', 'Normal')], ['cancelled', L('বাতিল / ফেরত', 'Cancelled / refunded')]], v.status || 'ok')}
-      <div class="hint">${L('বাতিল করা আইটেম বিলে ধরা হয় না, তাই ফেরত আর ডিসকাউন্ট দুইবার প্রয়োগ হয় না।', 'Cancelled items are left out of the bill, so a refund and a discount are never applied twice.')}</div></div>
+      <div class="hint">${L('বাতিল করা আইটেম বিলে ধরা হয় না।', 'Cancelled items are left out of the bill.')}</div></div>
     <div class="preview" data-linetotal></div>
     <button class="btn primary block" type="submit">${L('সেভ করুন', 'Save')}</button>
     <button type="button" class="btn block mt8" data-action="hg-bill-back">${L('বিলে ফিরুন', 'Back to bill')}</button></form>`;
 }
 LIVE['hg-item'] = f => {
-  const t = f.elements.type.value;
-  $$('[data-grp]', f).forEach(g => g.classList.toggle('hidden', g.dataset.grp !== t));
-  $('[data-qtybox]', f).classList.toggle('hidden', t === 'multi');
+  const multi = f.elements.multi.checked;
+  $('[data-grp="multi"]', f).classList.toggle('hidden', !multi);
+  $('[data-grp="weights"]', f).classList.toggle('hidden', multi);
+  $('[data-qtybox]', f).classList.toggle('hidden', multi);
+  $('[data-whobox]', f).classList.toggle('hidden', multi);
   const ev = hgCur();
   let qty = Math.max(1, Math.floor(hgNum(f.elements.qty.value)) || 1);
-  if (t === 'multi') qty = sum(ev.participants.map(p => (f.elements['q_' + p.id] ? Math.floor(hgNum(f.elements['q_' + p.id].value)) : 0)));
+  if (multi) qty = sum(ev.participants.map(p => (f.elements['q_' + p.id] ? Math.floor(hgNum(f.elements['q_' + p.id].value)) : 0)));
   const tot = toMinor(f.elements.unit.value) * qty;
-  $('[data-linetotal]', f).innerHTML = tot ? `${L('লাইন মোট', 'Line total')}: <b>${hgM(tot)}</b> (${hgM(toMinor(f.elements.unit.value))} × ${qty})` : '';
+  $('[data-linetotal]', f).innerHTML = tot ? `${L('এই আইটেমের মোট', 'Line total')}: <b>${hgM(tot)}</b> (${hgM(toMinor(f.elements.unit.value))} × ${qty})` : '';
 };
 function hgChargeForm(c, kind) {
   const ev = hgCur(), d = hgDraft;
@@ -213,21 +217,24 @@ Object.assign(FORMS, {
   'hg-item': f => {
     if (!hgDraft) return;
     const ev = hgCur();
-    const name = f.elements.name.value.trim(), type = f.elements.type.value;
+    const name = f.elements.name.value.trim();
     if (!name) return fail(f, L('খাবারের নাম লিখুন', 'Enter the dish name'), 'name');
     const unit = toMinor(f.elements.unit.value);
     if (unit <= 0) return fail(f, L('দাম লিখুন', 'Enter the price'), 'unit');
     const it = { id: f.dataset.id || uid(), name, unit, status: f.elements.status.value, qty: Math.max(1, Math.floor(hgNum(f.elements.qty.value)) || 1) };
-    if (type === 'individual') { it.type = 'individual'; it.orderedBy = f.elements.orderedBy.value; }
-    else if (type === 'shared') {
-      it.type = 'shared'; it.sharers = ev.participants.filter(p => f.elements['sh_' + p.id] && f.elements['sh_' + p.id].checked).map(p => p.id);
-      if (!it.sharers.length) return fail(f, L('কারা শেয়ার করছে বাছুন', 'Pick who shares it'));
-      it.weights = {}; it.sharers.forEach(id => { const w = hgNum(f.elements['w_' + id].value); if (w > 0) it.weights[id] = w; });
-    } else {
+    if (f.elements.multi.checked) {
       it.type = 'shared'; it.multi = true; it.weights = {}; it.sharers = [];
       ev.participants.forEach(p => { const q = f.elements['q_' + p.id] ? Math.floor(hgNum(f.elements['q_' + p.id].value)) : 0; if (q > 0) { it.weights[p.id] = q; it.sharers.push(p.id); } });
       if (!it.sharers.length) return fail(f, L('কে কয়টা নিয়েছে লিখুন', 'Enter how many each person had'));
       it.qty = sum(Object.values(it.weights));
+    } else {
+      const who = ev.participants.filter(p => f.elements['sh_' + p.id] && f.elements['sh_' + p.id].checked).map(p => p.id);
+      if (!who.length) return fail(f, L('কে কে খেয়েছে তাদের বাছুন', 'Pick who had it'));
+      if (who.length === 1) { it.type = 'individual'; it.orderedBy = who[0]; }
+      else {
+        it.type = 'shared'; it.sharers = who; it.weights = {};
+        who.forEach(id => { const w = hgNum(f.elements['w_' + id].value); if (w > 0) it.weights[id] = w; });
+      }
     }
     const i = hgDraft.items.findIndex(x => x.id === it.id);
     if (i >= 0) hgDraft.items[i] = it; else hgDraft.items.push(it);
@@ -369,29 +376,16 @@ function hgSoftDelete(ev, list, id, bn, en) {
   undoable(DELETED(), () => { x.del = Date.now(); hgLog(ev, `মোছা হয়েছে: ${bn}`, `Deleted: ${en}`); });
 }
 Object.assign(ACTIONS, {
-  'hg-home': () => { hgRoute = { ev: null, sub: 'overview' }; if (sheetOpen) closeSheet(); if (tab !== 'events') setTab('events'); else render(); window.scrollTo(0, 0); },
-  'hg-open': el => { hgRoute = { ev: el.dataset.id, sub: 'overview' }; render(); window.scrollTo(0, 0); },
-  'hg-sub': el => { hgRoute.sub = el.dataset.v; render(); window.scrollTo(0, 0); },
-  'hg-filter-status': el => { hgF.status = el.dataset.v; render(); },
+  'hg-home': () => { if (sheetOpen) closeSheet(); setTab('home'); window.scrollTo(0, 0); },
   'hg-exp-cat': el => { hgExpCat = el.dataset.v; render(); },
   'hg-new-event': () => openSheet(hgEventForm(null)),
-  'hg-event-menu': () => {
-    const ev = hgCur(); if (!ev) return;
-    openSheet(`${sheetHead(esc(ev.name), hgStatusLabel(ev.status))}<div class="menu">
-      ${ev.status !== 'archived' ? menuItem('hg-edit-event', 'edit', L('ইভেন্ট এডিট', 'Edit event'), L('নাম, তারিখ, জায়গা, খাত', 'Name, dates, place, categories')) : ''}
-      ${ev.status === 'settled' ? menuItem('hg-reopen', 'undo', L('আবার খুলুন', 'Reopen'), L('হিসাব সংশোধন বা নতুন বাকি এলে', 'To correct the books or when something is owed again')) : ''}
-      ${ev.status === 'active' ? menuItem('hg-settle', 'check', L('মিটে গেছে হিসেবে বন্ধ করুন', 'Close as settled'), L('সবার হিসাব শূন্য হলে', 'When everyone is even')) : ''}
-      ${ev.status !== 'archived' ? menuItem('hg-archive', 'archive', L('আর্কাইভ', 'Archive'), L('তালিকা থেকে সরে যাবে, ফেরানো যাবে', 'Hidden from the main list, restorable')) : menuItem('hg-restore', 'undo', L('রিস্টোর', 'Restore'), L('আবার সক্রিয় করুন', 'Make it active again'))}
-      ${menuItem('hg-export', 'doc', L('রিপোর্ট ও শেয়ার', 'Report & share'), L('PDF মেমো, সামারি স্লিপ, টেক্সট', 'PDF memo, summary slip, text'))}</div>
-      <button type="button" class="btn danger block mt12" data-action="hg-del-event">${icon('trash', 18)} ${L('ইভেন্ট ডিলিট', 'Delete event')}</button>`);
-  },
   'hg-edit-event': () => { const ev = hgCur(); if (!ev) return; if (ev.status === 'archived') return hgLockMsg(ev); openSheet(hgEventForm(ev)); },
   'hg-settle': () => {
     const ev = hgCur(); if (!ev) return;
     if (ev.status !== 'active') return hgLockMsg(ev);
     const c = hgEventCalc(ev);
     if (!ev.participants.length || !c.gross) return toast(L('কোনো খরচ নেই, মিটানোর কিছু নেই', 'There is nothing to settle yet'), 'danger');
-    if (c.issues.length) { if (sheetOpen) closeSheet(); hgRoute.sub = 'overview'; render(); return toast(L('আগে হিসাবের সমস্যাগুলো ঠিক করুন', 'Fix the issues in the books first'), 'danger'); }
+    if (c.issues.length) { if (sheetOpen) closeSheet(); hgGo('home'); return toast(L('আগে হিসাবের সমস্যাগুলো ঠিক করুন', 'Fix the issues in the books first'), 'danger'); }
     if (ev.participants.some(p => c.final[p.id] !== 0)) { if (sheetOpen) closeSheet(); return toast(L('এখনও কারও টাকা বাকি আছে, পুরো মিটলে তবেই বন্ধ করা যায়', 'Someone still owes or is owed money. Close only when everyone is even.'), 'danger'); }
     const open = ev.decisions.filter(d => !d.del && ['proposed', 'awaiting', 'disputed', 'agreed'].includes(d.status)).length;
     if (open && !confirm(L(`${open}টা সিদ্ধান্ত চূড়ান্ত হয়নি। তবুও বন্ধ করবেন?`, `${open} decision(s) are not finalized. Close anyway?`))) return;
@@ -405,7 +399,7 @@ Object.assign(ACTIONS, {
     const ev = hgCur(); if (!ev) return;
     if (!confirm(L(`"${ev.name}" ইভেন্ট ডিলিট করবেন? এর সব খরচ, লেনদেন আর সিদ্ধান্ত এর সাথে যাবে। "আরও" ট্যাবের "সম্প্রতি মোছা" থেকে ফেরানো যাবে।`, `Delete "${ev.name}"? All its expenses, payments and decisions go with it. You can restore it from "Recently deleted" in More.`))) return;
     if (sheetOpen) closeSheet();
-    undoable(DELETED(), () => { ev.del = Date.now(); hgRoute = { ev: null, sub: 'overview' }; });
+    undoable(DELETED(), () => { ev.del = Date.now(); hgRoute.ev = null; });
   },
   'hg-add-person': () => { const ev = hgGuard(); if (ev) openSheet(hgPersonForm(ev, null)); },
   'hg-edit-person': el => { const ev = hgGuard(); if (ev) openSheet(hgPersonForm(ev, hgIdEl(ev.participants, el.dataset.id))); },
@@ -420,15 +414,10 @@ Object.assign(ACTIONS, {
     if (!confirm(L(`${p.name}-কে এই ইভেন্ট থেকে সরাবেন?`, `Remove ${p.name} from this event?`))) return;
     undoable(DELETED(), () => { ev.participants = ev.participants.filter(x => x.id !== p.id); hgLog(ev, `বন্ধু সরানো: ${p.name}`, `Person removed: ${p.name}`); });
   },
-  'hg-add-expense': () => { const ev = hgGuard(); if (!ev) return; if (!hgActive(ev).length) { toast(L('আগে বন্ধুদের যোগ করুন', 'Add the people first')); hgRoute.sub = 'people'; if (sheetOpen) closeSheet(); return render(); } openSheet(hgExpenseForm(null)); },
+  'hg-add-expense': () => { const ev = hgGuard(); if (!ev) return; if (!hgActive(ev).length) { toast(L('আগে বন্ধুদের যোগ করুন', 'Add the people first')); if (sheetOpen) closeSheet(); return hgGo('people'); } openSheet(hgExpenseForm(null)); },
   'hg-edit-expense': el => { const ev = hgCur(); if (!ev) return; const e = hgIdEl(ev.expenses, el.dataset.id); if (!e) return; if (hgLocked(ev)) return hgLockMsg(ev); if (e.mode === 'bill') hgBillOpen(e); else openSheet(hgExpenseForm(e)); },
   'hg-del-expense': el => { const ev = hgGuard(); if (!ev) return; const e = hgIdEl(ev.expenses, el.dataset.id); if (e) hgSoftDelete(ev, ev.expenses, e.id, e.title, e.title); },
-  'hg-pay-all': el => {
-    const f = el.closest('form'), ev = hgCur(); const total = f.elements.total.value; const who = f.elements.payAll.value;
-    ev.participants.forEach(p => { const i = f.elements['pay_' + p.id]; if (i) i.value = p.id === who ? total : ''; });
-    runLive(f, null);
-  },
-  'hg-add-bill': () => { const ev = hgGuard(); if (!ev) return; if (!hgActive(ev).length) { toast(L('আগে বন্ধুদের যোগ করুন', 'Add the people first')); hgRoute.sub = 'people'; if (sheetOpen) closeSheet(); return render(); } hgBillOpen(null); },
+  'hg-add-bill': () => { const ev = hgGuard(); if (!ev) return; if (!hgActive(ev).length) { toast(L('আগে বন্ধুদের যোগ করুন', 'Add the people first')); if (sheetOpen) closeSheet(); return hgGo('people'); } hgBillOpen(null); },
   'hg-item-add': () => { hgBillSync(); openSheet(hgItemForm(null)); },
   'hg-item-edit': el => { hgBillSync(); openSheet(hgItemForm(hgIdEl(hgDraft.items, el.dataset.id))); },
   'hg-item-del': el => { hgBillSync(); hgDraft.items = hgDraft.items.filter(x => x.id !== el.dataset.id); hgDraft.charges.forEach(c => { if (c.scope) c.scope = c.scope.filter(id => id !== el.dataset.id); }); openSheet(hgBillSheet()); },

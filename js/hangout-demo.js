@@ -89,7 +89,7 @@ function hgSeedDemoOnce() {
 Object.assign(ACTIONS, {
   'hg-demo-clear': () => {
     if (!confirm(L('ডেমো ইভেন্ট আর ডেমো বন্ধুদের মুছবেন? আপনার নিজের ইভেন্ট ঠিক থাকবে।', 'Remove the demo events and demo friends? Your own events stay.'))) return;
-    hgRoute = { ev: null, sub: 'overview' }; undoable(DELETED(), () => hgDemoClear());
+    hgRoute.ev = null; undoable(DELETED(), () => hgDemoClear());
   },
   'hg-demo-load': () => { hgDemoInstall(); commit(L('ডেমো ডেটা যোগ হয়েছে', 'Demo data added')); },
 });

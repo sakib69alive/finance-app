@@ -1733,7 +1733,7 @@ function tradeTopbar({ b }) {
       <span class="bb-text"><button type="button" class="home-link" data-action="go-home">${L('হিসাবী', 'Hisabi')}</button>
         <button type="button" class="batch-name" data-action="batches" aria-label="${L('ব্যাচ বদলান', 'Switch batch')}"><b>${esc(b.name)}</b>${icon('chev', 16)}</button></span>
     </div>
-    <div class="top-actions">${moduleSwitcher()}${langBtn()}</div>
+    <div class="top-actions">${moduleSwitcher()}${helpBtn()}${langBtn()}</div>
     ${trail.length > 1 ? `<nav class="crumbs" aria-label="${L('আপনি কোথায় ছিলেন', 'Where you have been')}">${trail.map((id, i) =>
       `${i ? '<i>›</i>' : ''}<button type="button" class="${id === tab ? 'cur' : ''}" data-action="tab" data-tab="${id}">${tabLabel(id)}</button>`).join('')}</nav>` : ''}`;
 }
@@ -1741,6 +1741,9 @@ function tradeTopbar({ b }) {
 registerModule({
   id: 'trade',
   icon: 'box',
+  emoji: '🛍️',
+  short: () => L('ব্যবসা', 'Business'),
+  hasData: s => (s.batches || []).length > 0,
   name: () => L('ব্যবসা (প্রোডাক্ট বেচা)', 'Product Sales'),
   tagline: () => L('মূলধন, খরচ, বিক্রি, প্রতি ইউনিটের দাম ও লাভ', 'Capital, costs, sales, price per unit and profit'),
   migrate: tradeMigrate,

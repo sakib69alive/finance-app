@@ -81,7 +81,7 @@ const hg = () => state.hangout;
 const hgEvents = () => hg().events.filter(e => !e.del);
 const hgEv = id => hg().events.find(e => e.id === id && !e.del) || null;
 let hgRoute = { ev: null, sub: 'overview' };
-const hgCur = () => (hgRoute.ev ? hgEv(hgRoute.ev) : null);
+const hgCur = () => hgEv(hgRoute.ev) || hgAutoEvent();
 let hgF = { q: '', status: 'all', type: 'all', from: '', to: '' };
 const pName = (ev, id) => { const p = ev.participants.find(x => x.id === id); return p ? p.name : '—'; };
 const hgM = hgMoney;
@@ -120,13 +120,7 @@ const hgErr = e => {
   return m ? m[isEN() ? 1 : 0] : e.code;
 };
 
-/* ---------- মডিউলের টপবার, ট্যাব ---------- */
-function hgTopbar() {
-  const ev = hgCur();
-  return `<div class="batch-btn"><button type="button" class="home-btn" data-action="hg-home" aria-label="${L('ইভেন্ট তালিকা', 'Events')}"><span class="logo-sm">${LOGO}</span></button>
-    <span class="bb-text"><small>${L('আড্ডা ও যৌথ খরচ', 'Hangout & group')}</small><b class="hg-top-title">${esc(ev ? ev.name : L('ইভেন্টসমূহ', 'Events'))}</b></span></div>
-    <div class="top-actions">${moduleSwitcher()}${langBtn()}</div>`;
-}
+/* ---------- ছোট উপাদান ---------- */
 const hgBadge = (cls, text) => `<span class="hgb ${cls}">${text}</span>`;
 const hgSign = n => (n > 0 ? 'pos' : n < 0 ? 'neg' : '');
 
@@ -162,74 +156,6 @@ function hgEventRow(ev) {
     <span class="lmain"><b>${esc(ev.name)}</b><small>${hgTypeLabel(ev.type)} · ${ev.start ? fmtDate(ev.start) : ''} · ${ev.participants.length} ${L('জন', 'people')}</small></span>
     <span class="lend"><b>${hgM(c.net)}</b><small>${owe > 0 ? `${L('বাকি', 'Open')} ${hgM(owe)}` : hgStatusLabel(ev.status)}</small></span></button>`;
 }
-function hgViewEvents() {
-  const ev = hgCur();
-  if (ev) return hgViewEvent(ev);
-  const evs = hgEvents();
-  const st = hgDashStats(evs);
-  const list = hgFilterEvents();
-  const sec = (key, title) => {
-    const xs = list.filter(e => e.status === key);
-    return xs.length ? `<div class="section-title">${title} · ${xs.length}</div><div class="list">${xs.map(hgEventRow).join('')}</div>` : '';
-  };
-  const recent = [...evs].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3);
-  return `<div class="page-head"><h1>${L('ইভেন্টসমূহ', 'Events')}</h1>
-      <button type="button" class="btn primary sm" data-action="hg-new-event">${icon('plus', 18)} ${L('নতুন ইভেন্ট', 'New event')}</button></div>
-    ${evs.length ? `<section class="hg-stats">
-      <div><small>${L('মোট খরচ (নেট)', 'Total expenses (net)')}</small><b>${hgM(st.net)}</b></div>
-      <div><small>${L('বাকি আছে (মেটাতে হবে)', 'Outstanding')}</small><b class="${st.outstanding ? 'warn' : ''}">${hgM(st.outstanding)}</b></div>
-      <div><small>${L('কেউ এখনও দেয়নি', 'Unpaid (nothing paid yet)')}</small><b class="${st.unpaid ? 'neg' : ''}">${hgM(st.unpaid)}</b></div>
-      <div><small>${L('মওকুফ', 'Waived')}</small><b>${hgM(st.waived)}</b></div></section>
-    <section class="card"><div class="card-head"><h2>${L('মেটানোর সারসংক্ষেপ', 'Settlement summary')}</h2></div>
-      <div class="prows">
-        <div><span>${L('চলমান ইভেন্ট', 'Active events')}</span><b>${evs.filter(e => e.status === 'active').length}</b></div>
-        <div><span>${L('মিটে যাওয়া ইভেন্ট', 'Settled events')}</span><b>${evs.filter(e => e.status === 'settled').length}</b></div>
-        <div><span>${L('আর্কাইভ', 'Archived')}</span><b>${evs.filter(e => e.status === 'archived').length}</b></div>
-        <div><span>${L('যাদের হিসাব বাকি', 'People with open balance')}</span><b>${st.openPeople}</b></div>
-        ${st.disputed ? `<div><span>${L('মতবিরোধে থাকা টাকা', 'Amount in dispute')}</span><b class="neg">${hgM(st.disputed)}</b></div>` : ''}</div></section>
-    ${recent.length ? `<div class="section-title">${L('সম্প্রতি আপডেট', 'Recently updated')}</div><div class="list">${recent.map(hgEventRow).join('')}</div>` : ''}
-    <div class="hg-filters">
-      <input class="input" type="search" data-hg-filter="q" value="${esc(hgF.q)}" placeholder="${L('নাম, জায়গা বা বন্ধু খুঁজুন', 'Search name, place or friend')}">
-      <div class="chiprow">${[['all', L('সব', 'All')], ['active', hgStatusLabel('active')], ['settled', hgStatusLabel('settled')], ['archived', hgStatusLabel('archived')]].map(([k, l]) =>
-        `<button type="button" class="fchip ${hgF.status === k ? 'active' : ''}" data-action="hg-filter-status" data-v="${k}">${l}</button>`).join('')}</div>
-      <select class="input" data-hg-filter="type"><option value="all">${L('সব ধরন', 'All types')}</option>${Object.keys(HG_TYPES).map(k => `<option value="${k}" ${hgF.type === k ? 'selected' : ''}>${hgTypeLabel(k)}</option>`).join('')}</select>
-      <div class="row2"><input class="input" type="date" data-hg-filter="from" value="${esc(hgF.from)}" aria-label="${L('শুরু', 'From')}"><input class="input" type="date" data-hg-filter="to" value="${esc(hgF.to)}" aria-label="${L('শেষ', 'To')}"></div>
-    </div>
-    <div data-hg-list>${sec('active', L('চলমান', 'Active')) + sec('settled', L('মিটে গেছে', 'Settled')) + sec('archived', L('আর্কাইভ', 'Archived')) || empty('🔍', L('কিছু পাওয়া যায়নি', 'Nothing found'), L('ফিল্টার বদলে দেখুন।', 'Try changing the filters.'))}</div>`
-    : empty('🧑‍🤝‍🧑', L('এখনও কোনো ইভেন্ট নেই', 'No events yet'), L('আড্ডা, রেস্টুরেন্ট, ভ্রমণ বা পিকনিকের জন্য একটা ইভেন্ট খুলুন। কে কত দিল, কার কত ভাগ আর কে কাকে কত দেবে, সব এখানে মিলবে।', 'Open an event for a hangout, meal, trip or picnic. See who paid, each share and who owes whom.'),
-      `<button type="button" class="btn primary" data-action="hg-new-event">${icon('plus', 18)} ${L('নতুন ইভেন্ট', 'New event')}</button>`)}`;
-}
-// সার্চ/ফিল্টার টাইপ করার সময় শুধু তালিকা বদলায়, কীবোর্ড বন্ধ হয় না
-document.addEventListener('input', e => {
-  const el = e.target.closest && e.target.closest('[data-hg-filter]');
-  if (!el) return;
-  hgF[el.dataset.hgFilter] = el.value;
-  if (el.type === 'search') { const box = $('[data-hg-list]'); if (box) { const tmp = document.createElement('div'); tmp.innerHTML = hgViewEvents(); const nb = $('[data-hg-list]', tmp); if (nb) box.innerHTML = nb.innerHTML; } } else render();
-});
-document.addEventListener('change', e => {
-  const el = e.target.closest && e.target.closest('select[data-hg-filter], input[type=date][data-hg-filter]');
-  if (!el) return;
-  hgF[el.dataset.hgFilter] = el.value; render();
-});
-
-/* ---------- ইভেন্ট পাতা ---------- */
-const HG_SUBS = [['overview', 'সারসংক্ষেপ', 'Overview'], ['expenses', 'খরচ', 'Expenses'], ['people', 'বন্ধুরা', 'People'], ['payments', 'লেনদেন', 'Payments'],
-  ['decisions', 'মতামত ও সমঝোতা', 'Decisions'], ['report', 'রিপোর্ট', 'Report'], ['history', 'ইতিহাস', 'History']];
-function hgViewEvent(ev) {
-  const c = hgEventCalc(ev);
-  const sub = HG_SUBS.some(s => s[0] === hgRoute.sub) ? hgRoute.sub : 'overview';
-  const body = { overview: hgSecOverview, expenses: hgSecExpenses, people: hgSecPeople, payments: hgSecPayments, decisions: hgSecDecisions, report: hgSecReport, history: hgSecHistory }[sub](ev, c);
-  const lockBar = ev.status === 'active' ? '' : `<div class="hg-lock ${ev.status}"><span>${ev.status === 'settled' ? L('এই ইভেন্টের হিসাব মিটে গেছে। বদলাতে আবার খুলুন।', 'This event is settled. Reopen it to change anything.') : L('এই ইভেন্ট আর্কাইভে আছে।', 'This event is archived.')}</span>
-      <button type="button" class="btn sm" data-action="${ev.status === 'settled' ? 'hg-reopen' : 'hg-restore'}">${ev.status === 'settled' ? L('আবার খুলুন', 'Reopen') : L('রিস্টোর', 'Restore')}</button></div>`;
-  return `<button type="button" class="link hg-back" data-action="hg-home">‹ ${L('সব ইভেন্ট', 'All events')}</button>
-    <div class="hg-head"><span class="hg-ic big">${(HG_TYPES[ev.type] || HG_TYPES.custom).icon}</span>
-      <div class="hg-ht"><h1>${esc(ev.name)}</h1><small>${hgTypeLabel(ev.type)}${ev.location ? ' · ' + esc(ev.location) : ''}${ev.start ? ' · ' + fmtDate(ev.start) + (ev.end && ev.end !== ev.start ? ' – ' + fmtDate(ev.end) : '') : ''}</small></div>
-      ${hgBadge(ev.status, hgStatusLabel(ev.status))}
-      <button type="button" class="icon-btn" data-action="hg-event-menu" aria-label="${L('আরও', 'More')}">${icon('sliders', 20)}</button></div>
-    ${lockBar}
-    <div class="chiprow hg-subs">${HG_SUBS.map(([k, bn, en]) => `<button type="button" class="fchip ${sub === k ? 'active' : ''}" data-action="hg-sub" data-v="${k}">${L(bn, en)}</button>`).join('')}</div>
-    <div class="hg-body">${body}</div>`;
-}
 function hgIssuesHtml(ev, c) {
   const msgs = [];
   c.issues.forEach(i => {
@@ -251,33 +177,6 @@ function hgPersonCard(ev, c, p) {
     <div class="hgp-g"><div><small>${L('তার অংশ', 'Share')}</small><b>${hgM(c.share[p.id])}</b></div><div><small>${L('দিয়েছে', 'Paid')}</small><b>${hgM(c.paid[p.id])}</b></div>
       <div><small>${L('পরিশোধ করেছে', 'Sent')}</small><b>${hgM(c.out[p.id])}</b></div><div><small>${L('পেয়েছে', 'Received')}</small><b>${hgM(c.inn[p.id])}</b></div></div></div>`;
 }
-function hgSecOverview(ev, c) {
-  const cats = Object.entries(c.catTotals).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
-  const settledCount = ev.participants.filter(p => c.final[p.id] === 0).length;
-  const openDecisions = ev.decisions.filter(d => !d.del && !['finalized', 'cancelled'].includes(d.status)).length;
-  return `${hgIssuesHtml(ev, c)}
-    <section class="hg-stats">
-      <div><small>${L('মোট খরচ (গ্রস)', 'Gross expenses')}</small><b>${hgM(c.gross)}</b></div>
-      <div><small>${L('রিফান্ড', 'Refunds')}</small><b>${hgM(c.refundTotal)}</b></div>
-      <div><small>${L('নেট খরচ', 'Net expenses')}</small><b>${hgM(c.net)}</b></div>
-      <div><small>${L('মেটেনি / মিটেছে', 'Open / settled')}</small><b>${ev.participants.length - settledCount} / ${settledCount}</b></div></section>
-    ${ev.status === 'active' ? `<div class="hg-actions">
-      <button type="button" class="btn primary" data-action="hg-add-expense">${icon('plus', 18)} ${L('খরচ', 'Expense')}</button>
-      <button type="button" class="btn" data-action="hg-add-bill">${icon('receipt', 18)} ${L('রেস্টুরেন্ট বিল', 'Restaurant bill')}</button></div>` : ''}
-    <section class="card"><div class="card-head"><h2>${L('কার কী অবস্থা', 'Who stands where')}</h2></div>
-      ${ev.participants.length ? ev.participants.map(p => hgPersonCard(ev, c, p)).join('') : `<p class="hint">${L('আগে বন্ধুদের যোগ করুন।', 'Add the people first.')}</p>`}
-      ${ev.status === 'active' ? `<button type="button" class="btn block mt8" data-action="hg-add-person">${icon('plus', 18)} ${L('বন্ধু যোগ করুন', 'Add person')}</button>` : ''}</section>
-    <section class="card"><div class="card-head"><h2>${L('কে কাকে কত দিলে মিটবে', 'Who pays whom')}</h2></div>
-      ${c.suggestions.length ? c.suggestions.map((s, i) => `<div class="hg-sugg"><span><b>${esc(pName(ev, s.from))}</b> → <b>${esc(pName(ev, s.to))}</b></span><b>${hgM(s.amt)}</b>
-        ${ev.status === 'active' ? `<button type="button" class="btn sm" data-action="hg-pay-sugg" data-i="${i}">${L('দেওয়া হয়েছে', 'Mark paid')}</button>` : ''}</div>`).join('') +
-        `<p class="hint">${L('এগুলো প্রস্তাব মাত্র। আসল টাকা দেওয়া-নেওয়ার পর "দেওয়া হয়েছে" চাপলে তবেই হিসাবে ঢুকবে।', 'These are suggestions only. They enter the books once you confirm the real payment.')}</p>`
-        : `<p class="hint">${ev.participants.length && c.gross ? L('কাউকে কিছু দিতে হবে না।', 'Nobody owes anything.') : L('এখনও কোনো খরচ নেই।', 'No expenses yet.')}</p>`}</section>
-    ${cats.length ? `<section class="card"><div class="card-head"><h2>${L('খাত অনুযায়ী খরচ', 'By category')}</h2></div>${cats.map(([k, v]) => `<div class="brow"><div class="brow-top"><span class="grow">${esc(hgCatLabel(ev, k))}</span><span class="amt">${hgM(v)}</span></div>
-      <div class="bbar"><span style="--c:var(--lav);width:${(v / (c.net || 1) * 100).toFixed(1)}%"></span></div></div>`).join('')}</section>` : ''}
-    ${openDecisions ? `<div class="bsum warn"><b>${L(`${openDecisions}টা সিদ্ধান্ত এখনও চূড়ান্ত হয়নি`, `${openDecisions} decision(s) not finalized yet`)}</b><span>${L('মতামত ও সমঝোতা ট্যাব দেখুন।', 'See the Decisions tab.')}</span></div>` : ''}
-    ${ev.status === 'active' ? `<button type="button" class="btn block ${c.balanced && !c.issues.length && c.gross > 0 && ev.participants.every(p => c.final[p.id] === 0) ? 'primary' : ''}" data-action="hg-settle">${icon('check', 18)} ${L('হিসাব মিটে গেছে, ইভেন্ট বন্ধ করুন', 'Everything is settled, close the event')}</button>` : ''}`;
-}
-
 /* ---------- খরচের তালিকা ---------- */
 let hgExpQ = '', hgExpCat = 'all';
 function hgSecExpenses(ev, c) {

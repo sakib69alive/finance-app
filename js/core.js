@@ -80,7 +80,7 @@ const LOGO = '<svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradien
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v27'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v28'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 // boot.js লোডের আগে খালি শেল; আসল ডেটা boot.js-এ মডিউল রেজিস্টার হওয়ার পরে আসে
 let state = { settings: { lang: 'bn' }, batches: [] };
@@ -92,6 +92,7 @@ function migrate(s) {
   s.settings = Object.assign({ lang: 'bn', rates: { CNY: '', USD: '' }, lastBackup: 0, module: 'trade' }, s.settings || {});
   moduleList().forEach(m => { if (m.migrate) m.migrate(s); });
   if (!MODULES[s.settings.module]) s.settings.module = moduleList()[0].id;
+  if (s.settings.onboarded === undefined) s.settings.onboarded = moduleList().some(m => m.hasData && m.hasData(s));
   return s;
 }
 function load() {
@@ -237,18 +238,34 @@ const langBtn = () => `<button type="button" class="icon-btn txt" data-action="t
 const moduleSwitcher = () => {
   if (moduleList().length < 2) return '';
   const m = currentModule();
-  return `<button type="button" class="icon-btn txt" data-action="modules" aria-label="${L('মডিউল বদলান', 'Switch module')}">${icon(m.icon, 18)}</button>`;
+  return `<button type="button" class="icon-btn txt modbtn" data-action="modules" aria-label="${L('কী নিয়ে কাজ করবেন বদলান', 'Switch what you are working on')}">${icon(m.icon, 18)}<span>${m.short ? m.short() : m.name()}</span></button>`;
 };
+const helpBtn = () => `<button type="button" class="icon-btn txt" data-action="guide" aria-label="${L('সাহায্য', 'Help')}">?</button>`;
+function moduleCards(cur) {
+  return `<div class="pickcards">${moduleList().map(m => `<button type="button" class="pickcard ${m.id === cur ? 'on' : ''}" data-action="switch-module" data-id="${m.id}">
+      <span class="pk-ic">${m.emoji || ''}</span><span class="pk-t"><b>${m.name()}</b><small>${m.tagline ? m.tagline() : ''}</small></span>
+      ${m.id === cur ? `<span class="pk-ok">${icon('check', 20)}</span>` : '<span class="pk-go">›</span>'}</button>`).join('')}</div>`;
+}
 function modulesSheet() {
-  const cur = currentModule().id;
-  return `${sheetHead(L('কী নিয়ে কাজ করবেন?', 'What are you working on?'), L('প্রতিটার হিসাব আলাদা, ব্যাকআপ একসাথে', 'Each keeps its own books; backup covers all'))}
-    <div class="menu">${moduleList().map(m => `<button type="button" class="mitem" data-action="switch-module" data-id="${m.id}">
-      <span class="mi">${icon(m.icon, 20)}</span><span class="mt"><b>${m.name()}</b>${m.tagline ? `<small>${m.tagline()}</small>` : ''}</span>${m.id === cur ? `<span class="check-mark">${icon('check', 20)}</span>` : icon('chev', 18)}</button>`).join('')}</div>`;
+  return `${sheetHead(L('কী নিয়ে কাজ করবেন?', 'What do you want to do?'), L('যেকোনো সময় বদলাতে পারবেন, দুটোর হিসাব আলাদা থাকে', 'Switch anytime; each keeps its own books'))}${moduleCards(currentModule().id)}`;
+}
+function onboardHtml() {
+  return `<div class="welcome"><div class="welcome-top"><div class="logo">${LOGO}</div>${langBtn()}</div>
+    <h1>${L('হিসাবী-তে স্বাগতম 👋', 'Welcome to Hisabi 👋')}</h1>
+    <p class="lead">${L('আপনি কী নিয়ে হিসাব রাখতে চান? একটা বেছে নিন। পরে উপরের বাটন থেকে অন্যটাও চালাতে পারবেন।', 'What do you want to keep track of? Pick one. You can use the other one later from the top bar.')}</p>
+    ${moduleCards('')}
+    <p class="tiny">${L('সব ডেটা শুধু আপনার ফোনে থাকে। কোনো লগইন লাগে না।', 'All data stays on your phone. No login needed.')}</p></div>`;
 }
 
 function render() {
   document.documentElement.lang = isEN() ? 'en' : 'bn';
   document.title = L('হিসাবী', 'Hisabi');
+  if (!state.settings.onboarded) {
+    $('#topbar').innerHTML = '';
+    $('#tabbar').innerHTML = '';
+    $('#view').innerHTML = onboardHtml();
+    return;
+  }
   const m = currentModule();
   if (!m.ready()) {
     $('#topbar').innerHTML = '';
@@ -413,6 +430,7 @@ const ACTIONS = {
   modules: () => openSheet(modulesSheet()),
   'switch-module': el => {
     state.settings.module = el.dataset.id;
+    state.settings.onboarded = true;
     tab = currentModule().tabs[0].id; trail = [tab];
     if (sheetOpen) closeSheet();
     commit();

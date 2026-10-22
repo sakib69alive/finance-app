@@ -125,13 +125,6 @@ function hgReportSheet(kind) {
     <p class="hint">${L('PDF: খোলা পেজ থেকে প্রিন্ট ডায়ালগে "PDF হিসেবে সেভ" বাছুন। মোবাইল ও ডেস্কটপ দুটোতেই চলে।', 'PDF: in the print dialog choose "Save as PDF". Works on mobile and desktop.')}</p>
     <div class="hg-preview">${html}</div>`);
 }
-function hgSecReport(ev, c) {
-  return `${hgIssuesHtml(ev, c)}<section class="card"><div class="card-head"><h2>${L('রিপোর্ট ও শেয়ার', 'Report & share')}</h2></div>
-    <p class="hint">${L('সব রিপোর্ট ড্যাশবোর্ডের সাথে একই হিসাব থেকে আসে। পূর্ণ মেমোতে সব খরচ, রেস্টুরেন্টের আইটেম, লেনদেন, মওকুফ ও সিদ্ধান্ত থাকে।', 'Every report comes from the same calculation as the dashboard. The full memo includes all expenses, restaurant items, transfers, waivers and decisions.')}</p>
-    <div class="menu">${menuItem('hg-rep-memo', 'doc', L('পূর্ণ মেমো (PDF)', 'Full memo (PDF)'), L('সম্পূর্ণ হিসাবের রিপোর্ট', 'Complete accounting report'))}
-      ${menuItem('hg-rep-slip', 'receipt', L('সামারি স্লিপ', 'Summary slip'), L('এক পাতার সংক্ষিপ্ত ফলাফল', 'One-page result'))}
-      ${menuItem('hg-rep-text', 'share', L('শেয়ার করার টেক্সট', 'Shareable text'), L('WhatsApp ইত্যাদিতে পাঠান', 'For WhatsApp and similar'))}</div></section>`;
-}
 async function hgCopy(text) {
   try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; } } catch (e) { /* নিচে বিকল্প */ }
   const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select();
@@ -207,7 +200,7 @@ async function hgApplyImport(mode) {
   const imgs = Object.entries(p.images || {}).filter(([k]) => k.startsWith('hgr:'));
   let failed = 0;
   await Promise.all(imgs.map(([k, d]) => (typeof d === 'string' && d.startsWith('data:image/') ? fetch(d).then(r => r.blob()).then(b => putImage(k, b)).catch(() => { failed++; }) : (failed++, 0))));
-  hgPendingImport = null; hgRoute = { ev: null, sub: 'overview' };
+  hgPendingImport = null; hgRoute.ev = null;
   if (sheetOpen) closeSheet();
   commit(failed ? L(`ফেরত এসেছে, কিন্তু ${failed}টা রসিদের ছবি আনা যায়নি`, `Restored, but ${failed} receipt photo(s) could not be restored`) : p.msg);
 }
@@ -237,7 +230,7 @@ Object.assign(ACTIONS, {
     let prev; try { prev = JSON.parse(localStorage.getItem(HG_PREV_KEY)); } catch (e) { prev = null; }
     if (!prev || !hgValidate(prev).ok) return toast(L('ফেরানোর মতো কপি নেই', 'No safety copy to go back to'), 'danger');
     if (!confirm(L('রিস্টোরের আগের Hangout ডেটায় ফিরবেন?', 'Go back to the Hangout data from before the restore?'))) return;
-    state.hangout = prev; hangoutMigrate(state); hgRoute = { ev: null, sub: 'overview' }; commit(L('আগের অবস্থায় ফেরানো হয়েছে', 'Reverted'));
+    state.hangout = prev; hangoutMigrate(state); hgRoute.ev = null; commit(L('আগের অবস্থায় ফেরানো হয়েছে', 'Reverted'));
   },
   'hg-restore-event': el => { const ev = hg().events.find(e => e.id === el.dataset.id); if (!ev) return; delete ev.del; hgLog(ev, 'ইভেন্ট ফেরানো হয়েছে', 'Event restored'); commit(L('ইভেন্ট ফিরেছে', 'Event restored')); },
   'hg-purge-event': el => {
@@ -249,35 +242,15 @@ Object.assign(ACTIONS, {
 });
 
 /* ---------- বন্ধুদের ট্যাব ও আরও ট্যাব ---------- */
-let hgFriendQ = '';
-function hgViewFriends() {
-  const q = hgFriendQ.trim().toLowerCase();
-  const list = hg().friends.filter(f => !q || f.name.toLowerCase().includes(q)).sort((a, b) => a.name.localeCompare(b.name));
+function hgFriendsSheet() {
+  const list = hg().friends.slice().sort((a, b) => a.name.localeCompare(b.name));
   const cntEv = f => hgEvents().filter(ev => ev.participants.some(p => p.friendId === f.id)).length;
-  return `<div class="page-head"><h1>${L('বন্ধুরা', 'Friends')}</h1><button type="button" class="btn primary sm" data-action="hg-add-friend">${icon('plus', 18)} ${L('বন্ধু', 'Friend')}</button></div>
-    ${hg().friends.length > 5 ? `<input class="input" type="search" data-hg-friend-q value="${esc(hgFriendQ)}" placeholder="${L('খুঁজুন', 'Search')}">` : ''}
-    ${list.length ? `<div class="list">${list.map(f => `<button type="button" class="lrow" data-action="hg-edit-friend" data-id="${f.id}"><span class="lic">${esc(f.name.charAt(0).toUpperCase())}</span>
+  return `${sheetHead(L('সেভ করা বন্ধুরা', 'Saved friends'), L('নতুন ইভেন্টে আবার বাছতে পারবেন', 'Reuse them in new events'))}
+    <button type="button" class="btn primary block" data-action="hg-add-friend">${icon('plus', 18)} ${L('বন্ধু যোগ করুন', 'Add friend')}</button>
+    ${list.length ? `<div class="list mt12">${list.map(f => `<button type="button" class="lrow" data-action="hg-edit-friend" data-id="${f.id}"><span class="lic">${esc(f.name.charAt(0).toUpperCase())}</span>
       <span class="lmain"><b>${esc(f.name)}</b><small>${f.phone ? '📞 ' + esc(f.phone) + ' · ' : ''}${cntEv(f)} ${L('ইভেন্ট', 'events')}</small></span>${icon('chev', 18)}</button>`).join('')}</div>`
-    : empty('🧑‍🤝‍🧑', L('কোনো বন্ধু সেভ নেই', 'No saved friends'), L('ইভেন্টে যোগ করা বন্ধুরা এখানে জমা হয়, পরের ইভেন্টে আবার বাছতে পারবেন।', 'Friends you add to events are saved here so you can reuse them.'), `<button type="button" class="btn primary" data-action="hg-add-friend">${icon('plus', 18)} ${L('বন্ধু যোগ', 'Add friend')}</button>`)}
+      : `<p class="hint">${L('এখনও কেউ সেভ নেই। ইভেন্টে বন্ধু যোগ করলে এখানে জমা হয়।', 'No one saved yet. Friends you add to events are saved here.')}</p>`}
     <p class="hint">${L('এখানে নাম বদলালে পুরোনো ইভেন্টের নাম বদলায় না।', 'Renaming here never changes past events.')}</p>`;
-}
-document.addEventListener('input', e => { if (e.target.matches && e.target.matches('[data-hg-friend-q]')) { hgFriendQ = e.target.value; render(); const i = $('[data-hg-friend-q]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } } });
-function hgViewMore() {
-  const dead = hg().events.filter(e => e.del);
-  let hasPrev = false; try { hasPrev = !!localStorage.getItem(HG_PREV_KEY); } catch (e) { hasPrev = false; }
-  return `<div class="page-head"><h1>${L('আরও', 'More')}</h1></div>
-    <div class="section-title">${L('Hangout ডেটা', 'Hangout data')}</div>
-    <div class="menu">${menuItem('hg-backup', 'download', L('Hangout ব্যাকআপ নিন', 'Back up Hangout data'), L('ইভেন্ট, বন্ধু, রসিদের ছবিসহ, আলাদা ফাইলে', 'Events, friends and receipt photos in a separate file'))}
-      ${menuItem('hg-import', 'upload', L('Hangout ব্যাকআপ রিস্টোর', 'Restore Hangout backup'), L('ডুপ্লিকেট ছাড়া মিলিয়ে নিন, বা বদলে দিন', 'Merge without duplicates, or replace'))}
-      ${hasPrev ? menuItem('hg-undo-import', 'undo', L('শেষ রিস্টোর ফেরান', 'Undo last restore'), L('রিস্টোরের আগের কপিতে ফিরুন', 'Go back to the copy from before restoring')) : ''}</div>
-    <div class="section-title">${L('ডেমো ডেটা (সাময়িক)', 'Demo data (temporary)')}</div>
-    <div class="menu">${hg().events.some(e => e.demo) ? menuItem('hg-demo-clear', 'trash', L('ডেমো ডেটা মুছুন', 'Remove demo data'), L('শুধু ডেমো ইভেন্ট ও বন্ধু যাবে, আপনার ডেটা থাকবে', 'Only the demo events and friends go; your data stays')) : menuItem('hg-demo-load', 'plus', L('ডেমো ডেটা আনুন', 'Load demo data'), L('দেখে পরীক্ষা করার জন্য নমুনা ইভেন্ট', 'Sample events for inspection'))}</div>
-    ${dead.length ? `<div class="section-title">${L('সম্প্রতি মোছা ইভেন্ট', 'Recently deleted events')} · ${dead.length}</div><div class="list">${dead.map(e => `<div class="lrow"><span class="lic">🗑️</span><span class="lmain"><b>${esc(e.name)}</b><small>${hgFmtTime(e.del)}</small></span>
-      <button type="button" class="btn sm" data-action="hg-restore-event" data-id="${e.id}">${L('ফেরত', 'Restore')}</button><button type="button" class="btn sm danger" data-action="hg-purge-event" data-id="${e.id}">${icon('trash', 16)}</button></div>`).join('')}</div>` : ''}
-    <div class="section-title">${L('টেমপ্লেট', 'Templates')}</div>
-    <div class="list">${Object.keys(HG_TYPES).filter(k => k !== 'custom').map(k => `<div class="lrow"><span class="lic">${HG_TYPES[k].icon}</span><span class="lmain"><b>${hgTypeLabel(k)}</b><small>${hgCatsFor(k).map(c => isEN() ? c.en : c.bn).join(', ')}</small></span></div>`).join('')}</div>
-    <p class="hint">${L('টেমপ্লেট শুধু খাত তৈরি করে, কোনো নকল খরচ যোগ করে না। কাস্টমে নিজের খাত দিন।', 'A template only prepares categories; it never adds sample expenses. Use Custom for your own categories.')}</p>
-    ${appSections()}`;
 }
 function hgGuideSheet() {
   const s = [
@@ -295,19 +268,24 @@ function hgGuideSheet() {
 registerModule({
   id: 'hangout',
   icon: 'users',
+  emoji: '🧑‍🤝‍🧑',
+  short: () => L('আড্ডা', 'Hangout'),
   name: () => L('আড্ডা ও যৌথ খরচ', 'Hangout & Group Expenses'),
-  tagline: () => L('বন্ধুদের সাথে খাওয়া, ভ্রমণ, পিকনিক: কে কত দিল, কার কত ভাগ, কে কাকে দেবে', 'Meals, trips, picnics: who paid, each share, who owes whom'),
+  tagline: () => L('বন্ধুদের সাথে খাওয়া, ভ্রমণ, পিকনিক: কে কত দিল, কে কাকে দেবে', 'Meals, trips, picnics: who paid, who owes whom'),
   migrate: hangoutMigrate,
+  hasData: s => !!(s.hangout && Array.isArray(s.hangout.events) && s.hangout.events.some(e => !e.del && !e.demo)),
   imageIds: () => hgReceiptKeys(),
   backupSummary: s => (s.hangout && Array.isArray(s.hangout.events) ? L(`${cnt(s.hangout.events.length)} Hangout ইভেন্ট`, `${s.hangout.events.length} hangout event(s)`) : ''),
-  ready: () => true,
-  welcome: () => '',
-  context: () => ({}),
+  ready: () => hgEvents().length > 0,
+  welcome: hgWelcome,
+  context: () => { const ev = hgCur(); return { ev, c: hgEventCalc(ev) }; },
   topbar: hgTopbar,
   guide: hgGuideSheet,
   tabs: [
-    { id: 'events', icon: 'users', label: () => L('ইভেন্ট', 'Events'), view: () => hgViewEvents() },
-    { id: 'friends', icon: 'person', label: () => L('বন্ধুরা', 'Friends'), view: () => hgViewFriends() },
-    { id: 'more', icon: 'grid', label: () => L('আরও', 'More'), view: () => hgViewMore() },
+    { id: 'home', icon: 'home', label: () => L('হোম', 'Home'), view: ({ ev, c }) => hgHomeTab(ev, c) },
+    { id: 'people', icon: 'users', label: () => L('বন্ধুরা', 'Friends'), view: ({ ev, c }) => hgPeopleTab(ev, c) },
+    { id: 'expenses', icon: 'receipt', label: () => L('খরচ', 'Expenses'), view: ({ ev, c }) => hgExpensesTab(ev, c) },
+    { id: 'settle', icon: 'check', label: () => L('মেটানো', 'Settle'), view: ({ ev, c }) => hgSettleTab(ev, c) },
+    { id: 'more', icon: 'grid', label: () => L('আরও', 'More'), view: ({ ev, c }) => hgMoreTab(ev, c) },
   ],
 });
