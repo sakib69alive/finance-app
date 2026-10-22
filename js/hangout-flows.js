@@ -677,20 +677,30 @@ Object.assign(ACTIONS, {
     f.elements.newcat.value = ''; $('[data-catnew]', f).classList.add('hidden');
     hgCatSelect(f, c.k, name);
   },
-  // মোটের ওপর % যোগ বা বিয়োগ। একই মূল টাকা থেকে বারবার % বদলানো যায়
+  // মোটের ওপর % যোগ-বিয়োগ: একাধিক একসাথে চলে, আবার ট্যাপ করলে বাদ যায়, "মূল টাকা" দিলে সব ফেরত
   'hg-exp-pct': el => {
     const f = el.closest('form'); if (!f) return;
-    const kind = el.dataset.k || f.elements.pctkind.value, p = el.dataset.v ? Number(el.dataset.v) : hgNum(f.elements.pctval.value);
-    if (el.dataset.v) { f.elements.pctval.value = el.dataset.v; f.elements.pctkind.value = kind; }
-    if (!(p > 0) || p > 100) return fail(f, L('১ থেকে ১০০ এর মধ্যে শতাংশ লিখুন', 'Enter a percent between 1 and 100'), 'pctval');
     const cur = toMinor(f.elements.total.value);
-    const base = f.dataset.pctOut && Number(f.dataset.pctOut) === cur ? Number(f.dataset.pctBase) : cur;
-    if (!(base > 0)) return fail(f, L('আগে মোট টাকা লিখুন', 'Enter the total first'), 'total');
-    const out = Math.round(base * (kind === '-' ? 100 - p : 100 + p) / 100);
-    f.dataset.pctBase = base; f.dataset.pctOut = out;
+    let adj = [];
+    // নিজে মোট বদলালে আগের সব % বাদ, নতুন মোটই মূল
+    if (f.dataset.pctOut && Number(f.dataset.pctOut) === cur) { try { adj = JSON.parse(f.dataset.pctAdj || '[]'); } catch (e) { adj = []; } }
+    const base = adj.length ? Number(f.dataset.pctBase) : cur;
+    if (el.dataset.k === 'reset') adj = [];
+    else {
+      const kind = el.dataset.k || f.elements.pctkind.value, p = el.dataset.v ? Number(el.dataset.v) : hgNum(f.elements.pctval.value);
+      if (!(p > 0) || p > 100) return fail(f, L('১ থেকে ১০০ এর মধ্যে শতাংশ লিখুন', 'Enter a percent between 1 and 100'), 'pctval');
+      if (!(base > 0)) return fail(f, L('আগে মোট টাকা লিখুন', 'Enter the total first'), 'total');
+      const i = adj.findIndex(x => x.k === kind && x.p === p);
+      if (i >= 0) adj.splice(i, 1); else adj.push({ k: kind, p });
+    }
+    const add = sum(adj.filter(x => x.k === '+').map(x => x.p)), cut = sum(adj.filter(x => x.k === '-').map(x => x.p));
+    const out = Math.round(base * (1 + add / 100) * (1 - Math.min(cut, 100) / 100));
+    f.dataset.pctBase = base; f.dataset.pctOut = out; f.dataset.pctAdj = JSON.stringify(adj);
     f.elements.total.value = fromMinor(out);
-    const n = $('[data-pctnote]', f); n.classList.remove('hidden');
-    n.innerHTML = `${hgM(base)} ${kind === '-' ? '−' : '+'} ${pct(p)} (${hgM(Math.abs(out - base))}) = <b>${hgM(out)}</b>`;
+    $$('[data-action="hg-exp-pct"][data-v]', f).forEach(c => c.classList.toggle('on', adj.some(x => x.k === c.dataset.k && x.p === Number(c.dataset.v))));
+    const n = $('[data-pctnote]', f);
+    n.classList.toggle('hidden', !adj.length);
+    n.innerHTML = adj.length ? `${L('মূল', 'Base')} ${hgM(base)}${adj.map(x => ` ${x.k === '-' ? '−' : '+'} ${pct(x.p)}`).join('')} = <b>${hgM(out)}</b> <small>(${L('আবার ট্যাপ করলে বাদ যাবে', 'tap again to remove')})</small>` : '';
     f.dataset.ppAuto = '1';
     runLive(f, f.elements.total);
   },
