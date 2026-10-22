@@ -89,3 +89,12 @@ language and version for free.
 - Open the app, switch through every tab and open each sheet. Console must be clean.
 - Old data still loads (do not rename stored fields).
 - Backup, then restore, and compare.
+
+## Module: hangout (Hangout & Group Expenses)
+
+Files: `js/hangout-calc.js` (pure integer-paisa calculation layer, unit tested), `js/hangout.js` (data, templates, dashboard, event sections),
+`js/hangout-forms.js` (decisions, history, event/person/expense forms), `js/hangout-flows.js` (restaurant bill, transfers, refunds, decision forms, all actions),
+`js/hangout-report.js` (memo, slip, text, Hangout-only backup/restore, friends/more tabs, `registerModule`).
+
+Data lives only in `state.hangout` (`schema`, `friends`, `events`). Balances are never stored: they are recomputed from expenses,
+transfers, refunds and finalized decisions by `hgEventCalc`. Run the calculation tests with `node tests/hangout-calc.test.js`.

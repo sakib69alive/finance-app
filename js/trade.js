@@ -1741,7 +1741,7 @@ function tradeTopbar({ b }) {
 registerModule({
   id: 'trade',
   icon: 'box',
-  name: () => L('ব্যবসা (প্রোডাক্ট বেচা)', 'Trading (buy & sell)'),
+  name: () => L('ব্যবসা (প্রোডাক্ট বেচা)', 'Product Sales'),
   tagline: () => L('মূলধন, খরচ, বিক্রি, প্রতি ইউনিটের দাম ও লাভ', 'Capital, costs, sales, price per unit and profit'),
   migrate: tradeMigrate,
   backupSummary: s => (Array.isArray(s.batches) ? L(`${cnt(s.batches.length)} ব্যাচ`, `${s.batches.length} batch(es)`) : ''),
