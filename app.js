@@ -110,7 +110,7 @@ const statusLabel = s => ({ delivered: L('ডেলিভারড', 'Delivered'
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v22'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v23'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 function newBatch(o = {}) {
   return {
@@ -1255,7 +1255,7 @@ function viewMore(b, c) {
     <div class="section-title">${L('অ্যাপ', 'App')}</div>
     <div class="menu">
       ${isStandalone() ? '' : mi('install-app', 'download', L('ফোনে ইনস্টল করুন', 'Install on phone'), L('একবার ইনস্টল করলে অফলাইনে চলবে', 'Works offline once installed'))}
-      ${mi('guide', 'spark', L('কিভাবে ব্যবহার করবেন', 'How to use'), L('৬টা সহজ কথায় পুরো অ্যাপ', 'The whole app in six lines'))}
+      ${mi('guide', 'spark', L('কিভাবে ব্যবহার করবেন', 'How to use'), L('সব ফিচার আর দাম বের করার হিসাব', 'Every feature and how prices are worked out'))}
     </div>
     <div class="section-title">${L('ডেটা', 'Data')}</div>
     <div class="menu">
@@ -1914,16 +1914,100 @@ function installHelp() {
     <p class="hint">${L('ইনস্টলের পর ডেটা শুধু এই ফোনেই থাকে। মাঝে মাঝে "আরও" থেকে ব্যাকআপ নিন।', 'After installing, data stays on this phone only. Back up now and then from "More".')}</p>`;
 }
 function guideSheet() {
-  const items = [
-    [L('মূলধন ও টার্গেট', 'Capital and target'), L('কত টাকা লাগিয়েছেন আর শেষে কত টাকা বানাতে চান।', 'How much you put in and how much you want to end with.')],
-    [L('প্রোডাক্ট', 'Product'), L('কী কিনেছেন, কয়টা পিস, কত দামে। এটাই প্রতি ইউনিটের খরচের ভিত্তি।', 'What you bought, how many pieces, at what price. This is the base of cost per unit.')],
-    [L('খরচ', 'Costs'), L('অ্যাড, শিপিং, প্যাকেজিং, কুরিয়ার। দিলে প্রতি ইউনিটের আসল খরচ বাড়ে, app নিজে ভাগ করে।', 'Ads, shipping, packaging, courier. The app splits them into the true cost per unit.')],
-    [L('কত দামে বেচবেন', 'What to charge'), L('প্রোডাক্টে ট্যাপ করলে টার্গেট পূরণের দাম দেখাবে, স্লাইডার টেনে দাম বদলে দেখতে পারবেন।', 'Tap a product to see the price that hits your target. Drag the slider to try prices.')],
-    [L('বিক্রি', 'Sales'), L('প্রতিটা অর্ডার লিখুন: ডেলিভারড, পেন্ডিং বা রিটার্ন। লাভ নিজে হিসাব হবে।', 'Log each order: delivered, pending or returned. Profit is worked out for you.')],
-    [L('ভুল হলে', 'Made a mistake?'), L('ডিলিট করার পর নিচে "ফিরিয়ে আনুন" আসে, চাপলেই আগের অবস্থায় ফিরবে। ট্যাবে বাম/ডানে সোয়াইপও করতে পারেন।', 'After deleting, tap "Undo" at the bottom. You can also swipe left/right to switch tabs.')],
+  const ul = arr => `<ul>${arr.map(x => `<li>${x}</li>`).join('')}</ul>`;
+  const ex = (bn, en) => `<div class="gex">${L(bn, en)}</div>`;
+  const sections = [
+    [L('শুরু করুন: ৫ ধাপে', 'Quick start: 5 steps'),
+      ul([
+        L('<b>ব্যাচ খুলুন:</b> মূলধন আর টার্গেট দিন (চাইলে কত দিনে বেচবেন তাও)।', '<b>Create a batch:</b> enter capital and target (optionally the number of days).'),
+        L('<b>প্রোডাক্ট যোগ করুন:</b> কী কিনেছেন, কয়টা, কত দামে।', '<b>Add products:</b> what you bought, how many, at what price.'),
+        L('<b>খরচ যোগ করুন:</b> অ্যাড, শিপিং, প্যাকেজিং, কুরিয়ার।', '<b>Add costs:</b> ads, shipping, packaging, courier.'),
+        L('<b>দাম দেখুন:</b> প্রোডাক্টে ট্যাপ করলে টার্গেটে পৌঁছানোর দাম দেখাবে।', '<b>Check the price:</b> tap a product to see the price that reaches your target.'),
+        L('<b>বিক্রি লিখুন:</b> হোমের <b>+১ বিক্রি</b> বাটনে এক ট্যাপে, বাকি হিসাব নিজে হবে।', '<b>Log sales:</b> one tap on <b>+1 sold</b> on Home, the rest is automatic.'),
+      ])],
+    [L('মূলধন, টার্গেট ও ডেডলাইন', 'Capital, target and deadline'),
+      ul([
+        L('<b>মূলধন:</b> ব্যবসায় মোট যত টাকা লাগাচ্ছেন।', '<b>Capital:</b> the total money you put in.'),
+        L('<b>টার্গেট:</b> শেষে হাতে মোট কত টাকা চান (মূলধনসহ)। যেমন ১০,০০০ লাগিয়ে ১৪,০০০ চাইলে লক্ষ্য লাভ ৪,০০০। "+২০% লাভ" বাটনে দ্রুত বসানো যায়।', '<b>Target:</b> the total cash you want at the end, capital included. Put in 10,000 and want 14,000 means a goal profit of 4,000. The "+20% profit" buttons fill it quickly.'),
+        L('<b>ডেডলাইন (ঐচ্ছিক):</b> কত দিনে টার্গেট বেচতে চান। দিলে হোমে প্রতিদিনের টার্গেট দেখাবে। পরে যেকোনো সময় "দিন বদলান" বা "+দিন বাড়ান" দিয়ে বদলানো যায়।', '<b>Deadline (optional):</b> days to reach the target. Home then shows a daily target. Change it anytime with "Change days" or "Add days".'),
+        L('<b>অ্যাডভান্সড:</b> রিটার্ন/ড্যামেজ বাফার (ডিফল্ট ৫%) আর COD চার্জ (ডিফল্ট ১%) দামের হিসাবে ধরা হয়।', '<b>Advanced:</b> the return/damage buffer (5% by default) and COD charge (1% by default) are built into the price.'),
+      ])],
+    [L('প্রোডাক্ট যোগ করা', 'Adding products'),
+      ul([
+        L('নাম, ছবি (ঐচ্ছিক), কয়টা ইউনিট, কেনা দাম দিন। দাম <b>প্রতি ইউনিট</b> বা <b>সব মিলিয়ে মোট</b>, যেটা সহজ সেটা বেছে নিন।', 'Name, optional photo, units and purchase price. Enter the price <b>per unit</b> or <b>for all together</b>, whichever is easier.'),
+        L('চীন/ডলারে কিনলে মুদ্রা বেছে এক্সচেঞ্জ রেট দিন, app নিজে টাকায় বদলাবে।', 'If you bought in yuan or dollars, pick the currency and the rate; the app converts to taka.'),
+        L('ওজন দিলে (সব প্রোডাক্টে) শিপিং খরচ ওজন অনুযায়ী ভাগ হয়, নইলে দাম অনুযায়ী।', 'With weights on every product, shipping is split by weight, otherwise by value.'),
+      ])],
+    [L('খরচ যোগ করা', 'Adding costs'),
+      ul([
+        L('খাত বাছুন: অ্যাড, শিপিং, প্যাকেজিং, কুরিয়ার, অন্যান্য।', 'Pick a category: ads, shipping, packaging, courier, other.'),
+        L('<b>কোন প্রোডাক্টের জন্য?</b> নির্দিষ্ট প্রোডাক্ট বাছলে পুরোটা সেটারই খরচ। "সব প্রোডাক্টে ভাগ" রাখলে app নিজে ভাগ করে দেয়।', '<b>For which product?</b> Pick one and the whole cost goes to it. Leave "split across all" and the app divides it.'),
+        L('<b>মোট টাকা</b> বা <b>প্রতি ইউনিটে</b>: প্যাকেজিং প্রতিটায় ৳২০ হলে "প্রতি ইউনিটে" বেছে ২০ লিখুন, app গুণ করে নেবে।', '<b>Total</b> or <b>per unit</b>: for packaging of ৳20 each, pick "per unit" and type 20; the app multiplies.'),
+        L('লেখার সময়ই নিচে দেখাবে এই খাতের বাজেটের কত বেশি/বাকি আর খরচের পর হাতে কত থাকবে।', 'While typing, the form shows how far over or under budget this category will be and the cash left afterwards.'),
+      ])],
+    [L('টাকা কীভাবে ভাগ হয়ে দাম বের হয়', 'How costs are split and the price is worked out'),
+      `<p>${L('এটাই অ্যাপের মূল হিসাব। ধাপে ধাপে:', 'This is the core of the app, step by step:')}</p>
+      <ol>
+        <li>${L('<b>প্রতি ইউনিটের আসল খরচ</b> = (কেনা দাম + ওই প্রোডাক্টের ভাগের সব খরচ + রিটার্নের খরচ) ÷ ইউনিট সংখ্যা।', '<b>True cost per unit</b> = (purchase + this product\'s share of all costs + return costs) ÷ units.')}</li>
+        <li>${L('<b>ভাগের নিয়ম:</b> নির্দিষ্ট প্রোডাক্টের খরচ শুধু সেটাতেই। "সব প্রোডাক্টে ভাগ" খরচ কেনা দাম অনুযায়ী (বা ইউনিট অনুযায়ী, ব্যাচ সেটিংসে বদলানো যায়) ভাগ হয়। শিপিং ওজন থাকলে ওজন অনুযায়ী।', '<b>Split rule:</b> a product-specific cost goes only to that product. Shared costs split by purchase value (or by units, set in batch settings). Shipping splits by weight when every product has one.')}</li>
+        <li>${L('<b>ব্রেক-ইভেন দাম</b> = আসল খরচ ÷ (১ − COD%)। এর নিচে বেচলে লস।', '<b>Break-even price</b> = true cost ÷ (1 − COD%). Selling below it loses money.')}</li>
+        <li>${L('<b>টার্গেটের দাম:</b> টার্গেটে পৌঁছাতে এখনও যত টাকা তুলতে হবে, সেটা বাকি স্টকের খরচের কত গুণ তা হিসাব হয়। তারপর রিটার্ন ও COD ধরে প্রতিটার দাম বের হয় এবং ৳১০ এ রাউন্ড হয়।', '<b>Target price:</b> the app finds how many times the remaining stock\'s cost you must earn back to reach the target, then adds the return and COD allowance and rounds up to ৳10.')}</li>
+      </ol>
+      ${ex(`<b>উদাহরণ:</b> মূলধন ১০,০০০, টার্গেট ১৪,০০০। ২০টা পণ্য × ৳২৫০ = ৳৫,০০০। অ্যাড ১,৫০০ + শিপিং ৮০০ + প্যাকেজিং ২০০ = ২,৫০০ খরচ। মোট খরচ ৭,৫০০, তাই প্রতি ইউনিট <b>৳৩৭৫</b>। হাতে নগদ ২,৫০০, টার্গেটে আরও ১১,৫০০ তুলতে হবে। ১১,৫০০ ÷ ৭,৫০০ = ১.৫৩ গুণ। ৩৭৫ × ১.৫৩ = ৫৭৫, রিটার্ন ৫% আর COD ১% ধরলে ÷ ০.৯৪ = ৬১১, রাউন্ড করে <b>৳৬২০</b> দামে বেচলে টার্গেট পূরণ।`,
+        `<b>Example:</b> capital 10,000, target 14,000. 20 units × ৳250 = ৳5,000. Ads 1,500 + shipping 800 + packaging 200 = 2,500. Total cost 7,500, so <b>৳375</b> per unit. Cash in hand is 2,500, so 11,500 must still come in. 11,500 ÷ 7,500 = 1.53 times. 375 × 1.53 = 575, divided by 0.94 for 5% returns and 1% COD = 611, rounded up to <b>৳620</b> to reach the target.`)}
+      <p class="muted">${L('খরচ বা বিক্রি যোগ হলেই এই দাম নিজে নতুন করে হিসাব হয়। প্রোডাক্টের পাতায় স্লাইডার টেনে অন্য দামে কী হয় দেখা যায়।', 'The price is recalculated whenever costs or sales change. On a product page, drag the slider to see what other prices would do.')}</p>`],
+    [L('বিক্রি লেখা', 'Recording sales'),
+      ul([
+        L('<b>এক ট্যাপে:</b> হোমে প্রোডাক্টের <b>+১ বিক্রি</b> বা <b>+২</b> বাটন। পরিকল্পিত দামে ডেলিভারড বিক্রি লেখা হয়। ভুল হলে নিচে "ফিরিয়ে আনুন"।', '<b>One tap:</b> use <b>+1 sold</b> or <b>+2</b> on a product on Home. It logs a delivered sale at the planned price. Tap Undo if it was a mistake.'),
+        L('<b>ডিসকাউন্ট/অন্য দাম:</b> "ডিসকাউন্ট" বাটনে ফর্ম খোলে। সেখানে ৳ টাকা অফ বা % ছাড় দিতে পারবেন।', '<b>Discount/other price:</b> the "Discount" button opens the form where you can give ৳ off or % off.'),
+        L('<b>অবস্থা:</b> ডেলিভারড = টাকা হাতে। পেন্ডিং = কুরিয়ারে, টাকা আসেনি। রিটার্ন = ফেরত এসেছে, মাল স্টকে ফিরবে আর রিটার্নের খরচ ওই প্রোডাক্টের খরচে যোগ হবে।', '<b>Status:</b> Delivered = money received. Pending = with the courier. Returned = came back; goods return to stock and the return cost is added to the product.'),
+        L('COD চার্জ কেটে নেট টাকা ধরা হয়।', 'Net money is counted after the COD charge.'),
+      ])],
+    [L('হোম ড্যাশবোর্ড', 'The Home dashboard'),
+      ul([
+        L('<b>হলুদ কার্ড:</b> এখন হাতে কত ক্যাশ, টার্গেট কতটা পূরণ, খরচ, বিক্রি আর লাভ। <b>কার্ডে ট্যাপ করলে</b> পুরো হিসাব খোলে: টাকার প্রবাহ, প্রতিটা প্রোডাক্টের খরচ-বিক্রি-লাভ, খরচের তালিকা, সম্পদ, বিক্রি আর টার্গেট।', '<b>Yellow card:</b> cash in hand now, target progress, spent, sales and profit. <b>Tap it</b> for the full breakdown: money flow, per-product cost, sales and profit, the cost list, assets, sales and target.'),
+        L('<b>টার্গেট টাইমলাইন:</b> ডেডলাইন দিলে আজ আর গতকালের টার্গেট বনাম আসল বিক্রি, বর্তমান গতি, আর দিন বাড়ানোর পরামর্শ।', '<b>Target timeline:</b> with a deadline, shows today and yesterday against target, your current pace, and advice on extra days.'),
+        L('<b>আমার প্রোডাক্ট:</b> প্রতিটার স্টক, দাম আর এক ট্যাপে বিক্রির বাটন।', '<b>My products:</b> stock, price and one-tap sell buttons for each.'),
+        L('<b>আদর্শ বাজেট ভাগ:</b> ডোনাট চার্টে খাতভিত্তিক ভাগ, আর কোথায় কত বেশি বা বাকি।', '<b>Ideal budget split:</b> a donut of the split per category, and how far over or under each one is.'),
+        L('<b>আরও হিসাব দেখুন:</b> বিজনেস গাইডের পরামর্শ, টাকার মিলান, বাড়তি তথ্য।', '<b>More details:</b> business guide tips, the money check and extra figures.'),
+      ])],
+    [L('টার্গেট টাইমলাইন কীভাবে চলে', 'How the target timeline works'),
+      ul([
+        L('<b>আজকের টার্গেট</b> = টার্গেটে যেতে এখনও যতটা বেচতে হবে ÷ বাকি দিন। কম বিক্রি হলে পরদিন টার্গেট একটু বাড়ে, বেশি হলে কমে।', '<b>Today\'s target</b> = units still needed ÷ days left. Sell less and tomorrow\'s target rises, sell more and it falls.'),
+        L('<b>বর্তমান গতি</b> = এ পর্যন্ত মোট বিক্রি ÷ কত দিন পার হয়েছে।', '<b>Current pace</b> = total sold ÷ days elapsed.'),
+        L('গতি ধরে রাখলে টার্গেটে কত দিন লাগবে আর ডেডলাইনে হাতে কত থাকবে সেটা দেখায়। দিন কম পড়লে "+দিন বাড়ান" বাটন প্রস্তাবিত দিন সহ আসে।', 'It shows how many days you need at this pace and the cash you will have by the deadline. If days run short, the "Add days" button suggests how many.'),
+        L('স্টকে কুলাবে না হলে সতর্ক করে: মাল আনুন, দাম বাড়ান বা টার্গেট কমান।', 'If your stock cannot reach the target it warns you: restock, raise prices or lower the target.'),
+      ])],
+    [L('বাজেট: আদর্শ ভাগ আর বদলানো', 'Budget: the ideal split and how to edit it'),
+      ul([
+        L('ব্যাচ খোলার সময় বা <b>আরও → বাজেট পরিকল্পনা</b>-য় তিনটা তৈরি প্ল্যান: <b>ভারসাম্য</b> (প্রোডাক্ট ৫০%, অ্যাড ২০%, শিপিং ১৫%…), <b>কম ঝুঁকি</b> (বেশি রিজার্ভ), <b>অ্যাড-নির্ভর</b> (বেশি অ্যাড)।', 'When creating a batch, or in <b>More → Budget plan</b>, pick a ready plan: <b>Balanced</b> (product 50%, ads 20%, shipping 15%…), <b>Low risk</b> (more reserve) or <b>Ad-driven</b> (heavier ads).'),
+        L('প্রতিটা খাতে <b>%</b> আর <b>৳</b> দুটো ঘর। একটা লিখলে অন্যটা নিজে বদলায়।', 'Each category has a <b>%</b> box and a <b>৳</b> box. Edit one and the other follows.'),
+        L('<b>জরুরি রিজার্ভ</b> বাকিটা নিজে নেয়, তাই মোট সবসময় ১০০%।', '<b>Emergency reserve</b> takes whatever is left, so the total is always 100%.'),
+        L('কোনো খাত সীমার কাছাকাছি গেলে (ডিফল্ট ৮০%) আগাম সতর্কতা আসে।', 'A warning appears when a category nears its limit (80% by default).'),
+      ])],
+    [L('ব্যবসার পরিকল্পনা (প্ল্যানার)', 'Business planner'),
+      ul([
+        L('<b>আরও → ব্যবসার পরিকল্পনা</b>-য় সংখ্যা বসিয়ে আগেই দেখা যায়: মূলধন কোথায় যাবে, কত দামে বেচলে কয়টা বিক্রি লাগবে।', 'In <b>More → Business planner</b> you can try numbers first: where capital goes and how many sales you need at a price.'),
+        L('এখানে কিছু সেভ হয় না। ভালো লাগলে "বাজেটে বসান" দিয়ে ভাগটা বাজেটে নেওয়া যায়।', 'Nothing is saved there. If you like a split, apply it to your budget.'),
+      ])],
+    [L('ব্যাচ, ব্যাকআপ ও অফলাইন', 'Batches, backup and offline'),
+      ul([
+        L('<b>ব্যাচ:</b> প্রতিটা ইনভেস্টমেন্ট রাউন্ড আলাদা ব্যাচ। উপরের নামে ট্যাপ করে বদলান, আরও পেজে ডিলিট বাটন আছে।', '<b>Batches:</b> each investment round is its own batch. Tap the name at the top to switch; delete is in More.'),
+        L('<b>ডেটা শুধু আপনার ফোনে</b> থাকে, কোনো সার্ভারে যায় না। তাই <b>আরও → ব্যাকআপ নিন</b> মাঝে মাঝে করুন। ফোন বদলালে ব্যাকআপ ফাইল থেকে ফিরিয়ে আনতে পারবেন।', '<b>Your data stays on your phone</b> and never goes to a server, so use <b>More → Back up</b> regularly. On a new phone, restore from the backup file.'),
+        L('<b>ইনস্টল:</b> ব্রাউজারের মেনু থেকে "হোম স্ক্রিনে যোগ করুন"। একবার ইনস্টল করলে ইন্টারনেট ছাড়াই চলে।', '<b>Install:</b> use "Add to Home screen" in the browser menu. Once installed it works without internet.'),
+        L('<b>আপডেট:</b> নতুন সংস্করণ এলে অ্যাপ নিজে একবার রিলোড হয়। ডেটা মোছে না।', '<b>Updates:</b> when a new version arrives, the app reloads once by itself. Your data is kept.'),
+      ])],
+    [L('ভুল হলে আর কাজের টিপস', 'Fixing mistakes and tips'),
+      ul([
+        L('ডিলিটের পর নিচে <b>"ফিরিয়ে আনুন"</b> আসে, চাপলেই আগের অবস্থা ফেরে। এক ট্যাপের বিক্রিতেও আসে।', 'After a delete, <b>"Undo"</b> appears at the bottom. It also appears after a one-tap sale.'),
+        L('ট্যাবে বাম/ডানে সোয়াইপ করে পাশের ট্যাবে যাওয়া যায়।', 'Swipe left or right to move between tabs.'),
+        L('সব খরচ (বিশেষ করে অ্যাড আর রিটার্ন) ঠিকমতো লিখুন, নইলে দাম আসলের চেয়ে কম দেখাবে।', 'Record every cost (especially ads and returns), otherwise the price will look lower than reality.'),
+        L('দাম বাড়িয়ে বা অ্যাড কমিয়ে দেখুন কী হয়: প্রোডাক্টের স্লাইডার আর প্ল্যানার এর জন্য।', 'Try raising prices or cutting ads and see the effect: use the product slider and the planner.'),
+        L('এই অ্যাপের পরামর্শ আপনার দেওয়া সংখ্যা থেকে হিসাব করা, লাভের নিশ্চয়তা নয়।', 'The advice is calculated from your own numbers and is not a guarantee of profit.'),
+      ])],
   ];
-  return `${sheetHead(L('কিভাবে ব্যবহার করবেন', 'How to use'), L('৬টা সহজ কথা', 'Six simple things'))}
-    <ol class="howlist">${items.map(([t, d], i) => `<li><span class="sn">${i + 1}</span><div><b>${t}</b><br><span class="muted">${d}</span></div></li>`).join('')}</ol>`;
+  return `${sheetHead(L('কিভাবে ব্যবহার করবেন', 'How to use'), L('সম্পূর্ণ গাইড: প্রতিটা ফিচার আর দাম বের করার হিসাব', 'Complete guide: every feature and how the price is worked out'))}
+    <div class="guide">${sections.map(([t, body], i) => `<details class="gd" ${i === 0 ? 'open' : ''}><summary><span class="sn">${i + 1}</span><b>${t}</b>${icon('chev', 18)}</summary><div class="gbody">${body}</div></details>`).join('')}</div>`;
 }
 
 /* ---------- ব্যাকআপ ---------- */

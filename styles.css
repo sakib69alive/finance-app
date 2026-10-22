@@ -665,3 +665,17 @@ button, a, .tab { touch-action: manipulation; }
 .bfrow.auto .input { background: var(--accent-soft); color: var(--accent); font-weight: 700; border-color: transparent; }
 .bimpact { background: var(--accent-soft); border-radius: 12px; padding: 9px 11px; margin-top: 8px; font-size: 13px; line-height: 1.55; }
 .bimpact.bad { background: var(--danger-soft); }
+
+/* ===== সম্পূর্ণ গাইড ===== */
+.guide { display: flex; flex-direction: column; gap: 8px; }
+.gd { background: var(--surface-2); border-radius: 18px; overflow: hidden; }
+.gd summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 12px 14px; }
+.gd summary::-webkit-details-marker { display: none; }
+.gd summary b { flex: 1; font-size: 14.5px; line-height: 1.35; }
+.gd summary .ic { color: var(--muted); transition: transform .2s; flex: none; }
+.gd[open] summary .ic { transform: rotate(180deg); }
+.gd .sn { width: 26px; height: 26px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 800; font-size: 13px; background: var(--lav); color: var(--ink); }
+.gbody { padding: 0 14px 14px 14px; font-size: 13.5px; line-height: 1.65; }
+.gbody p { margin: 4px 0 8px; }
+.gbody ul, .gbody ol { padding-left: 20px; display: flex; flex-direction: column; gap: 7px; margin: 4px 0 6px; }
+.gex { background: var(--accent-soft); border-radius: 14px; padding: 11px 13px; margin: 8px 0; font-size: 13px; }
