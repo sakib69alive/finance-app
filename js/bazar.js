@@ -67,7 +67,8 @@ const bzRestock = m => { if (bz().autoStock) bzApplyStock(bz(), m); else if (m.i
 function bzNewItem(o) { return Object.assign({ id: uid(), name: '', cat: 'other', qty: 1000, unit: '', est: 0, status: 'todo', aQty: 0, aPrice: null, note: '', createdAt: Date.now() }, o); }
 
 /* ---------- মূল খরচের সাথে সংযোগ (Hangout-এর দৈনন্দিন ইভেন্টে একটাই খরচ, ref = bz:<বাজারের id>) ---------- */
-function bzTargets() {
+function bzTargets() { return []; } // সাময়িকভাবে বন্ধ: বাজার সদাই এখন আলাদা মডিউল, আড্ডা ও যৌথ খরচের সাথে যুক্ত নয়
+function bzTargetsLinked() {
   if (typeof HG_TYPES === 'undefined' || !state.hangout || !Array.isArray(state.hangout.events)) return [];
   return state.hangout.events.filter(e => !e.del && e.status === 'active' && (HG_TYPES[e.type] || {}).g === 'daily');
 }
@@ -210,7 +211,6 @@ function bzListTab() {
         ${menuItem('bz-save-tpl', 'doc', L('তালিকাটা টেমপ্লেট করে রাখুন', 'Save list as template'), L('পরেরবার এক ট্যাপে একই তালিকা', 'Reuse this list next time'))}
         ${menuItem('bz-copy', 'share', L('সারাংশ কপি / শেয়ার', 'Copy / share summary'), L('টেক্সট হিসেবে', 'As text'))}
         ${menuItem('bz-csv', 'download', L('CSV ফাইল নামান', 'Download CSV'), L('Excel বা Sheets-এ খোলার জন্য', 'Open in Excel or Sheets'))}
-        ${menuItem('bz-sync', 'layers', L('মূল খরচে যোগ করুন', 'Add to main expenses'), m.sync ? L('যোগ করা আছে, বদলালে নিজে মিলে যায়', 'Linked, stays in sync') : L('আড্ডা ও যৌথ খরচের দৈনন্দিন ইভেন্টে একটাই খরচ', 'One expense in a daily event'))}
         ${m.status === 'cancelled' ? '' : menuItem('bz-cancel', 'x', L('বাজার বাতিল করুন', 'Cancel this market'), L('হিসাবে ধরা হবে না', 'Not counted anywhere'))}
         <button type="button" class="mitem danger" data-action="bz-del-market" data-id="${m.id}"><span class="mi">${icon('trash', 20)}</span><span class="mt"><b>${L('বাজার ডিলিট', 'Delete market')}</b><small>${L('ফিরিয়ে আনার সুযোগ থাকবে', 'You can undo right after')}</small></span></button></div></section>`;
 }
@@ -336,9 +336,7 @@ function bzMoreTab() {
       ${mi('bz-tpls', 'doc', L('নিয়মিত তালিকা (টেমপ্লেট)', 'Recurring lists (templates)'), `${tpl} ${L('টা আছে', 'saved')}`)}
       ${mi('bz-cats', 'grid', L('পণ্যের বিভাগ', 'Product categories'), L('নিজের বিভাগ যোগ, বদল, মোছা', 'Add, edit or remove your own'))}</div>
     <div class="section-title">${L('মজুত ও সংযোগ', 'Stock & links')}</div>
-    <div class="menu">${mi('bz-sync', 'layers', L('মূল খরচে যোগ করুন', 'Add to main expenses'), L('এই বাজারের আসল খরচ, একবারই', 'This market\'s real total, only once'))}
-      ${mi('bz-link', 'layers', L('সংসারের মাসিক হিসাবে নিজে যোগ', 'Auto-add to household month'), bz().linkEv && bzTargets().some(e => e.id === bz().linkEv) ? L('চালু: ', 'On: ') + esc(bzTargets().find(e => e.id === bz().linkEv).name) : L('বন্ধ। চালু করলে বাজারের খরচ মাসের বাজেট থেকে নিজে কাটা যাবে', 'Off. Turn on to deduct market costs from the monthly budget automatically'))}
-      ${mi('bz-auto-toggle', 'check', L('কেনা পণ্য নিজে মজুতে যোগ', 'Auto-add bought items to stock'), bz().autoStock ? L('এখন চালু', 'Currently on') : L('এখন বন্ধ', 'Currently off'))}</div>
+    <div class="menu">${mi('bz-auto-toggle', 'check', L('কেনা পণ্য নিজে মজুতে যোগ', 'Auto-add bought items to stock'), bz().autoStock ? L('এখন চালু', 'Currently on') : L('এখন বন্ধ', 'Currently off'))}</div>
     ${appSections()}`;
 }
 
