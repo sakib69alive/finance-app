@@ -110,7 +110,7 @@ const statusLabel = s => ({ delivered: L('ডেলিভারড', 'Delivered'
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v23'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v24'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 function newBatch(o = {}) {
   return {
@@ -576,6 +576,139 @@ function batchForm(b) {
 }
 
 /* ---------- হোম ---------- */
+/* ---------- মনোযোগ কেন্দ্র: কোথায় নজর দিতে হবে, গুরুত্ব অনুযায়ী সাজানো ---------- */
+const AREAS = {
+  setup: ['শুরুর কাজ', 'Getting started'], budget: ['বাজেট ও খরচ', 'Budget & costs'], price: ['দাম ও লাভ', 'Price & profit'],
+  stock: ['স্টক', 'Stock'], sales: ['বিক্রি ও কুরিয়ার', 'Sales & courier'], time: ['টার্গেট ও সময়', 'Target & time'], data: ['ডেটা সুরক্ষা', 'Data safety'],
+};
+function attention(b, c) {
+  const items = [];
+  const add = (sev, area, t, d, act) => items.push({ sev, area, t, d, act });
+  const cap = c.capital;
+  const p = pace(b, c);
+  const go = (a, label, data) => ({ a, l: label, data: data || {} });
+
+  // শুরুর কাজ
+  if (c.target <= cap) add('danger', 'setup', L('টার্গেট মূলধনের চেয়ে বেশি দিন', 'Set the target above your capital'),
+    L(`টার্গেট ${fmt(c.target)}, মূলধন ${fmt(cap)}। নইলে লাভের হিসাব হবে না।`, `Target is ${fmt(c.target)} and capital ${fmt(cap)}, so there is no profit to plan.`), go('edit-batch', L('টার্গেট বদলান', 'Change target')));
+  if (!b.products.length) {
+    add('info', 'setup', L('প্রথমে প্রোডাক্ট যোগ করুন', 'Add your first product'),
+      L('কী কিনেছেন, কয়টা ইউনিট, কত দামে। এটাই সব হিসাবের ভিত্তি।', 'What you bought, how many units and at what price. Everything else builds on this.'), go('add-product', L('প্রোডাক্ট যোগ', 'Add product')));
+  } else {
+    if (!b.expenses.length) add('warn', 'setup', L('খরচ যোগ করুন', 'Add your costs'),
+      L('অ্যাড, শিপিং, প্যাকেজিং না দিলে প্রতি ইউনিটের খরচ আসলের চেয়ে কম দেখাবে।', 'Without ads, shipping and packaging the cost per unit looks lower than it is.'), go('add-expense', L('খরচ যোগ', 'Add cost')));
+    if (!b.sales.length) add('info', 'setup', L('প্রথম বিক্রি লিখুন', 'Record your first sale'),
+      L('হোমের "+১ বিক্রি" বাটনে এক ট্যাপেই হয়ে যায়।', 'One tap on "+1 sold" below does it.'), go('add-sale', L('বিক্রি লিখুন', 'Add sale')));
+    if (!p) add('info', 'setup', L('কত দিনে টার্গেট ধরবেন ঠিক করুন', 'Set a deadline for your target'),
+      L('ডেডলাইন দিলে প্রতিদিনের টার্গেট আর গতি দেখানো হবে (ঐচ্ছিক)।', 'A deadline gives you a daily target and pace tracking (optional).'), go('edit-batch', L('দিন সেট করুন', 'Set days')));
+  }
+  if (!b.products.length) return sortAttention(items);
+
+  // বাজেট ও খরচ
+  if (c.unspent < 0) add('danger', 'budget', L(`মূলধনের চেয়ে ${fmt(-c.unspent)} বেশি খরচ হয়েছে`, `${fmt(-c.unspent)} spent beyond your capital`),
+    L('এই টাকা বিক্রি থেকে তুলতে হবে। নতুন খরচ আপাতত থামান।', 'Sales must cover this. Pause new spending for now.'), go('tab', L('খরচ দেখুন', 'See costs'), { tab: 'expenses' }));
+  if (cap > 0) {
+    const act = budgetActual(c), wr = warnRatio(b);
+    for (const k of ['product', 'shipping', 'ads', 'packaging', 'courier', 'other']) {
+      const a = act[k], lim = limitOf(b, k);
+      if (lim <= 0 || a <= 0) continue;
+      if (a > lim + 0.5) add('danger', 'budget', L(`${bl(k)} বাজেটের ${fmt(a - lim)} বেশি`, `${bl(k)} is ${fmt(a - lim)} over budget`),
+        L(`খরচ ${fmt(a)}, আদর্শ সীমা ${fmt(lim)}। বাড়তি টাকা প্রতি ইউনিটের খরচ বাড়ায়। পরিকল্পিত হলে বাজেটে সীমা বাড়ান।`, `Spent ${fmt(a)} against ${fmt(lim)}. Extra spend raises the cost per unit. If planned, raise the limit.`), go('edit-budget', L('বাজেট বদলান', 'Edit budget')));
+      else if (k !== 'product' && a >= lim * wr) add('warn', 'budget', L(`${bl(k)} সীমার ${pct(a / lim * 100)} শেষ`, `${bl(k)} is at ${pct(a / lim * 100)} of its limit`),
+        L(`বাকি মাত্র ${fmt(lim - a)}। আর খরচের আগে দেখুন সত্যিই দরকার কিনা।`, `Only ${fmt(lim - a)} left. Check it is needed before spending more.`), go('edit-budget', L('বাজেট বদলান', 'Edit budget')));
+    }
+    const res = limitOf(b, 'reserve');
+    if (c.unspent >= 0 && c.unspent < res - 0.5 && c.spent > 0) add('warn', 'budget', L('জরুরি রিজার্ভ কমে গেছে', 'Emergency reserve is low'),
+      L(`অব্যবহৃত ${fmt(c.unspent)}, ন্যূনতম ${fmt(res)}। রিটার্ন বা বাড়তি চার্জে টাকা কম পড়তে পারে।`, `Unspent ${fmt(c.unspent)} against a minimum of ${fmt(res)}. A return or surprise fee could leave you short.`), null);
+  }
+  if (c.unallocated > 0) add('warn', 'budget', L(`${fmt(c.unallocated)} খরচ কোনো প্রোডাক্টে ভাগ হয়নি`, `${fmt(c.unallocated)} of costs is not assigned to any product`),
+    L('খরচ যোগের সময় প্রোডাক্ট বেছে দিন, নইলে দামের হিসাবে ধরা পড়ে না।', 'Pick a product when adding costs, otherwise the price calculation misses it.'), go('tab', L('খরচ দেখুন', 'See costs'), { tab: 'expenses' }));
+
+  // দাম ও লাভ
+  for (const x of c.items) {
+    if (x.remaining <= 0 || x.myPrice <= 0) continue;
+    if (x.myPrice < x.breakeven) add('danger', 'price', L(`${x.p.name}: লসে বিক্রি হচ্ছে`, `${x.p.name}: priced at a loss`),
+      L(`আপনার দাম ${fmt(x.myPrice)}, খরচ ${fmt(x.unit)}। কমপক্ষে ${fmt(ceil10(x.breakeven))} রাখুন।`, `Your price ${fmt(x.myPrice)} is under the cost of ${fmt(x.unit)}. Charge at least ${fmt(ceil10(x.breakeven))}.`), go('open-product', L('দাম দেখুন', 'Review price'), { id: x.p.id }));
+    else if (x.myPrice < x.goalPrice) add('warn', 'price', L(`${x.p.name}: এই দামে টার্গেট ধরা কঠিন`, `${x.p.name}: this price will not reach the target`),
+      L(`${fmt(x.myPrice)} এ লাভ হবে, কিন্তু টার্গেটের জন্য ${fmt(x.goalPrice)} লাগবে।`, `${fmt(x.myPrice)} is profitable but the target needs ${fmt(x.goalPrice)}.`), go('open-product', L('দাম দেখুন', 'Review price'), { id: x.p.id }));
+  }
+  if (c.cat.ads > 0 && c.deliveredOrders > 0) {
+    const per = c.cat.ads / c.deliveredOrders, avg = c.revenue / c.deliveredOrders;
+    if (avg > 0 && per / avg > 0.3) add('warn', 'price', L('অ্যাড খরচ বিক্রির তুলনায় বেশি', 'Ad cost is heavy compared to sales'),
+      L(`প্রতি ডেলিভারড অর্ডারে অ্যাড ${fmt(per)}, গড় অর্ডার ${fmt(avg)} (${pct(per / avg * 100)})। অ্যাড কমান বা দাম দেখুন।`, `Ads cost ${fmt(per)} per delivered order against an average order of ${fmt(avg)} (${pct(per / avg * 100)}). Trim ads or review prices.`), null);
+  }
+
+  // স্টক
+  for (const x of c.items) {
+    if (x.units <= 0) continue;
+    if (x.remaining <= 0) add('info', 'stock', L(`${x.p.name}: স্টক শেষ`, `${x.p.name}: out of stock`),
+      L('আবার আনার কথা ভাবুন, বিক্রি এখন থেমে আছে।', 'Think about restocking, sales have stopped for this item.'), go('open-product', L('দেখুন', 'Open'), { id: x.p.id }));
+    else if (x.remaining <= Math.max(2, Math.ceil(x.units * 0.15))) add('warn', 'stock', L(`${x.p.name}: স্টক কমে গেছে`, `${x.p.name}: running low`),
+      L(`মাত্র ${x.remaining}টা বাকি (${x.units}টার মধ্যে)।`, `Only ${x.remaining} left of ${x.units}.`), go('open-product', L('দেখুন', 'Open'), { id: x.p.id }));
+  }
+
+  // বিক্রি ও কুরিয়ার
+  if (c.pendingOrders) {
+    const old = b.sales.filter(s => s.status === 'pending' && s.date && daysBetween(s.date, today()) >= 7).length;
+    if (old) add('warn', 'sales', L(`${old}টা অর্ডার ৭ দিনের বেশি পেন্ডিং`, `${old} order(s) pending for over 7 days`),
+      L(`কুরিয়ারে মোট ${fmt(c.pendingNet)} আটকে আছে। খোঁজ নিন, টাকা এসে থাকলে ডেলিভারড করুন।`, `${fmt(c.pendingNet)} is stuck with the courier. Follow up, and mark delivered if paid.`), go('tab', L('বিক্রি দেখুন', 'See sales'), { tab: 'sales' }));
+    else add('info', 'sales', L(`কুরিয়ারে ${fmt(c.pendingNet)} আসা বাকি`, `${fmt(c.pendingNet)} still with the courier`),
+      L(`${c.pendingOrders}টা অর্ডার পেন্ডিং। টাকা এলে ডেলিভারড করে দিন।`, `${c.pendingOrders} pending order(s). Mark them delivered when paid.`), go('tab', L('বিক্রি দেখুন', 'See sales'), { tab: 'sales' }));
+  }
+  const closed = c.deliveredOrders + c.returnedOrders;
+  if (closed >= 4) {
+    const rr = c.returnedOrders / closed;
+    if (rr > c.r + 0.02) add('warn', 'sales', L(`রিটার্ন রেট ${pct(rr * 100)}, ধরা আছে ${pct(c.r * 100)}`, `Return rate is ${pct(rr * 100)} against a ${pct(c.r * 100)} buffer`),
+      L('বাফার বাড়ান, তাহলে দাম বাস্তব হিসাবে আসবে।', 'Raise the buffer so prices reflect reality.'), go('edit-batch', L('বাফার বদলান', 'Change buffer')));
+  }
+
+  // টার্গেট ও সময়
+  if (c.target > 0 && c.cash >= c.target) add('good', 'time', L('টার্গেট পূরণ হয়েছে 🎉', 'Target reached 🎉'), L(`হাতে ${fmt(c.cash)}। এখন থেকে প্রতিটা বিক্রিই বাড়তি লাভ।`, `${fmt(c.cash)} in hand. Every sale from here is extra profit.`), null);
+  else if (p) {
+    if (!p.enough) add('danger', 'time', L('স্টকে টার্গেট ধরা যাবে না', 'Your stock cannot reach the target'),
+      L(`আরও প্রায় ${p.needUnits}টা বিক্রি লাগবে, স্টকে আছে ${c.remainingUnits}টা। মাল আনুন, দাম বাড়ান বা টার্গেট কমান।`, `About ${p.needUnits} more sales needed but only ${c.remainingUnits} in stock. Restock, raise prices or lower the target.`), go('edit-batch', L('টার্গেট বদলান', 'Change target')));
+    else if (p.daysLeft <= 0) add('danger', 'time', L('ডেডলাইন পার হয়ে গেছে', 'The deadline has passed'),
+      L(p.needDays != null ? `টার্গেটে পৌঁছাতে আরও প্রায় ${p.needDays} দিন লাগবে এই গতিতে।` : 'ডেডলাইন বাড়িয়ে নিন।', p.needDays != null ? `About ${p.needDays} more days at this pace.` : 'Extend the deadline.'), go('add-days', L(`+${p.needDays || 7} দিন`, `+${p.needDays || 7} days`), { n: p.needDays || 7 }));
+    else if (p.extra > 0) add('warn', 'time', L('এই গতিতে ডেডলাইন ধরা কঠিন', 'Hard to hit the deadline at this pace'),
+      L(`আপনার গতি দিনে ${Math.round(p.perDay * 10) / 10}টা। ${p.extra} দিন বাড়ালে টার্গেট ধরা যাবে।`, `You sell ${Math.round(p.perDay * 10) / 10} a day. Adding ${p.extra} days gets you there.`), go('add-days', L(`+${p.extra} দিন`, `+${p.extra} days`), { n: p.extra }));
+    if (p.daysLeft > 0 && p.soldToday < p.targetToday && !p.reached) add('info', 'time', L(`আজ আরও ${p.targetToday - p.soldToday}টা বিক্রি দরকার`, `${p.targetToday - p.soldToday} more sale(s) needed today`),
+      L(`আজকের টার্গেট ${p.targetToday}টা, হয়েছে ${p.soldToday}টা।`, `Today's target is ${p.targetToday}, you have sold ${p.soldToday}.`), go('add-sale', L('বিক্রি লিখুন', 'Add sale')));
+  } else if (c.gap > 1 && c.remainingUnits > 0) {
+    add('info', 'time', L(`টার্গেটে আরও ${fmt(c.gap)} দরকার`, `${fmt(c.gap)} short of the target`),
+      L(`এখনকার দামে সব বেচলে শেষে হবে প্রায় ${fmt(c.projected)}। দাম বাড়ান বা খরচ কমান।`, `At current prices you end near ${fmt(c.projected)}. Raise prices or cut costs.`), null);
+  }
+
+  // ডেটা সুরক্ষা
+  const last = state.settings.lastBackup;
+  if ((!last || Date.now() - last > 7 * 864e5) && (b.sales.length + b.expenses.length) >= 3) add('warn', 'data', L(last ? 'এক সপ্তাহের বেশি ব্যাকআপ নেওয়া হয়নি' : 'এখনও ব্যাকআপ নেওয়া হয়নি', last ? 'No backup in over a week' : 'No backup yet'),
+    L('ফোন হারালে বা অ্যাপ মুছলে ডেটা চলে যাবে।', 'Losing the phone or deleting the app loses your data.'), go('export', L('ব্যাকআপ নিন', 'Back up now')));
+
+  return sortAttention(items);
+}
+function sortAttention(items) {
+  const rank = { danger: 0, warn: 1, info: 2, good: 3 }, order = Object.keys(AREAS);
+  return items.map((it, i) => ({ it, i })).sort((x, y) => rank[x.it.sev] - rank[y.it.sev] || order.indexOf(x.it.area) - order.indexOf(y.it.area) || x.i - y.i).map(o => o.it);
+}
+function attentionCard(b, c) {
+  const items = attention(b, c);
+  if (!items.length) {
+    return `<section class="card attn ok"><div class="attn-allgood"><span>✓</span><div><b>${L('সব ঠিকঠাক চলছে', 'Everything looks good')}</b><small>${L('বাজেট, দাম আর স্টক সব নিয়মের ভেতরে।', 'Budget, prices and stock are all within range.')}</small></div></div></section>`;
+  }
+  const n = s => items.filter(i => i.sev === s).length;
+  const area = k => AREAS[k][isEN() ? 1 : 0];
+  const btn = (a, cls) => a ? `<button type="button" class="btn ${cls} sm" data-action="${a.a}" ${Object.entries(a.data).map(([k, v]) => `data-${k}="${esc(v)}"`).join(' ')}>${a.l}</button>` : '';
+  const row = it => `<div class="arow ${it.sev}"><i></i><div class="atx"><small>${area(it.area)}</small><b>${esc(it.t)}</b><span>${esc(it.d)}</span></div>${btn(it.act, '')}</div>`;
+  const top = items[0], rest = items.slice(1);
+  const shown = rest.slice(0, 3), more = rest.slice(3);
+  return `<section class="card attn">
+    <div class="card-head"><h2>${L('মনোযোগ দরকার', 'Needs your attention')}</h2>
+      <span class="achips">${n('danger') ? `<em class="d">${n('danger')} ${L('জরুরি', 'urgent')}</em>` : ''}${n('warn') ? `<em class="w">${n('warn')} ${L('সতর্ক', 'watch')}</em>` : ''}${n('info') ? `<em class="i">${n('info')} ${L('পরামর্শ', 'tips')}</em>` : ''}</span></div>
+    <div class="atop ${top.sev}"><small>${L('সবার আগে', 'Do this first')} · ${area(top.area)}</small><b>${esc(top.t)}</b><p>${esc(top.d)}</p>${btn(top.act, 'primary')}</div>
+    ${rest.length ? `<div class="alist">${shown.map(row).join('')}</div>` : ''}
+    ${more.length ? `<details class="amore"><summary>${L(`আরও ${more.length}টা দেখুন`, `Show ${more.length} more`)} ${icon('chev', 16)}</summary><div class="alist">${more.map(row).join('')}</div></details>` : ''}
+  </section>`;
+}
+
 /* ---------- দিনের হিসাব: টার্গেট কত দিনে, আজ কতটা বেচলে ঠিক থাকবে ---------- */
 function pace(b, c) {
   const days = Math.floor(toNum(b.days));
@@ -731,7 +864,6 @@ function viewHome(b, c) {
   const progress = c.target > 0 ? clamp(c.cash / c.target, 0, 1) : 0;
   const ins = insights(b, c);
   const nw = c.netWorth - c.capital;
-  const next = ins[0] && ins[0].lvl !== 'good' ? ins[0] : null;
   return `
   <section class="hero tappable" data-action="hero-detail" role="button" tabindex="0" aria-label="${L('পুরো হিসাব দেখুন', 'See full breakdown')}">
     <div class="hero-top">
@@ -768,7 +900,7 @@ function viewHome(b, c) {
   </section>` : ''}
   ${installCard()}
 
-  ${next ? `<section class="card next-card"><small>${L('এখন যা করবেন', 'Do this next')}</small><p>${esc(next.t)}</p></section>` : ''}
+  ${attentionCard(b, c)}
 
   <details class="card more-card">
     <summary>${L('আরও হিসাব দেখুন', 'More details')} ${icon('chev', 20)}</summary>
@@ -782,7 +914,7 @@ function viewHome(b, c) {
     </section>
 
     <h3 class="sub-title">${icon('spark', 18)} ${L('বিজনেস গাইড', 'Business guide')}</h3>
-    <ul class="insights">${ins.slice(next ? 1 : 0).map(i => `<li class="insight ${i.lvl}">${esc(i.t)}</li>`).join('')}</ul>
+    <ul class="insights">${ins.map(i => `<li class="insight ${i.lvl}">${esc(i.t)}</li>`).join('')}</ul>
     <p class="hint">${L('এই পরামর্শ আপনার দেওয়া হিসাব থেকে, ফোনেই তৈরি (ইন্টারনেট লাগে না)। লাভের নিশ্চয়তা নয়।', 'Built on this device from your own numbers (no internet). Not a guarantee of profit.')}</p>
 
     <h3 class="sub-title">${L('টাকার মিলান (১ টাকারও হিসাব)', 'Money check (to the last taka)')}</h3>
