@@ -99,11 +99,13 @@ function hgHomeTab(ev, c) {
     <div class="hero-more">${L('ট্যাপ করে পুরো হিসাব দেখুন', 'Tap for the full breakdown')} ${icon('chev', 16)}</div>
   </section>
   ${hgStepsCard(ev, c)}
-  ${ev.status === 'active' ? `<div class="quick">
+  ${ev.status === 'active' ? `<div class="quick four">
     <button type="button" class="qbtn" data-action="hg-add-expense"><span class="qi">${icon('receipt')}</span>${L('খরচ', 'Expense')}</button>
+    <button type="button" class="qbtn" data-action="hg-add-personal"><span class="qi">${icon('person')}</span>${L('ব্যক্তিগত খরচ', 'Personal cost')}</button>
     <button type="button" class="qbtn" data-action="hg-add-bill"><span class="qi">${icon('doc')}</span>${L('রেস্টুরেন্ট বিল', 'Restaurant bill')}</button>
-    <button type="button" class="qbtn" data-action="hg-add-person"><span class="qi">${icon('users')}</span>${L('বন্ধু', 'Friend')}</button></div>` : ''}
+    <button type="button" class="qbtn" data-action="hg-money"><span class="qi">${icon('wallet')}</span>${L('টাকা জমা/শোধ', 'Money in/out')}</button></div>` : ''}
   ${hgWhoPays(ev, c, true)}
+  ${hgPoolCard(ev, c)}
   ${hgPlanCard(ev, c)}
   ${hgWhereCard(ev, c)}
   <section class="card"><div class="card-head"><h2>${L('বন্ধুদের হিসাব', 'Each friend')}</h2><button type="button" class="link" data-action="tab" data-tab="people">${L('বিস্তারিত', 'Details')}</button></div>
@@ -134,7 +136,9 @@ function hgSettleTab(ev, c) {
   return `<div class="page-head"><h1>${L('মেটানো', 'Settle up')}</h1></div>
     ${hgIssuesHtml(ev, c)}
     ${hgWhoPays(ev, c, true)}
-    <section class="card"><div class="card-head"><h2>${L('টাকা দেওয়া-নেওয়া', 'Payments')}</h2></div>
+    ${hgPoolCard(ev, c)}
+    ${ev.status === 'active' ? `<button type="button" class="btn block" data-action="hg-money">💰 ${L('টাকা জমা নিলাম / শোধ পেলাম / ফেরত দিলাম', 'Money received / paid / returned')}</button>` : ''}
+    <section class="card mt12"><div class="card-head"><h2>${L('টাকা দেওয়া-নেওয়া', 'Payments')}</h2></div>
       <p class="hint" style="margin:0 0 8px">${L('যে টাকা বন্ধুরা একে অপরকে দিয়েছে বা দোকান থেকে ফেরত এসেছে, এখানে লিখে রাখুন।', 'Record money friends gave each other, or refunds from a shop.')}</p>
       <div class="hg-body">${hgSecPayments(ev, c)}</div></section>
     <details class="card more-card"><summary>${L('মাফ ও সমঝোতা (দরকার হলে)', 'Forgive & agreements (if needed)')} ${icon('chev', 20)}</summary>
@@ -464,4 +468,85 @@ Object.assign(ACTIONS, {
     runLive(f, null);
   },
   'hg-plan-del': () => { const ev = hgGuard(); if (!ev) return; if (!confirm(L('বাজেট মুছবেন? খরচের হিসাব ঠিক থাকবে।', 'Remove the budget? Your expenses stay.'))) return; delete ev.plan; closeSheet(); hgCommit(ev, 'বাজেট মোছা হয়েছে', 'Budget removed'); },
+});
+
+/* =========================================================
+   টাকার লেনদেন (জমা নেওয়া, দেনা শোধ, ফেরত দেওয়া) এক ট্যাপের সুবিধা + জমা টাকার (পুলের) হিসাব
+   অর্গানাইজারের কাছে বন্ধুরা টাকা জমা দিতে পারে; কার কত জমা, কত খরচ, কাকে কত ফেরত দিতে হবে সব দেখায়।
+   ========================================================= */
+function hgPoolCard(ev, c) {
+  const p = hgPoolCalc(ev, c);
+  if (!p || !p.hasPool) return '';
+  const act = ev.status === 'active';
+  const orgName = pName(ev, p.org);
+  const rowHtml = r => {
+    const f = r.final;
+    const btn = !act ? '' : f > 0 ? `<button type="button" class="btn sm" data-action="hg-money" data-kind="ret" data-p="${r.id}">${L('ফেরত দিলাম ✓', 'Returned ✓')}</button>`
+      : f < 0 ? `<button type="button" class="btn sm" data-action="hg-money" data-kind="pay" data-p="${r.id}">${L('পেলাম ✓', 'Got it ✓')}</button>` : '';
+    return `<div class="poolrow"><div class="pr-n"><b>${esc(pName(ev, r.id))}</b>
+        <small>${L('জমা', 'Deposited')} ${hgM(r.deposited)} · ${L('তার খরচ', 'His/her cost')} ${hgM(r.share)}${r.personal ? ` (${L('নিজের', 'own')} ${hgM(r.personal)})` : ''}${r.returned ? ` · ${L('ফেরত দিয়েছেন', 'Returned')} ${hgM(r.returned)}` : ''}</small></div>
+      <div class="pr-r ${f > 0 ? 'pos' : f < 0 ? 'neg' : ''}"><b>${f === 0 ? L('মিটেছে ✓', 'Even ✓') : hgM(Math.abs(f))}</b>${f ? `<small>${f > 0 ? L('ফেরত দিতে হবে', 'to return') : L('আরও দেবে', 'still owes')}</small>` : ''}</div>${btn}</div>`;
+  };
+  return `<section class="card pool"><div class="card-head"><h2>💼 ${L('জমা টাকার হিসাব', 'Money held for the group')}</h2>${act ? `<button type="button" class="link" data-action="hg-money">+ ${L('লেনদেন', 'Add')}</button>` : ''}</div>
+    <p class="hint" style="margin:0 0 8px">${L(`${esc(orgName)}-এর কাছে বন্ধুদের জমা দেওয়া টাকা।`, `Money friends handed to ${esc(orgName)}.`)}</p>
+    <div class="pool-sum"><div><small>${L('জমা হয়েছে', 'Collected')}</small><b>${hgM(p.collected)}</b></div><div><small>${L('খরচ হয়েছে', 'Spent')}</small><b>${hgM(p.spent)}</b></div>
+      <div><small>${L('হাতে আছে', 'In hand')}</small><b class="${p.held < 0 ? 'neg' : ''}">${hgM(p.held)}</b></div><div><small>${L('ফেরত দিতে হবে', 'To return')}</small><b>${hgM(p.toReturn)}</b></div></div>
+    ${p.shortfall > 0 ? `<div class="bsum warn"><b>${L(`ফেরত দিতে আরও ${hgM(p.shortfall)} লাগবে`, `${hgM(p.shortfall)} more is needed to return everything`)}</b><span>${L('জমা টাকা থেকে আপনার নিজের ভাগও খরচ হয়েছে, বাকিটা নিজের পকেট থেকে দিতে হবে।', 'Your own share also came out of the pool, so the rest comes from your pocket.')}</span></div>` : ''}
+    ${p.rows.map(rowHtml).join('')}</section>`;
+}
+function hgMoneySheet(pre) {
+  const ev = hgCur(), c = hgEventCalc(ev), pool = hgPoolCalc(ev, c);
+  const people = ev.participants.filter(p => p.id !== pool.org && p.active);
+  if (!people.length) return `${sheetHead(L('টাকার লেনদেন', 'Money in or out'))}<p class="hint">${L('আগে বন্ধুদের যোগ করুন।', 'Add your friends first.')}</p>`;
+  const kind = (pre && pre.kind) || 'deposit', who = (pre && pre.p) || people[0].id;
+  const orgName = esc(pName(ev, pool.org));
+  return `${sheetHead(L('টাকার লেনদেন', 'Money in or out'), L(`আপনি = ${orgName}`, `You = ${orgName}`))}
+  <form data-form="hg-money" data-live="hg-money" autocomplete="off">
+    <div class="field"><span class="flabel">1. ${L('কী হলো?', 'What happened?')}</span>
+      <div class="hg-methods vert">${[['deposit', '💰', L('সে আমার কাছে টাকা জমা দিল', 'He/she handed me money to hold')], ['pay', '✅', L('সে তার দেনা শোধ করল', 'He/she paid what they owed')], ['ret', '↩️', L('আমি তাকে টাকা ফেরত দিলাম', 'I gave money back to him/her')]].map(([k, e, l]) =>
+        `<label class="chip wide"><input type="radio" name="kind" value="${k}" ${kind === k ? 'checked' : ''}><span>${e} ${l}</span></label>`).join('')}</div></div>
+    <div class="field"><span class="flabel">2. ${L('কার সাথে?', 'With whom?')}</span>
+      <div class="chips">${people.map(p => `<label class="chip"><input type="radio" name="who" value="${p.id}" ${who === p.id ? 'checked' : ''}><span>${esc(p.name)}</span></label>`).join('')}</div></div>
+    <label class="field"><span>3. ${L('কত টাকা?', 'How much?')}</span>${moneyInput('amt', '', '0')}</label>
+    <div class="preview" data-mnote></div>
+    <div class="row2"><label class="field"><span>${L('তারিখ', 'Date')}</span><input class="input" type="date" name="date" value="${today()}"></label>
+      <label class="field"><span>${L('নোট', 'Note')}</span><input class="input" name="note" maxlength="80" placeholder="${L('ঐচ্ছিক', 'Optional')}"></label></div>
+    <button class="btn primary block" type="submit">${L('সেভ করুন', 'Save')}</button></form>`;
+}
+LIVE['hg-money'] = (f, t) => {
+  const ev = hgCur(); if (!ev) return;
+  const c = hgEventCalc(ev), kind = f.elements.kind.value, who = f.elements.who.value;
+  const fin = c.final[who] || 0, a = f.elements.amt;
+  const sug = kind === 'pay' ? Math.max(0, -fin) : kind === 'ret' ? Math.max(0, fin) : 0;
+  // কিসের লেনদেন বা কার সাথে বদলালে পরিমাণ নিজে বসে (যতক্ষণ না নিজে লিখেছেন)
+  if ((!t || ['kind', 'who'].includes(t.name)) && a.dataset.edited !== '1') a.value = sug > 0 ? fromMinor(sug) : '';
+  if (t && t.name === 'amt') a.dataset.edited = '1';
+  const amt = toMinor(a.value), org = pName(ev, hgPoolCalc(ev, c).org), nm = pName(ev, who);
+  const n = $('[data-mnote]', f); n.className = 'preview';
+  const hint = kind === 'deposit' ? L(`${nm} → ${org}: জমা ${hgM(amt)}। এটা খরচ নয়, জমা টাকা, খরচ হলে নিজে কাটা যাবে।`, `${nm} → ${org}: deposit of ${hgM(amt)}. Not an expense; it is deducted as costs come in.`)
+    : kind === 'pay' ? L(`${nm} → ${org}: ${hgM(amt)} শোধ। এখন বাকি: ${hgM(Math.max(0, -fin))}`, `${nm} → ${org}: ${hgM(amt)} paid. Owes now: ${hgM(Math.max(0, -fin))}`)
+      : L(`${org} → ${nm}: ${hgM(amt)} ফেরত। এখন ফেরত পাওনা: ${hgM(Math.max(0, fin))}`, `${org} → ${nm}: ${hgM(amt)} back. To get back now: ${hgM(Math.max(0, fin))}`);
+  n.innerHTML = amt > 0 ? hint : '';
+};
+Object.assign(FORMS, {
+  'hg-money': f => {
+    const ev = hgGuard(); if (!ev) return;
+    const c = hgEventCalc(ev), pool = hgPoolCalc(ev, c), kind = f.elements.kind.value, who = f.elements.who.value, amt = toMinor(f.elements.amt.value);
+    if (!who) return fail(f, L('কার সাথে লেনদেন তা বাছুন', 'Pick the person'));
+    if (amt <= 0) return fail(f, L('টাকার পরিমাণ লিখুন', 'Enter the amount'), 'amt');
+    const o = { id: uid(), amt, createdAt: Date.now(), status: 'confirmed', date: f.elements.date.value || today(), note: f.elements.note.value.trim(), purpose: '' };
+    if (kind === 'deposit') Object.assign(o, { kind: 'contribution', from: who, to: pool.org, purpose: L('জমা', 'Deposit') });
+    else if (kind === 'pay') Object.assign(o, { kind: 'settlement', from: who, to: pool.org });
+    else Object.assign(o, { kind: 'settlement', from: pool.org, to: who });
+    ev.transfers.push(o);
+    closeSheet(); hgCommit(ev, `${kind === 'deposit' ? 'জমা' : kind === 'pay' ? 'শোধ' : 'ফেরত'}: ${pName(ev, o.from)} → ${pName(ev, o.to)} ${hgM(amt)}`, `${kind === 'deposit' ? 'Deposit' : kind === 'pay' ? 'Payment' : 'Return'}: ${pName(ev, o.from)} → ${pName(ev, o.to)} ${hgM(amt)}`);
+  },
+});
+Object.assign(ACTIONS, {
+  'hg-money': el => { const ev = hgGuard(); if (!ev) return; if (!hgActive(ev).length) return toast(L('আগে বন্ধুদের যোগ করুন', 'Add your friends first')); openSheet(hgMoneySheet({ kind: el.dataset.kind, p: el.dataset.p })); },
+  'hg-add-personal': () => {
+    const ev = hgGuard(); if (!ev) return;
+    if (!hgActive(ev).length) { toast(L('আগে বন্ধুদের যোগ করুন', 'Add the people first')); return hgGo('people'); }
+    openSheet(hgExpenseForm(null, null, 'personal'));
+  },
 });

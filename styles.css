@@ -877,3 +877,20 @@ details.more summary { padding: 8px 0 12px; font-size: 14.5px; }
 .addcat { background: var(--surface-2); border-radius: 16px; padding: 10px 12px; margin: 6px 0 12px; }
 .addcat .btn-row { margin-top: 6px; }
 a.delnew { color: var(--danger); font-weight: 700; text-decoration: none; font-size: 11.5px; }
+
+/* ===== ব্যক্তিগত খরচ, জমা টাকার কার্ড ===== */
+.quick.four { grid-template-columns: repeat(2, 1fr); }
+.quick.four .qbtn { flex-direction: row; justify-content: flex-start; gap: 10px; padding: 12px 14px; text-align: left; font-size: 14px; }
+.hg-methods.vert { flex-direction: column; }
+.chip.wide span { display: block; border-radius: 16px; text-align: left; padding: 11px 14px; font-size: 14px; }
+.pool-sum { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 8px 0; }
+.pool-sum > div { background: var(--surface-2); border-radius: 14px; padding: 9px 12px; min-width: 0; }
+.pool-sum small { display: block; color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.pool-sum b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.poolrow { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--border); }
+.poolrow .pr-n { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.poolrow .pr-n small { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.poolrow .pr-r { text-align: right; flex: none; display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
+.poolrow .pr-r small { color: var(--muted); font-size: 11px; }
+.poolrow .pr-r.pos b { color: var(--good); } .poolrow .pr-r.neg b { color: var(--danger); }
+.poolrow .btn { flex: none; white-space: nowrap; padding: 0 10px; }

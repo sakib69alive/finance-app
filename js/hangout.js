@@ -193,7 +193,7 @@ function hgSecExpenses(ev, c) {
       const x = per[e.id] || { refund: 0, ok: true };
       return `<div class="lwrap"><button type="button" class="lrow" data-action="hg-edit-expense" data-id="${e.id}">
         <span class="lic">${e.mode === 'bill' ? '🧾' : '💸'}</span>
-        <span class="lmain"><b>${esc(e.title)}${x.ok ? '' : ' ⚠️'}</b><small>${esc(hgCatLabel(ev, e.category))} · ${fmtDate(e.date)} · ${L('দিয়েছে', 'paid by')} ${e.payers.map(p => esc(pName(ev, p.pid))).join(', ')}${e.receipt ? ' 📎' : ''}</small></span>
+        <span class="lmain"><b>${e.personal ? '👤 ' : ''}${esc(e.title)}${x.ok ? '' : ' ⚠️'}</b><small>${esc(hgCatLabel(ev, e.category))}${e.personal ? ` · ${esc(pName(ev, e.personal))}${L('-এর নিজের', "'s own")}` : ''} · ${fmtDate(e.date)} · ${L('দিয়েছে', 'paid by')} ${e.payers.map(p => esc(pName(ev, p.pid))).join(', ')}${e.receipt ? ' 📎' : ''}</small></span>
         <span class="lend"><b>${hgM(e.total)}</b><small>${x.refund ? `${L('রিফান্ড', 'refund')} ${hgM(x.refund)}` : (e.mode === 'bill' ? L('আইটেম বিল', 'itemised') : hgMethodLabel(e.method))}</small></span></button>
         ${ev.status === 'active' ? delBtn('hg-del-expense', e.id) : ''}</div>`;
     }).join('')}</div>` : empty('🧾', L('কোনো খরচ নেই', 'No expenses'), L('খরচ যোগ করলে এখানে দেখা যাবে।', 'Added expenses show up here.'))}`;
@@ -216,6 +216,7 @@ function hgSecPeople(ev, c) {
     ${ev.participants.map(p => `<section class="card hg-pcard">${hgPersonCard(ev, c, p)}
       ${p.phone ? `<p class="hint">📞 ${esc(p.phone)}</p>` : ''}${p.note ? `<p class="hint">${esc(p.note)}</p>` : ''}
       ${p.joinedOn ? `<p class="hint">🗓️ ${L('যোগ দিয়েছে', 'Joined')}: ${fmtDate(p.joinedOn)}${ev.start ? ' (' + hgDayLabel(ev, p.joinedOn) + ')' : ''}</p>` : ''}
+      ${ev.status === 'active' && !p.org ? `<button type="button" class="btn sm block mt8" data-action="hg-money" data-p="${p.id}">💰 ${L('টাকা জমা / শোধ / ফেরত', 'Money in / paid / returned')}</button>` : ''}
       ${ev.status === 'active' ? `<div class="btn-row mt8"><button type="button" class="btn sm" data-action="hg-edit-person" data-id="${p.id}">${icon('edit', 16)} ${L('এডিট', 'Edit')}</button>
         <button type="button" class="btn sm" data-action="hg-toggle-person" data-id="${p.id}">${p.active ? L('নিষ্ক্রিয় করুন', 'Deactivate') : L('সক্রিয় করুন', 'Activate')}</button>
         ${hgPidUsed(ev, p.id) ? '' : `<button type="button" class="btn sm danger" data-action="hg-del-person" data-id="${p.id}">${icon('trash', 16)}</button>`}</div>` : ''}</section>`).join('') || empty('🧑‍🤝‍🧑', L('কেউ নেই', 'No one yet'), L('বন্ধুদের নাম যোগ করুন।', 'Add the friends who joined.'))}

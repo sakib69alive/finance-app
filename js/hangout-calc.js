@@ -256,6 +256,7 @@ function hgEventCalc(ev) {
   const paid = zero(), share = zero(), refundGot = zero(), out = zero(), inn = zero();
   const per = [], issues = [];
   const catTotals = {};
+  const personal = zero();
   const byPersonCat = Object.fromEntries(ids.map(id => [id, {}])), byPersonDay = Object.fromEntries(ids.map(id => [id, {}])), byDay = {};
   let gross = 0, refundTotal = 0;
   for (const e of exps) {
@@ -282,6 +283,7 @@ function hgEventCalc(ev) {
     const cat = e.category || 'other';
     catTotals[cat] = (catTotals[cat] || 0) + e.total - Math.min(refSum, e.total);
     per.push({ id: e.id, total: e.total, refund: Math.min(refSum, e.total), net: e.total - Math.min(refSum, e.total), alloc, netAlloc: net, ok: r.ok, error: r.error });
+    if (e.personal && e.personal in personal) personal[e.personal] += net[e.personal] || 0; // শুধু একজনের নিজের খরচ (যেমন কোক)
     // কে কোন খাতে আর কোন দিনে কত বহন করল (রিফান্ড বাদ দিয়ে), এভাবে "টাকা কোথায় গেল" বোঝা যায়
     const day = e.date || '';
     const dd = byDay[day] || (byDay[day] = { total: 0, byCat: {}, count: 0 });
@@ -313,7 +315,7 @@ function hgEventCalc(ev) {
   const netExp = gross - refundTotal;
   return {
     ids, per, paid, share, refundGot, out, inn, byKind, inKind, base, pre, adj: dec.adj, waivedFor: dec.waivedFor, waivedBy: dec.waivedBy,
-    applied: dec.applied, final, gross, refundTotal, net: netExp, catTotals, byPersonCat, byPersonDay, byDay, days: Object.keys(byDay).sort(), issues, balanced: finalSum === 0 && baseSum === 0,
+    applied: dec.applied, final, gross, refundTotal, net: netExp, catTotals, byPersonCat, byPersonDay, byDay, personal, days: Object.keys(byDay).sort(), issues, balanced: finalSum === 0 && baseSum === 0,
     suggestions: hgSuggest(final),
   };
 }
@@ -333,6 +335,24 @@ function hgSuggest(final) {
     if (cred[j].a === 0) j++;
   }
   return out;
+}
+
+/* ---------- জমা টাকার (পুলের) হিসাব: অর্গানাইজারের কাছে বন্ধুদের জমা দেওয়া টাকা ---------- */
+function hgPoolCalc(ev, calc) {
+  const org = ev.participants.find(p => p.org) || ev.participants[0];
+  if (!org) return null;
+  const live = (ev.transfers || []).filter(t => !t.del);
+  const dep = {}, back = {}, pay = {};
+  calc.ids.forEach(id => { dep[id] = 0; back[id] = 0; pay[id] = 0; });
+  let any = false;
+  live.forEach(t => {
+    if (t.to === org.id && t.from !== org.id) { if (t.kind === 'settlement') pay[t.from] += t.amt; else { dep[t.from] += t.amt; any = true; } }
+    if (t.from === org.id && t.to !== org.id) back[t.to] += t.amt;
+  });
+  const rows = ev.participants.filter(p => p.id !== org.id).map(p => ({ id: p.id, deposited: dep[p.id], share: calc.share[p.id], paidDirect: calc.paid[p.id], returned: back[p.id], settled: pay[p.id], final: calc.final[p.id], personal: calc.personal[p.id] }));
+  const held = calc.inn[org.id] - calc.out[org.id] - calc.paid[org.id] + calc.refundGot[org.id];
+  const toReturn = hgSum(rows.map(r => Math.max(0, r.final))), toCollect = hgSum(rows.map(r => Math.max(0, -r.final)));
+  return { org: org.id, hasPool: any, collected: hgSum(Object.values(dep)), spent: calc.net, held, toReturn, toCollect, shortfall: Math.max(0, toReturn - held), rows };
 }
 
 /* ---------- ব্যক্তির অবস্থা (Status) ---------- */
@@ -452,5 +472,5 @@ function hgPlanCalc(ev, calc, now) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { hgDist, hgSplit, hgBill, hgExpenseAlloc, hgEventCalc, hgSuggest, hgApplyDecisions, hgPersonStatus, hgValidate, hgMerge, toMinor, hgMoney, HG_DECISION_TYPES, hgDecisionEffect, hgPlanDefaults, hgPlanTotals, hgPlanCalc, HG_RESERVE_PCT };
+  module.exports = { hgDist, hgSplit, hgBill, hgExpenseAlloc, hgEventCalc, hgSuggest, hgApplyDecisions, hgPersonStatus, hgValidate, hgMerge, toMinor, hgMoney, HG_DECISION_TYPES, hgDecisionEffect, hgPlanDefaults, hgPlanTotals, hgPlanCalc, HG_RESERVE_PCT, hgPoolCalc };
 }

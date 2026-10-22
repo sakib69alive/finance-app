@@ -101,6 +101,8 @@ function hgShareText(ev, full) {
     if (cats.length) { lines.push(`*${L('টাকা কোথায় গেল', 'Where the money went')}*`); cats.forEach(([k, v]) => lines.push(`- ${hgCatLabel(ev, k)}: ${hgM(v)}`)); lines.push(''); }
     if (c.days.length > 1) { lines.push(`*${L('দিন অনুযায়ী', 'Day by day')}*`); c.days.forEach(d => lines.push(`- ${hgDayLabel(ev, d)}: ${hgM(c.byDay[d].total)}`)); lines.push(''); }
   }
+  const pool = hgPoolCalc(ev, c);
+  if (pool && pool.hasPool) lines.push(`*${L('জমা টাকা', 'Money held')}*: ${L('জমা', 'collected')} ${hgM(pool.collected)} · ${L('খরচ', 'spent')} ${hgM(pool.spent)} · ${L('হাতে', 'in hand')} ${hgM(pool.held)} · ${L('ফেরত দিতে হবে', 'to return')} ${hgM(pool.toReturn)}`, '');
   lines.push(`*${L('কার কী অবস্থা', 'Who stands where')}*`);
   rows.forEach(r => lines.push(`- ${r.p.name}: ${L('অংশ', 'share')} ${hgM(r.share)}, ${L('দিয়েছে', 'paid')} ${hgM(r.paid)} => ${hgFinalText(r.fin)} [${hgPStatusLabel(r.st)}]${r.waivedFor ? ` (${L('মওকুফ', 'waived')} ${hgM(r.waivedFor)})` : ''}${r.waivedBy ? ` (${L('ছেড়েছে', 'forgave')} ${hgM(r.waivedBy)})` : ''}`));
   if (c.suggestions.length) { lines.push(''); lines.push(`*${L('কে কাকে দেবে', 'Who pays whom')}*`); c.suggestions.forEach(s => lines.push(`- ${pName(ev, s.from)} -> ${pName(ev, s.to)}: ${hgM(s.amt)}`)); }

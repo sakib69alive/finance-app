@@ -183,7 +183,7 @@ async function hgSaveReceipt(expense, f) {
     return true;
   } catch (err) { return false; }
 }
-function hgExpenseForm(e, preset) {
+function hgExpenseForm(e, preset, scope0) {
   const ev = hgCur();
   const isNew = !e;
   const usedIds = e ? e.payers.map(p => p.pid).concat((e.spec && e.spec.incl) || [], Object.keys((e.spec && e.spec.values) || {})) : [];
@@ -194,9 +194,11 @@ function hgExpenseForm(e, preset) {
   const inclNow = v.method === 'equal' ? people.filter(p => p.active || ((v.spec && v.spec.incl) || []).includes(p.id)).map(p => p.id) : (v.spec.incl || []);
   const payOf = pid => (v.payers.find(p => p.pid === pid) || {}).amt;
   const multi = v.payers.length > 1;
+  const scope = (e && e.personal) || scope0 === 'personal' ? 'personal' : 'group';
   const lastPay = isNew ? ([...ev.expenses].filter(x => !x.del && x.payers.length).sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0))[0] || { payers: [] }).payers[0] : null;
   const lastPid = lastPay && people.some(p => p.id === lastPay.pid && p.active) ? lastPay.pid : null;
   const onePayer = (v.payers[0] || {}).pid || lastPid || (ev.participants.find(p => p.org && p.active) || people[0] || {}).id;
+  const forWho = (e && e.personal) || onePayer;
   const val = (pid, m) => { const x = (v.spec.values || {})[pid]; if (x == null) return ''; return (m === 'exact' || m === 'custom') ? hgTaka(x) : x; };
   const meta = v.meta || {};
   const mset = (m, pre, ph, suffix) => `<div class="hg-vals ${method === m ? '' : 'hidden'}" data-vals="${m}">${people.map(p => `<label class="hg-vrow"><span>${esc(p.name)}</span>
@@ -205,7 +207,7 @@ function hgExpenseForm(e, preset) {
   return `${sheetHead(isNew ? L('নতুন খরচ', 'New expense') : L('খরচ এডিট', 'Edit expense'), esc(ev.name))}
   <form data-form="hg-expense" data-live="hg-expense" data-id="${e ? e.id : ''}" data-rid="${e && e.receipt ? e.receipt : ''}" autocomplete="off">
     <label class="field"><span>1. ${L('কিসের খরচ?', 'What was it for?')}</span><input class="input" name="title" maxlength="60" value="${esc(v.title)}" placeholder="${L('লিখুন বা নিচ থেকে বাছুন', 'Type, or tap one below')}"></label>
-    ${isNew ? `<div class="qtitles">${ev.cats.filter(k => !['discount', 'vat', 'service', 'other_charges'].includes(k.k)).slice(0, 6).map(k => `<button type="button" class="qchip" data-action="hg-title-chip" data-k="${k.k}" data-t="${esc(isEN() ? k.en : k.bn)}">${esc(isEN() ? k.en : k.bn)}</button>`).join('')}</div>` : ''}
+    ${isNew ? `<div class="qtitles ${scope === 'personal' ? 'hidden' : ''}" data-qcat>${ev.cats.filter(k => !['discount', 'vat', 'service', 'other_charges'].includes(k.k)).slice(0, 6).map(k => `<button type="button" class="qchip" data-action="hg-title-chip" data-k="${k.k}" data-t="${esc(isEN() ? k.en : k.bn)}">${esc(isEN() ? k.en : k.bn)}</button>`).join('')}</div>` : ''}
     <label class="field"><span>2. ${L('মোট কত টাকা?', 'How much in total?')}</span>${moneyInput('total', hgTaka(v.total), '0')}</label>
     <div class="field"><span class="flabel">3. ${L('টাকা কে দিয়েছে?', 'Who paid?')}</span>
       <div data-one>${hgSelect('payOne', people.map(p => [p.id, esc(p.name)]), onePayer)}</div>
@@ -213,12 +215,17 @@ function hgExpenseForm(e, preset) {
       <div class="hg-multi ${multi ? '' : 'hidden'}" data-multi><span class="hint">${L('কে কত দিয়েছে লিখুন', 'Enter how much each person paid')}</span>
         ${people.map(p => `<label class="hg-vrow"><span>${esc(p.name)}</span>${moneyInput('pay_' + p.id, hgTaka(payOf(p.id)), '0')}</label>`).join('')}
         <div class="preview" data-paysum></div></div></div>
-    <div class="field"><span class="flabel">4. ${L('কাদের মধ্যে ভাগ হবে? (সমান ভাগ)', 'Who shares it? (split equally)')}</span>
+    ${isNew ? `<div class="qtitles ${scope === 'personal' ? '' : 'hidden'}" data-qpers>${[['কোক', 'Coke'], ['চা', 'Tea'], ['নাস্তা', 'Snack'], ['রিকশা', 'Rickshaw']].map(([bn, en]) => `<button type="button" class="qchip" data-action="hg-title-chip" data-k="" data-t="${L(bn, en)}">${L(bn, en)}</button>`).join('')}</div>` : ''}
+    <div class="field"><span class="flabel">4. ${L('খরচটা কার?', 'Whose cost is it?')}</span>
+      <div class="hg-methods"><label class="chip"><input type="radio" name="scope" value="group" ${scope === 'group' ? 'checked' : ''}><span>👥 ${L('সবার মধ্যে ভাগ', 'Shared by the group')}</span></label>
+        <label class="chip"><input type="radio" name="scope" value="personal" ${scope === 'personal' ? 'checked' : ''}><span>👤 ${L('শুধু একজনের (ব্যক্তিগত)', 'Only one person (personal)')}</span></label></div>
+      <div class="hg-multi ${scope === 'personal' ? '' : 'hidden'}" data-personal><span class="hint">${L('কার খরচ? (যেমন কেউ একা কোক খেল, শুধু তার হিসাবে যাবে, অন্য কারও ভাগে নয়)', 'Whose cost? (e.g. someone had a coke alone: it goes only to them)')}</span>${hgSelect('forWho', people.map(p => [p.id, esc(p.name)]), forWho)}</div></div>
+    <div class="field ${scope === 'personal' ? 'hidden' : ''}" data-groupbox><span class="flabel">5. ${L('কাদের মধ্যে ভাগ হবে? (সমান ভাগ)', 'Who shares it? (split equally)')}</span>
       <div class="hg-incl ${advOpen ? 'hidden' : ''}" data-incl><div class="chips">${people.map(p => `<label class="chip"><input type="checkbox" name="inc_${p.id}" ${inclNow.includes(p.id) ? 'checked' : ''}><span>${esc(p.name)}${p.joinedOn ? ` <small>(${L('থেকে', 'from')} ${fmtDate(p.joinedOn)})</small>` : ''}</span></label>`).join('')}</div>
         <div class="hint">${L('যারা এই খরচে ছিল না তাদের টিক তুলে দিন।', 'Untick anyone who was not part of this.')}</div></div>
       <div class="preview" data-split></div>
       <div class="preview" data-budget></div></div>
-    <details class="more" ${advOpen ? 'open' : ''}><summary>${L('অন্যভাবে ভাগ করতে চান? (শতাংশ, নির্দিষ্ট টাকা…)', 'Split differently? (percent, exact amounts…)')}</summary>
+    <details class="more ${scope === 'personal' ? 'hidden' : ''}" data-groupbox ${advOpen ? 'open' : ''}><summary>${L('অন্যভাবে ভাগ করতে চান? (শতাংশ, নির্দিষ্ট টাকা…)', 'Split differently? (percent, exact amounts…)')}</summary>
       <div class="hg-methods">${['selected', 'exact', 'percent', 'ratio', 'custom'].map(m => `<label class="chip"><input type="radio" name="method" value="${m}" ${method === m ? 'checked' : ''}><span>${m === 'selected' ? L('সমান ভাগ', 'Equal') : HG_METHODS[m][isEN() ? 1 : 0]}</span></label>`).join('')}</div>
       ${mset('exact', 'ex_', '0', '৳')}${mset('percent', 'pc_', '0', '%')}${mset('ratio', 'rt_', '1', '×')}${mset('custom', 'cu_', L('বাকিটা অটো', 'rest auto'), '৳')}</details>
     <details class="more" ${(!isNew && (v.category !== ev.cats[0].k || v.desc || e.receipt)) ? 'open' : ''}><summary>${L('আরও অপশন (খাত, তারিখ, রসিদের ছবি, নোট)', 'More options (category, date, receipt photo, note)')}</summary>
@@ -243,7 +250,9 @@ function hgReadExpense(f, ev) {
     ? people.map(p => ({ pid: p.id, amt: toMinor(f.elements['pay_' + p.id].value) })).filter(x => x.amt > 0)
     : (total > 0 && f.elements.payOne.value ? [{ pid: f.elements.payOne.value, amt: total }] : []);
   let method = f.elements.method.value;
-  const incl = method === 'selected' ? people.filter(p => f.elements['inc_' + p.id].checked).map(p => p.id) : people.filter(p => f.elements['inc_' + p.id].checked).map(p => p.id);
+  const personal = f.elements.scope && f.elements.scope.value === 'personal' ? f.elements.forWho.value : null;
+  let incl = method === 'selected' ? people.filter(p => f.elements['inc_' + p.id].checked).map(p => p.id) : people.filter(p => f.elements['inc_' + p.id].checked).map(p => p.id);
+  if (personal) { method = 'selected'; incl = [personal]; }
   const pre = { exact: 'ex_', percent: 'pc_', ratio: 'rt_', custom: 'cu_' }[method];
   const values = {};
   const blanks = [];
@@ -256,11 +265,17 @@ function hgReadExpense(f, ev) {
   const split = hgSplit(total, method === 'selected' ? 'selected' : method, people.map(p => p.id), { incl, values });
   // সবাই থাকলে "সমান" হিসেবে সংরক্ষণ
   if (method === 'selected' && people.filter(p => p.active).every(p => incl.includes(p.id)) && incl.length === people.filter(p => p.active).length) method = 'equal';
-  return { total, payers, method, spec: { incl, values }, split, people, multi };
+  return { total, payers, method, spec: { incl, values }, split, people, multi, personal };
 }
 LIVE['hg-expense'] = (f, t) => {
   const ev = hgCur(); if (!ev) return;
-  const method = f.elements.method.value;
+  const personalOn = f.elements.scope.value === 'personal';
+  $$('[data-groupbox]', f).forEach(d => d.classList.toggle('hidden', personalOn));
+  $('[data-personal]', f).classList.toggle('hidden', !personalOn);
+  const qp = $('[data-qpers]', f), qc = $('[data-qcat]', f); if (qp) qp.classList.toggle('hidden', !personalOn); if (qc) qc.classList.toggle('hidden', personalOn);
+  if (t && t.name === 'payOne' && !f.elements.forWho.dataset.touched) f.elements.forWho.value = f.elements.payOne.value;
+  if (t && t.name === 'forWho') f.elements.forWho.dataset.touched = '1';
+  const method = personalOn ? 'selected' : f.elements.method.value;
   $$('[data-vals]', f).forEach(d => d.classList.toggle('hidden', d.dataset.vals !== method));
   $('[data-incl]', f).classList.toggle('hidden', method !== 'selected');
   $('[data-multi]', f).classList.toggle('hidden', !f.elements.multi.checked);
@@ -318,7 +333,7 @@ Object.assign(FORMS, {
     const x = existing || { id: uid(), createdAt: Date.now(), mode: 'split' };
     const before = existing ? `${x.title} ${hgM(x.total)}` : '';
     Object.assign(x, { title, category: f.elements.cat.value, date: f.elements.date.value || today(), desc: f.elements.desc.value.trim(), total: r.total, payers: r.payers,
-      method: r.method, spec: r.spec, alloc, mode: 'split', updatedAt: Date.now(),
+      method: r.method, spec: r.spec, alloc, personal: r.personal || null, mode: 'split', updatedAt: Date.now(),
       meta: { rooms: f.elements.rooms.value.trim(), nights: f.elements.nights.value.trim(), rate: f.elements.rate.value.trim() } });
     if (!existing) ev.expenses.push(x);
     const okImg = await hgSaveReceipt(x, f);

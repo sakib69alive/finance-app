@@ -346,4 +346,38 @@ t('late joiner: an expense that lists only the people present leaves the newcome
   assert.strictEqual(c.byPersonDay.c['2026-10-10'], undefined); assert.ok(c.balanced);
 });
 
+
+// ---- ব্যক্তিগত খরচ ও জমা টাকা ----
+t('personal expense (a coke): only that person carries it, others untouched', () => {
+  const ev = mkEv(['me', 'a', 'b']);
+  const e = exp('coke', T(60), [{ pid: 'me', amt: T(60) }], 'selected', { incl: ['me'] }, 'food'); e.personal = 'me'; ev.expenses.push(e);
+  const c = hgEventCalc(ev);
+  assert.deepStrictEqual(c.share, { me: T(60), a: 0, b: 0 }); assert.strictEqual(c.personal.me, T(60)); assert.strictEqual(c.personal.a, 0);
+  assert.deepStrictEqual(c.suggestions, []); assert.ok(c.balanced);
+});
+t('personal expense paid by someone else shows up as that person owing the payer', () => {
+  const ev = mkEv(['me', 'a']);
+  const e = exp('coke', T(60), [{ pid: 'me', amt: T(60) }], 'selected', { incl: ['a'] }, 'food'); e.personal = 'a'; ev.expenses.push(e);
+  const c = hgEventCalc(ev); assert.deepStrictEqual(c.suggestions, [{ from: 'a', to: 'me', amt: T(60) }]); assert.strictEqual(c.personal.a, T(60));
+});
+const { hgPoolCalc } = C;
+t('pool: friends hand their money to the organizer; collected, in hand and per-person return add up', () => {
+  const ev = mkEv(['o', 'a', 'b']); ev.participants[0].org = true;
+  ev.expenses.push(exp('trip', T(9000), [{ pid: 'o', amt: T(9000) }], 'equal', { incl: ['o', 'a', 'b'] }));
+  ev.transfers.push({ id: 't1', kind: 'contribution', from: 'a', to: 'o', amt: T(5000) }, { id: 't2', kind: 'contribution', from: 'b', to: 'o', amt: T(5000) });
+  const c = hgEventCalc(ev), p = hgPoolCalc(ev, c);
+  assert.ok(p.hasPool); assert.strictEqual(p.collected, T(10000)); assert.strictEqual(p.spent, T(9000)); assert.strictEqual(p.held, T(1000));
+  assert.deepStrictEqual(p.rows.map(r => r.final), [T(2000), T(2000)]); assert.strictEqual(p.toReturn, T(4000));
+  assert.strictEqual(p.shortfall, T(3000)); // অর্গানাইজারের নিজের ভাগ ৩০০০ পুল থেকে গেছে
+  ev.transfers.push({ id: 't3', kind: 'settlement', from: 'o', to: 'a', amt: T(2000) });
+  const c2 = hgEventCalc(ev), p2 = hgPoolCalc(ev, c2);
+  assert.strictEqual(p2.rows[0].final, 0); assert.strictEqual(p2.rows[0].returned, T(2000)); assert.strictEqual(p2.toReturn, T(2000)); assert.ok(c2.balanced);
+});
+t('pool: a friend who still owes pays the organizer, and nothing is counted as a deposit', () => {
+  const ev = mkEv(['o', 'a']); ev.participants[0].org = true;
+  ev.expenses.push(exp('x', T(1000), [{ pid: 'o', amt: T(1000) }], 'equal', { incl: ['o', 'a'] }));
+  ev.transfers.push({ id: 't', kind: 'settlement', from: 'a', to: 'o', amt: T(500) });
+  const p = hgPoolCalc(ev, hgEventCalc(ev)); assert.ok(!p.hasPool); assert.strictEqual(p.rows[0].settled, T(500)); assert.strictEqual(p.rows[0].final, 0);
+});
+
 console.log(`\n${passed} tests passed`);

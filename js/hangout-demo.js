@@ -46,6 +46,8 @@ function hgDemoBuild() {
   const b = hgBill(bill, all5);
   exp(trip, { title: 'Sea Pearl ডিনার / Dinner', category: 'food', date: dAgo(3), total: b.total, payers: [{ pid: S, amt: b.total }], method: 'bill', mode: 'bill', spec: {}, bill, billActual: b.total, desc: 'আইটেম অনুযায়ী বিল' });
   exp(trip, { title: 'স্যুভেনির / Souvenirs', category: 'shopping', date: dAgo(2), total: T(2500), payers: [{ pid: R, amt: T(2500) }], method: 'equal', spec: { incl: all5, values: {} }, desc: 'শেষ দিনে কেনাকাটা' });
+  { const coke = exp(trip, { title: 'কোক (ব্যক্তিগত) / Coke', category: 'food', date: dAgo(3), total: T(60), payers: [{ pid: M, amt: T(60) }], method: 'selected', spec: { incl: [M], values: {} }, desc: 'মিম একা খেয়েছে' }); coke.personal = M; }
+  trip.transfers.push({ id: 'demo-t3', kind: 'contribution', from: M, to: S, amt: T(3000), date: dAgo(5), note: '', purpose: 'জমা', createdAt: now, status: 'confirmed' });
   trip.refunds.push({ id: 'demo-r1', expenseId: 'demo-e2', amt: T(500), by: R, date: dAgo(2), note: 'এক রাতের আংশিক ফেরত', createdAt: now });
   trip.transfers.push({ id: 'demo-t1', kind: 'advance', from: N, to: S, amt: T(2000), date: dAgo(5), note: '', purpose: 'বাস বুকিংয়ের অ্যাডভান্স', createdAt: now, status: 'confirmed' });
   trip.transfers.push({ id: 'demo-t2', kind: 'settlement', from: N, to: R, amt: T(1000), date: dAgo(1), note: 'আংশিক পরিশোধ', purpose: '', createdAt: now, status: 'confirmed' });
