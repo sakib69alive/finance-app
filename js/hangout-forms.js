@@ -282,21 +282,22 @@ LIVE['hg-expense'] = (f, t) => {
   if (t && t.name === 'forWho') f.elements.forWho.dataset.touched = '1';
   // যারা টাকা দিয়েছে তাদের চিপ থেকে সমান ভাগ (নিজে ঘরে লিখলে অটো বন্ধ)
   if (t && t.name && t.name.startsWith('pay_')) f.dataset.ppAuto = '';
-  const eachV = f.elements.each ? toMinor(f.elements.each.value) : 0;
+  if (t && t.name === 'each') f.dataset.eachAuto = '';
+  const eachV = f.elements.each && f.dataset.eachAuto !== '1' ? toMinor(f.elements.each.value) : 0;
   if (t && t.name && (t.name === 'each' || (t.name.startsWith('pp_') && eachV))) {
     ev.participants.forEach(p => {
       const c = f.elements['pp_' + p.id], i = f.elements['pay_' + p.id];
       if (c && i) i.value = c.checked && eachV ? fromMinor(eachV) : '';
     });
     f.dataset.ppAuto = '';
-  } else if (t && t.name && t.name.startsWith('pp_') && f.elements.each) f.elements.each.value = '';
-  if (t && t.name === 'total' && f.dataset.ppAuto === '1' && f.elements.each) f.elements.each.value = '';
+  }
   if (t && t.name && ((t.name.startsWith('pp_') && !eachV) || (t.name === 'total' && f.dataset.ppAuto === '1'))) {
     const ticked = ev.participants.filter(p => f.elements['pp_' + p.id] && f.elements['pp_' + p.id].checked).map(p => p.id);
     const tot = toMinor(f.elements.total.value);
     const dist = hgDist(tot, Object.fromEntries(ticked.map(id => [id, 1])), ev.participants.map(p => p.id));
     ev.participants.forEach(p => { const i = f.elements['pay_' + p.id]; if (i) i.value = dist[p.id] ? fromMinor(dist[p.id]) : ''; });
     f.dataset.ppAuto = '1';
+    if (f.elements.each) { f.elements.each.value = ticked.length && tot ? fromMinor(Math.floor(tot / ticked.length)) : ''; f.dataset.eachAuto = '1'; }
   }
   const method = personalOn ? 'selected' : f.elements.method.value;
   $$('[data-vals]', f).forEach(d => d.classList.toggle('hidden', d.dataset.vals !== method));
