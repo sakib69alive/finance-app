@@ -947,3 +947,11 @@ details.more[open] > summary::before { content: none; }
 .payerchips { margin: 8px 0 12px; }
 
 .qchip.on { background: var(--ink, #1f2a1f); color: #fff; }
+
+/* ===== রেস্টুরেন্ট বিল: এক নজরে হিসাব ===== */
+.bres { display: grid; grid-template-columns: 1.1fr .9fr .9fr 1.3fr; gap: 6px; align-items: center; padding: 8px 0; border-top: 1px solid var(--border); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.bres.head { border-top: 0; padding: 0 0 4px; }
+.bres.head small { color: var(--faint); font-size: 10.5px; font-weight: 700; text-align: right; }
+.bres b { font-size: 13.5px; overflow-wrap: anywhere; }
+.bres > span { text-align: right; }
+.bres .pos { color: var(--good); font-weight: 700; } .bres .neg { color: var(--danger); font-weight: 700; }

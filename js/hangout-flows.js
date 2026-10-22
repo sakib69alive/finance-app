@@ -5,34 +5,62 @@
    ========================================================= */
 
 /* ---------- রেস্টুরেন্ট বিল (আইটেম অনুযায়ী) ---------- */
-let hgDraft = null; // { id, title, category, date, desc, actual, payers:{pid:minor}, items, charges, note, receipt }
+let hgDraft = null; // { id, title, category, date, desc, actual, payers:{pid:minor}, items, charges, receipt, eq, equalIds, payMode, one }
 function hgBillOpen(e) {
   const ev = hgGuard(); if (!ev) return;
   hgPendingReceipt = undefined;
+  const org = (ev.participants.find(p => p.org && p.active) || ev.participants.find(p => p.active) || {}).id || null;
+  const eqIds = e && e.bill && e.bill.equal && e.bill.equal.length ? e.bill.equal : null;
+  const one = e && e.payers.length === 1 && e.payers[0].amt === e.total ? e.payers[0].pid : null;
   hgDraft = e ? {
     id: e.id, title: e.title, category: e.category, date: e.date, desc: e.desc || '', actual: e.billActual || 0,
-    payers: Object.fromEntries(e.payers.map(p => [p.pid, p.amt])), items: JSON.parse(JSON.stringify(e.bill.items)), charges: JSON.parse(JSON.stringify(e.bill.charges || [])), note: e.desc || '', receipt: e.receipt || null,
-  } : { id: '', title: ev.type === 'restaurant' ? ev.name : '', category: (ev.cats.find(c => c.k === 'food') || ev.cats[0]).k, date: today(), desc: '', actual: 0, payers: {}, items: [], charges: [], note: '', receipt: null };
+    payers: Object.fromEntries(e.payers.map(p => [p.pid, p.amt])), items: JSON.parse(JSON.stringify(e.bill.items)), charges: JSON.parse(JSON.stringify(e.bill.charges || [])), receipt: e.receipt || null,
+    eq: !!eqIds, equalIds: eqIds || ev.participants.filter(p => p.active).map(p => p.id), payMode: one ? 'one' : 'multi', one: one || org,
+  } : { id: '', title: ev.type === 'restaurant' ? ev.name : '', category: (ev.cats.find(c => c.k === 'food') || ev.cats[0]).k, date: today(), desc: '', actual: 0, payers: {}, items: [], charges: [], receipt: null,
+    eq: false, equalIds: ev.participants.filter(p => p.active).map(p => p.id), payMode: 'one', one: org };
   openSheet(hgBillSheet());
+}
+const hgDraftBill = () => ({ items: hgDraft.items, charges: hgDraft.charges, equal: hgDraft.eq ? hgDraft.equalIds : null, equalTotal: hgDraft.eq ? hgDraft.actual : 0 });
+// বিলের হিসাব: ভাগ (b), মোট, আসলের সাথে পার্থক্য
+function hgBillCalc(ev, d) {
+  const b = hgBill(hgDraftBill(), ev.participants.map(p => p.id));
+  const actual = d.actual || 0;
+  const diff = !d.eq && actual > 0 ? actual - b.total : 0;
+  const total = d.eq ? b.total : (actual > 0 ? actual : b.total);
+  return { b, actual, diff, total };
 }
 function hgBillSync() {
   const f = $('form[data-form="hg-bill"]'); if (!f || !hgDraft) return;
-  const ev = hgCur();
-  hgDraft.title = f.elements.title.value.trim(); hgDraft.category = f.elements.cat.value; hgDraft.date = f.elements.date.value || today();
-  hgDraft.actual = toMinor(f.elements.actual.value); hgDraft.desc = f.elements.desc.value.trim();
-  hgDraft.payers = {};
-  ev.participants.forEach(p => { if (f.elements['pay_' + p.id]) { const m = toMinor(f.elements['pay_' + p.id].value); if (m > 0) hgDraft.payers[p.id] = m; } });
+  const ev = hgCur(), d = hgDraft;
+  d.title = f.elements.title.value.trim(); d.category = f.elements.cat.value; d.date = f.elements.date.value || today();
+  d.actual = toMinor(f.elements.actual.value); d.desc = f.elements.desc.value.trim();
+  d.eq = f.elements.bmode.value === 'equal';
+  d.equalIds = ev.participants.filter(p => f.elements['eq_' + p.id] && f.elements['eq_' + p.id].checked).map(p => p.id);
+  d.payMode = f.elements.bpay.value === 'multi' ? 'multi' : 'one';
+  if (f.elements.one && f.elements.one.value) d.one = f.elements.one.value;
+  if (d.payMode === 'multi') {
+    d.payers = {};
+    ev.participants.forEach(p => { if (f.elements['pay_' + p.id]) { const m = toMinor(f.elements['pay_' + p.id].value); if (m > 0) d.payers[p.id] = m; } });
+  } else {
+    const { total } = hgBillCalc(ev, d);
+    d.payers = d.one && total > 0 ? { [d.one]: total } : {};
+  }
 }
-const hgDraftBill = () => ({ items: hgDraft.items, charges: hgDraft.charges });
+// "কার কত পড়ল / কে কত দিল / কার কী বাকি": লাইভ ফল
+function hgBillResult(ev, d, c) {
+  const rows = ev.participants.map(p => ({ p, sh: c.b.perPerson[p.id] || 0, pd: d.payers[p.id] || 0 })).filter(r => r.sh || r.pd);
+  if (!rows.length || !(c.total > 0)) return `<p class="hint" style="margin:0">${L('আইটেম বা মোট বিল লিখলে এখানে প্রত্যেকের হিসাব দেখাবে।', 'Add items or a total and each person\'s result shows here.')}</p>`;
+  const net = r => r.pd - r.sh;
+  return `<div class="bres head"><span></span><small>${L('ভাগ', 'Share')}</small><small>${L('দিয়েছে', 'Paid')}</small><small>${L('ফল', 'Result')}</small></div>`
+    + rows.map(r => `<div class="bres"><b>${esc(r.p.name)}</b><span>${hgM(r.sh)}</span><span>${r.pd ? hgM(r.pd) : '—'}</span>`
+      + `<span class="${net(r) > 0 ? 'pos' : net(r) < 0 ? 'neg' : ''}">${net(r) > 0 ? L('পাবে', 'gets') + ' ' + hgM(net(r)) : net(r) < 0 ? L('দেবে', 'owes') + ' ' + hgM(-net(r)) : '✓'}</span></div>`).join('')
+    + `<div class="hint" style="margin:8px 0 0">${L('ফল = যা দিয়েছে − নিজের ভাগ। সবুজ = টাকা ফেরত পাবে, লাল = টাকা দিতে হবে।', 'Result = what they paid − their share. Green = gets money back, red = owes.')}</div>`;
+}
 function hgBillSheet() {
   const ev = hgCur(), d = hgDraft;
-  const ids = ev.participants.map(p => p.id);
-  const b = hgBill(hgDraftBill(), ids);
-  const computed = b.total, actual = d.actual || 0;
-  const diff = actual > 0 ? actual - computed : 0;
-  const total = actual > 0 ? actual : computed;
+  const c = hgBillCalc(ev, d), b = c.b, total = c.total, diff = c.diff, actual = c.actual;
   const paid = sum(Object.values(d.payers));
-  const people = hgPickable(ev, Object.keys(d.payers));
+  const people = hgPickable(ev, Object.keys(d.payers).concat(d.equalIds, d.items.map(i => i.orderedBy).filter(Boolean)));
   const itemRow = it => {
     const tot = Math.round(it.unit) * Math.max(1, Math.floor(it.qty || 1));
     const who = it.type === 'shared' ? (it.sharers || []).map(id => esc(pName(ev, id))).join(', ') : esc(pName(ev, it.orderedBy));
@@ -40,35 +68,53 @@ function hgBillSheet() {
       <span class="lic">🍴</span><span class="lmain"><b>${esc(it.name)} ${it.qty > 1 ? `× ${it.qty}` : ''}</b><small>${it.type === 'shared' ? L('শেয়ার্ড', 'shared') : L('একজনের', 'individual')}: ${who}${it.status === 'cancelled' ? ' · ' + L('বাতিল', 'cancelled') : ''}</small></span>
       <span class="lend"><b>${hgM(tot)}</b><small>${hgM(it.unit)} ${L('প্রতিটা', 'each')}</small></span></button>${delBtn('hg-item-del', it.id)}</div>`;
   };
-  const chRow = c => `<div class="lwrap"><button type="button" class="lrow" data-action="hg-charge-edit" data-id="${c.id}"><span class="lic">${c.kind === 'discount' ? '🏷️' : '➕'}</span>
-      <span class="lmain"><b>${esc(c.name)}</b><small>${c.kind === 'discount' ? L('ডিসকাউন্ট', 'discount') : L('চার্জ', 'charge')} · ${({ proportional: L('আনুপাতিক', 'proportional'), equal: L('সমান', 'equal'), custom: L('কাস্টম', 'custom') })[c.method]}</small></span>
-      <span class="lend"><b class="${c.kind === 'discount' ? 'pos' : ''}">${c.kind === 'discount' ? '−' : ''}${hgM(c.amt)}</b></span></button>${delBtn('hg-charge-del', c.id)}</div>`;
-  return `${sheetHead(d.id ? L('বিল এডিট', 'Edit bill') : L('রেস্টুরেন্ট বিল', 'Restaurant bill'), esc(ev.name))}
+  const chRow = x => `<div class="lwrap"><button type="button" class="lrow" data-action="hg-charge-edit" data-id="${x.id}"><span class="lic">${x.kind === 'discount' ? '🏷️' : '➕'}</span>
+      <span class="lmain"><b>${esc(x.name)}</b><small>${x.kind === 'discount' ? L('ডিসকাউন্ট', 'discount') : L('চার্জ', 'charge')} · ${({ proportional: L('আনুপাতিক', 'proportional'), equal: L('সমান', 'equal'), custom: L('কাস্টম', 'custom') })[x.method]}</small></span>
+      <span class="lend"><b class="${x.kind === 'discount' ? 'pos' : ''}">${x.kind === 'discount' ? '−' : ''}${hgM(x.amt)}</b></span></button>${delBtn('hg-charge-del', x.id)}</div>`;
+  const chip = (name, p, on, type = 'checkbox') => `<label class="chip"><input type="${type}" name="${name}" ${type === 'radio' ? `value="${p.id}"` : ''} ${on ? 'checked' : ''}><span>${esc(p.name)}</span></label>`;
+  const multi = d.payMode === 'multi';
+  return `${sheetHead(d.id ? L('বিল এডিট', 'Edit bill') : L('রেস্টুরেন্টের বিল', 'Restaurant bill'), esc(ev.name))}
   <form data-form="hg-bill" data-live="hg-bill" data-rid="${d.receipt || ''}" autocomplete="off">
-    <label class="field"><span>${L('রেস্টুরেন্টের নাম / বিবরণ', 'Restaurant / title')}</span><input class="input" name="title" maxlength="60" value="${esc(d.title)}"></label>
+    <label class="field"><span>1. ${L('কোথায় খাওয়া হলো?', 'Where did you eat?')}</span><input class="input" name="title" maxlength="60" value="${esc(d.title)}" placeholder="${L('রেস্টুরেন্টের নাম', 'Restaurant name')}"></label>
     <div class="row2"><label class="field"><span>${L('খাত', 'Category')}</span>${hgSelect('cat', ev.cats.map(k => [k.k, esc(isEN() ? k.en : k.bn)]), d.category)}</label>
       <label class="field"><span>${L('তারিখ', 'Date')}</span><input class="input" type="date" name="date" value="${esc(d.date)}"></label></div>
-    <div class="section-title">${L('আইটেম', 'Items')} · ${d.items.length}</div>
-    ${d.items.length ? `<div class="list">${d.items.map(itemRow).join('')}</div>` : `<p class="hint">${L('খাবারের আইটেম যোগ করুন। যার অর্ডার তার হিসাবে, শেয়ার করলে ভাগ হবে।', 'Add the dishes. Individual items go to the orderer, shared ones are split.')}</p>`}
+
+    <div class="field"><span class="flabel">2. ${L('বিলটা কীভাবে ভাগ হবে?', 'How should the bill be split?')}</span>
+      ${seg('bmode', [['items', '🍴 ' + L('যে যা খেয়েছে', 'By what each ate')], ['equal', '👥 ' + L('সবাই সমান', 'Equally')]], d.eq ? 'equal' : 'items')}
+      <div class="hint" data-grp="m-items">${L('প্রতিটা খাবারে লিখবেন কে কে খেয়েছে। যে যা খেয়েছে তার দাম তার হিসাবে যাবে, ভ্যাট/সার্ভিস আনুপাতিক হারে।', 'Add each dish and who had it. Everyone pays for what they ate, VAT/service in proportion.')}</div>
+      <div class="hint" data-grp="m-equal">${L('মোট বিল নিচে লিখুন, বাছাই করা সবাই সমান ভাগে দেবে। খাবারের তালিকা লেখা ঐচ্ছিক, শুধু মনে রাখার জন্য।', 'Type the total below; everyone ticked pays an equal share. Listing dishes is optional, just a memo.')}</div></div>
+    <div class="field" data-grp="m-equal"><span class="flabel">${L('কারা ভাগ করবে?', 'Who shares it?')}</span>
+      <div class="chips">${people.map(p => chip('eq_' + p.id, p, d.equalIds.includes(p.id))).join('')}<button type="button" class="qchip" data-action="hg-bill-eqall">${L('সবাই', 'Everyone')}</button></div></div>
+
+    <div class="section-title"><span data-grp="m-items">3. ${L('কী কী খাওয়া হলো', 'What was eaten')}</span><span data-grp="m-equal">3. ${L('খাবারের তালিকা (ঐচ্ছিক)', 'Dishes (optional)')}</span> · ${d.items.length}</div>
+    ${d.items.length ? `<div class="list">${d.items.map(itemRow).join('')}</div>` : `<p class="hint">${L('এখনও কোনো আইটেম নেই।', 'No items yet.')}</p>`}
     <button type="button" class="btn block mt8" data-action="hg-item-add">${icon('plus', 18)} ${L('আইটেম যোগ', 'Add item')}</button>
     <div class="section-title">${L('ভ্যাট, সার্ভিস চার্জ, ডিসকাউন্ট', 'VAT, service charge, discount')} · ${d.charges.length}</div>
     ${d.charges.length ? `<div class="list">${d.charges.map(chRow).join('')}</div>` : ''}
     <div class="btn-row mt8"><button type="button" class="btn sm" data-action="hg-charge-add" data-kind="charge">${icon('plus', 16)} ${L('চার্জ', 'Charge')}</button><button type="button" class="btn sm" data-action="hg-charge-add" data-kind="discount">${icon('plus', 16)} ${L('ডিসকাউন্ট', 'Discount')}</button></div>
-    <section class="hg-totals">
+    <section class="hg-totals" data-grp="m-items">
       <div><span>${L('আইটেম মোট', 'Items subtotal')}</span><b>${hgM(b.subtotal)}</b></div>
       ${b.discountTotal ? `<div><span>${L('ডিসকাউন্ট', 'Discount')}</span><b class="pos">−${hgM(b.discountTotal)}</b></div>` : ''}
       ${b.chargeTotal ? `<div><span>${L('চার্জ (ভ্যাট/সার্ভিস)', 'Charges')}</span><b>${hgM(b.chargeTotal)}</b></div>` : ''}
-      <div class="total"><span>${L('হিসাব করা বিল', 'Calculated bill')}</span><b>${hgM(computed)}</b></div></section>
-    <label class="field"><span>${L('রেস্টুরেন্টের আসল বিল (মিলিয়ে দেখতে, ঐচ্ছিক)', 'Actual bill from restaurant (to reconcile, optional)')}</span>${moneyInput('actual', hgTaka(actual), hgTaka(computed))}</label>
-    <div class="preview ${diff ? 'warn' : ''}" data-recon>${diff ? hgReconHtml(diff) : (actual ? `${L('আইটেমের হিসাব আসল বিলের সাথে মিলেছে', 'Items match the actual bill')} ✓` : '')}</div>
+      <div class="total"><span>${L('হিসাব করা বিল', 'Calculated bill')}</span><b>${hgM(b.total)}</b></div></section>
+
+    <label class="field"><span data-grp="m-items">4. ${L('রেস্টুরেন্টের আসল বিল (মিলিয়ে দেখতে, ঐচ্ছিক)', 'Actual bill (to reconcile, optional)')}</span><span data-grp="m-equal">4. ${L('মোট বিল কত?', 'Total bill')}</span>${moneyInput('actual', hgTaka(actual), hgTaka(b.total))}</label>
+    <div class="preview ${diff ? 'warn' : ''}" data-recon>${diff ? hgReconHtml(diff) : (actual && !d.eq ? `${L('আইটেমের হিসাব আসল বিলের সাথে মিলেছে', 'Items match the actual bill')} ✓` : '')}</div>
     <button type="button" class="btn block ${diff ? '' : 'hidden'}" data-action="hg-bill-adjust" data-adjbtn>${L('পার্থক্যটা "অ্যাডজাস্টমেন্ট" চার্জ হিসেবে যোগ করুন', 'Add the difference as an adjustment charge')}</button>
-    ${b.errors.length ? `<div class="form-error">${b.errors.map(e => `<div>• ${esc(hgErr(e))}</div>`).join('')}</div>` : ''}
-    <div class="field mt8"><span class="flabel">${L('কে কত দিয়েছে?', 'Who paid how much?')} <small class="muted">(${L('মোট', 'total')} ${hgM(total)})</small></span>
-      ${people.map(p => `<label class="hg-vrow"><span>${esc(p.name)}</span>${moneyInput('pay_' + p.id, hgTaka(d.payers[p.id]), '0')}</label>`).join('')}
-      <div class="btn-row mt8">${hgSelect('payAll', people.map(p => [p.id, esc(p.name)]), (ev.participants.find(p => p.org) || people[0] || {}).id)}<button type="button" class="btn sm" data-action="hg-bill-payall">${L('পুরোটা সে দিয়েছে', 'Paid it all')}</button></div>
+    ${b.errors.length && !d.eq ? `<div class="form-error">${b.errors.map(e => `<div>• ${esc(hgErr(e))}</div>`).join('')}</div>` : ''}
+
+    <div class="field mt8"><span class="flabel">5. ${L('টাকা কে দিয়েছে?', 'Who paid?')} <small class="muted">(${L('মোট', 'total')} <b data-tot>${hgM(total)}</b>)</small></span>
+      ${seg('bpay', [['one', L('একজন পুরোটা দিয়েছে', 'One person paid it all')], ['multi', L('একাধিক জন দিয়েছে', 'Several people paid')]], d.payMode)}
+      <div data-grp="p-one"><div class="chips payerchips">${people.map(p => chip('one', p, d.one === p.id, 'radio')).join('')}</div>
+        <div class="hint">${L('যে পুরো বিল দিয়েছে তাকে বাছুন। বাকিরা তাকে নিজের ভাগ ফেরত দেবে।', 'Pick whoever paid the whole bill. Others will pay their share back to them.')}</div></div>
+      <div class="hg-multi" data-grp="p-multi"><span class="hint">${L('১) যারা টাকা দিয়েছে তাদের ট্যাপ করুন, প্রত্যেকে নিজের ভাগ দিয়েছে ধরে বসে যাবে। ২) আলাদা হলে নিচের ঘরে নিজে লিখুন বা "বাকিটা" চাপুন।', '1) Tap who paid, each is filled with their own share. 2) If different, type it or press "Rest".')}</span>
+        <div class="chips payerchips">${people.map(p => chip('pp_' + p.id, p, !!d.payers[p.id])).join('')}<button type="button" class="qchip" data-action="hg-bill-allchips">${L('সবাই', 'Everyone')}</button></div>
+        <div class="chips payerchips"><button type="button" class="qchip" data-action="hg-bill-spread">${L('⚖️ যে দেয়নি তার অংশ বাকিরা ভাগ করে নিক', '⚖️ Others cover whoever did not pay')}</button></div>
+        ${people.map(p => `<div class="payrow"><span class="pn">${esc(p.name)}</span><div class="pi">${moneyInput('pay_' + p.id, hgTaka(d.payers[p.id]), '0')}</div><button type="button" class="qchip" data-action="hg-bill-rest" data-p="${p.id}">${L('বাকিটা', 'Rest')}</button></div>`).join('')}</div>
       <div class="preview ${paid === total ? '' : 'warn'}" data-paysum>${paid === total ? `${L('মোট দেওয়া', 'Paid total')} <b class="pos">${hgM(paid)}</b> ✓` : L(`মোট দেওয়া ${hgM(paid)}, বিল ${hgM(total)}`, `Paid ${hgM(paid)} vs bill ${hgM(total)}`)}</div></div>
-    ${b.ok && total > 0 ? `<section class="card"><div class="card-head"><h2>${L('কার কত পড়ল', 'Each person pays')}</h2></div>${ev.participants.filter(p => b.perPerson[p.id] > 0).map(p => `<div class="prows"><div><span>${esc(p.name)}</span><b>${hgM(b.perPerson[p.id])}</b></div></div>`).join('')}</section>` : ''}
-    <label class="field"><span>${L('নোট', 'Note')}</span><input class="input" name="desc" maxlength="160" value="${esc(d.desc)}"></label>
+
+    <section class="card"><div class="card-head"><h2>👥 ${L('এক নজরে সবার হিসাব', 'Everyone at a glance')}</h2></div><div data-result>${hgBillResult(ev, d, c)}</div></section>
+    <label class="field"><span>6. ${L('বিবরণ / নোট (ঐচ্ছিক)', 'Description / note (optional)')}</span><input class="input" name="desc" maxlength="160" value="${esc(d.desc)}" placeholder="${L('যেমন: জন্মদিনের ডিনার', 'e.g. birthday dinner')}"></label>
     ${hgReceiptBlock(d.receipt)}
     <button class="btn primary block" type="submit">${d.id ? L('সেভ করুন', 'Save') : L('বিল যোগ করুন', 'Add bill')}</button>
     ${d.id ? `<button type="button" class="btn danger block mt8" data-action="hg-del-expense" data-id="${d.id}">${icon('trash', 18)} ${L('ডিলিট', 'Delete')}</button>` : ''}
@@ -77,16 +123,39 @@ function hgBillSheet() {
 const hgReconHtml = diff => (diff > 0
   ? L(`আসল বিল হিসাবের চেয়ে <b>${hgM(diff)}</b> বেশি। কোনো চার্জ বাদ পড়েছে? না হলে অ্যাডজাস্টমেন্ট যোগ করুন, নইলে এটা কারও হিসাবে গোপনে যাবে না আর সেভও হবে না।`, `The actual bill is <b>${hgM(diff)}</b> higher than the items. Missing a charge? Otherwise add an adjustment; it will not be silently charged to anyone and the bill cannot be saved until resolved.`)
   : L(`আসল বিল হিসাবের চেয়ে <b>${hgM(-diff)}</b> কম। কোনো ডিসকাউন্ট বাদ পড়েছে? অ্যাডজাস্টমেন্ট (ডিসকাউন্ট) যোগ করুন।`, `The actual bill is <b>${hgM(-diff)}</b> lower than the items. Missing a discount? Add an adjustment discount.`));
-LIVE['hg-bill'] = f => {
+LIVE['hg-bill'] = (f, t) => {
   const ev = hgCur(); if (!ev || !hgDraft) return;
+  const d = hgDraft;
+  const name = t && t.name ? t.name : '';
+  if (name.startsWith('pay_')) f.dataset.ppAuto = '';
+  if (name === 'each') f.dataset.eachAuto = '';
   hgBillSync();
-  const b = hgBill(hgDraftBill(), ev.participants.map(p => p.id));
-  const actual = hgDraft.actual, diff = actual > 0 ? actual - b.total : 0, total = actual > 0 ? actual : b.total;
-  const rc = $('[data-recon]', f); rc.className = 'preview' + (diff ? ' warn' : ''); rc.innerHTML = diff ? hgReconHtml(diff) : (actual ? `${L('আইটেমের হিসাব আসল বিলের সাথে মিলেছে', 'Items match the actual bill')} ✓` : '');
-  $('[data-adjbtn]', f).classList.toggle('hidden', !diff);
-  const paid = sum(Object.values(hgDraft.payers)), ps = $('[data-paysum]', f);
-  ps.className = 'preview' + (paid === total ? '' : ' warn');
-  ps.innerHTML = paid === total ? `${L('মোট দেওয়া', 'Paid total')} <b class="pos">${hgM(paid)}</b> ✓` : L(`মোট দেওয়া ${hgM(paid)}, বিল ${hgM(total)}`, `Paid ${hgM(paid)} vs bill ${hgM(total)}`);
+  let c = hgBillCalc(ev, d);
+  // একাধিক জন দিলে: টিক দেওয়া প্রত্যেকে নিজের ভাগ দেয় (বাদ দিলে অন্যদের অঙ্ক বাড়ে না)
+  if (d.payMode === 'multi' && (name.startsWith('pp_') || name === 'pmode' || name === 'bpay' || ((name === 'actual' || name === 'bmode' || name.startsWith('eq_')) && f.dataset.ppAuto === '1'))) {
+    const ids = ev.participants.map(p => p.id);
+    const ticked = ev.participants.filter(p => f.elements['pp_' + p.id] && f.elements['pp_' + p.id].checked).map(p => p.id);
+    const grp = ids.filter(id => c.b.perPerson[id] > 0);
+    const per = Math.floor(c.total / (grp.length || 1) / 100) * 100;
+    const flat = hgDist(c.total, Object.fromEntries(ticked.map(id => [id, 1])), ids, 100);
+    const spread = f.dataset.pmode === 'spread';
+    ev.participants.forEach(p => {
+      const i = f.elements['pay_' + p.id]; if (!i) return;
+      const v = !ticked.includes(p.id) ? 0 : spread ? flat[p.id] : (c.b.perPerson[p.id] || per);
+      i.value = v ? fromMinor(v) : '';
+    });
+    f.dataset.ppAuto = '1';
+    hgBillSync(); c = hgBillCalc(ev, d);
+  }
+  f.querySelectorAll('[data-grp^="m-"]').forEach(x => x.classList.toggle('hidden', x.dataset.grp !== (d.eq ? 'm-equal' : 'm-items')));
+  f.querySelectorAll('[data-grp^="p-"]').forEach(x => x.classList.toggle('hidden', x.dataset.grp !== (d.payMode === 'multi' ? 'p-multi' : 'p-one')));
+  const rc = $('[data-recon]', f); rc.className = 'preview' + (c.diff ? ' warn' : ''); rc.innerHTML = c.diff ? hgReconHtml(c.diff) : (c.actual && !d.eq ? `${L('আইটেমের হিসাব আসল বিলের সাথে মিলেছে', 'Items match the actual bill')} ✓` : '');
+  $('[data-adjbtn]', f).classList.toggle('hidden', !c.diff);
+  const paid = sum(Object.values(d.payers)), ps = $('[data-paysum]', f);
+  ps.className = 'preview' + (paid === c.total ? '' : ' warn');
+  ps.innerHTML = paid === c.total ? `${L('মোট দেওয়া', 'Paid total')} <b class="pos">${hgM(paid)}</b> ✓` : L(`মোট দেওয়া ${hgM(paid)}, বিল ${hgM(c.total)}${paid < c.total ? `, আরও ${hgM(c.total - paid)} কেউ দিয়েছে লিখুন` : ', বেশি দেওয়া হয়েছে'}`, `Paid ${hgM(paid)} vs bill ${hgM(c.total)}`);
+  const tt = $('[data-tot]', f); if (tt) tt.textContent = hgM(c.total);
+  $('[data-result]', f).innerHTML = hgBillResult(ev, d, c);
 };
 function hgItemForm(it) {
   const ev = hgCur(), d = hgDraft;
@@ -229,6 +298,7 @@ Object.assign(FORMS, {
       it.qty = sum(Object.values(it.weights));
     } else {
       const who = ev.participants.filter(p => f.elements['sh_' + p.id] && f.elements['sh_' + p.id].checked).map(p => p.id);
+      if (!who.length && hgDraft.eq) who.push(...hgDraft.equalIds);
       if (!who.length) return fail(f, L('কে কে খেয়েছে তাদের বাছুন', 'Pick who had it'));
       if (who.length === 1) { it.type = 'individual'; it.orderedBy = who[0]; }
       else {
@@ -264,13 +334,14 @@ Object.assign(FORMS, {
     hgBillSync();
     const d = hgDraft;
     if (!d.title) return fail(f, L('রেস্টুরেন্ট বা বিলের নাম লিখুন', 'Enter the restaurant / bill title'), 'title');
-    if (!d.items.some(i => i.status !== 'cancelled')) return fail(f, L('অন্তত একটা আইটেম যোগ করুন', 'Add at least one item'));
+    if (d.eq && !d.equalIds.length) return fail(f, L('কারা ভাগ করবে তাদের বাছুন', 'Pick who shares the bill'));
+    if (!d.eq && !d.items.some(i => i.status !== 'cancelled')) return fail(f, L('অন্তত একটা আইটেম যোগ করুন (অথবা "সবাই সমান" বেছে মোট বিল লিখুন)', 'Add at least one item (or choose "Equally" and type the total)'));
     const ids = ev.participants.map(p => p.id);
     const b = hgBill(hgDraftBill(), ids);
     if (!b.ok) return fail(f, hgErr(b.errors[0]));
-    if (d.actual > 0 && d.actual !== b.total) return fail(f, L(`আসল বিল ${hgM(d.actual)} কিন্তু আইটেমের হিসাব ${hgM(b.total)}। পার্থক্য মেটান (অ্যাডজাস্টমেন্ট যোগ করুন বা আইটেম ঠিক করুন)।`, `Actual bill ${hgM(d.actual)} differs from the items ${hgM(b.total)}. Resolve it with an adjustment or fix the items.`));
-    const total = d.actual > 0 ? d.actual : b.total;
-    if (total <= 0) return fail(f, L('বিলের মোট শূন্য', 'The bill total is zero'));
+    if (!d.eq && d.actual > 0 && d.actual !== b.total) return fail(f, L(`আসল বিল ${hgM(d.actual)} কিন্তু আইটেমের হিসাব ${hgM(b.total)}। পার্থক্য মেটান (অ্যাডজাস্টমেন্ট যোগ করুন বা আইটেম ঠিক করুন)।`, `Actual bill ${hgM(d.actual)} differs from the items ${hgM(b.total)}. Resolve it with an adjustment or fix the items.`));
+    const total = d.eq ? b.total : (d.actual > 0 ? d.actual : b.total);
+    if (total <= 0) return fail(f, L('মোট বিল লিখুন', 'Enter the total bill'), 'actual');
     const payers = Object.entries(d.payers).map(([pid, amt]) => ({ pid, amt })).filter(x => x.amt > 0);
     const ps = sum(payers.map(p => p.amt));
     if (!payers.length) return fail(f, L('কে টাকা দিয়েছে তা দিন', 'Enter who paid'));
@@ -278,7 +349,7 @@ Object.assign(FORMS, {
     const x = d.id ? ev.expenses.find(e => e.id === d.id) : { id: uid(), createdAt: Date.now() };
     if (!x) return;
     const before = d.id ? `${x.title} ${hgM(x.total)}` : '';
-    Object.assign(x, { title: d.title, category: d.category, date: d.date, desc: d.desc, total, payers, mode: 'bill', method: 'bill', spec: {}, bill: { items: d.items, charges: d.charges }, billActual: d.actual || 0, alloc: b.perPerson, updatedAt: Date.now(), receipt: x.receipt || d.receipt || null });
+    Object.assign(x, { title: d.title, category: d.category, date: d.date, desc: d.desc, total, payers, mode: 'bill', method: 'bill', spec: {}, bill: d.eq ? { items: d.items, charges: d.charges, equal: d.equalIds, equalTotal: d.actual || 0 } : { items: d.items, charges: d.charges }, billActual: d.actual || 0, alloc: b.perPerson, updatedAt: Date.now(), receipt: x.receipt || d.receipt || null });
     if (!d.id) ev.expenses.push(x);
     const okImg = await hgSaveReceipt(x, f);
     hgDraft = null; closeSheet();
@@ -425,11 +496,31 @@ Object.assign(ACTIONS, {
   'hg-charge-edit': el => { hgBillSync(); openSheet(hgChargeForm(hgIdEl(hgDraft.charges, el.dataset.id))); },
   'hg-charge-del': el => { hgBillSync(); hgDraft.charges = hgDraft.charges.filter(x => x.id !== el.dataset.id); openSheet(hgBillSheet()); },
   'hg-bill-back': () => openSheet(hgBillSheet()),
-  'hg-bill-payall': el => {
-    const f = el.closest('form'), ev = hgCur(); hgBillSync();
-    const b = hgBill(hgDraftBill(), ev.participants.map(p => p.id)); const total = hgDraft.actual > 0 ? hgDraft.actual : b.total; const who = f.elements.payAll.value;
-    ev.participants.forEach(p => { const i = f.elements['pay_' + p.id]; if (i) i.value = p.id === who ? fromMinor(total) : ''; });
-    LIVE['hg-bill'](f);
+  'hg-bill-eqall': el => {
+    const f = el.closest('form'), ev = hgCur(); if (!f || !ev) return;
+    ev.participants.forEach(p => { const c = f.elements['eq_' + p.id]; if (c) c.checked = p.active; });
+    runLive(f, f.elements['eq_' + ev.participants[0].id]);
+  },
+  'hg-bill-allchips': el => {
+    const f = el.closest('form'), ev = hgCur(); if (!f || !ev) return;
+    ev.participants.forEach(p => { const c = f.elements['pp_' + p.id]; if (c) c.checked = p.active; });
+    runLive(f, f.elements['pp_' + ev.participants[0].id]);
+  },
+  'hg-bill-spread': el => {
+    const f = el.closest('form'); if (!f) return;
+    const on = f.dataset.pmode !== 'spread';
+    f.dataset.pmode = on ? 'spread' : ''; el.classList.toggle('on', on); f.dataset.ppAuto = '1';
+    runLive(f, { name: 'pmode' });
+  },
+  'hg-bill-rest': el => {
+    const f = el.closest('form'), ev = hgCur(); if (!f || !ev || !hgDraft) return;
+    hgBillSync();
+    const total = hgBillCalc(ev, hgDraft).total;
+    const others = sum(ev.participants.filter(p => p.id !== el.dataset.p && f.elements['pay_' + p.id]).map(p => toMinor(f.elements['pay_' + p.id].value)));
+    if (total <= others) { toast(L('বাকি নেই: মোট টাকা আগেই দেওয়া হয়ে গেছে। কারও অঙ্ক কমালে বাকিটা বসবে।', 'Nothing left: the total is already covered. Lower one amount first.')); return; }
+    f.dataset.ppAuto = '';
+    f.elements['pay_' + el.dataset.p].value = fromMinor(total - others);
+    runLive(f, f.elements['pay_' + el.dataset.p]);
   },
   'hg-bill-adjust': () => {
     hgBillSync(); const ev = hgCur();

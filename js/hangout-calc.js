@@ -161,6 +161,13 @@ function hgBill(bill, ids) {
   const perPerson = {}; ids.forEach(id => { perPerson[id] = 0; });
   Object.values(cells).forEach(row => ids.forEach(id => { perPerson[id] += row[id]; }));
   Object.values(chargeAlloc).forEach(row => ids.forEach(id => { perPerson[id] += row[id]; }));
+  // সবাই সমান ভাগে: আইটেম শুধু মেনু; মোট বিল (equalTotal বা আইটেম থেকে) বাছাই করা কয়েকজনের মধ্যে পুরো টাকায় ভাগ হয়
+  const eq = (bill.equal || []).filter(id => ids.includes(id));
+  if (eq.length) {
+    const tot = bill.equalTotal > 0 ? Math.round(bill.equalTotal) : subtotal - discountTotal + chargeTotal;
+    const share = hgDist(tot, Object.fromEntries(eq.map(id => [id, 1])), ids, 100);
+    return { ok: tot > 0, errors: tot > 0 ? [] : [{ code: 'bill_zero' }], subtotal, discountTotal, chargeTotal, total: tot, perPerson: share, cells, chargeAlloc, equal: true };
+  }
   const total = subtotal - discountTotal + chargeTotal;
   if (hgSum(Object.values(perPerson)) !== total) errors.push({ code: 'bill_sum', diff: total - hgSum(Object.values(perPerson)) });
   return { ok: !errors.length, errors, subtotal, discountTotal, chargeTotal, total, perPerson, cells, chargeAlloc };
