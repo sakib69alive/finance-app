@@ -76,11 +76,11 @@ const ICONS = {
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z"/>',
 };
 const icon = (n, s = 22) => `<svg class="ic" viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;
-const LOGO = '<svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1D1D1B"/><stop offset="1" stop-color="#34332F"/></linearGradient></defs><rect width="512" height="512" fill="url(#lg)"/><rect x="102" y="271" width="68" height="138" rx="18" fill="#A9A4F5" opacity=".7"/><rect x="222" y="195" width="68" height="215" rx="18" fill="#A9A4F5" opacity=".92"/><rect x="342" y="102" width="68" height="307" rx="18" fill="#F6D98B"/></svg>';
+const LOGO = '<svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1D1D1B"/><stop offset="1" stop-color="#34332F"/></linearGradient></defs><rect width="512" height="512" fill="url(#lg)"/><rect x="102" y="271" width="68" height="138" rx="18" fill="#CDB985" opacity=".7"/><rect x="222" y="195" width="68" height="215" rx="18" fill="#CDB985" opacity=".92"/><rect x="342" y="102" width="68" height="307" rx="18" fill="#F6D98B"/></svg>';
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v42'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v45'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 // boot.js লোডের আগে খালি শেল; আসল ডেটা boot.js-এ মডিউল রেজিস্টার হওয়ার পরে আসে
 let state = { settings: { lang: 'bn' }, batches: [] };

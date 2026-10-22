@@ -67,13 +67,34 @@ function hgStepsCard(ev, c) {
 function hgWhoPays(ev, c, withClose) {
   const act = ev.status === 'active';
   const allEven = c.gross > 0 && ev.participants.every(p => c.final[p.id] === 0);
+  const owe = sum(ev.participants.map(p => Math.max(0, -c.final[p.id])));
+  const moved = sum(Object.values(c.byKind.settlement));
+  const prog = owe + moved > 0 ? moved / (owe + moved) * 100 : 0;
   const share = c.gross > 0 ? `<div class="hg-share3 mt8"><button type="button" class="btn sm" data-action="hg-copy-short">📋 ${L('ছোট কপি', 'Short copy')}</button><button type="button" class="btn sm" data-action="hg-rep-pdf">📄 PDF</button><button type="button" class="btn sm" data-action="hg-wa-share">📤 WhatsApp</button></div>` : '';
+  const head = c.suggestions.length ? `<div class="sg-hero"><div><small>${L('এখনও মেটানো বাকি', 'Still to settle')}</small><b>${hgM(owe)}</b></div><div><small>${L('লেনদেন লাগবে', 'Payments needed')}</small><b>${c.suggestions.length}</b></div></div>
+      <div class="sg-prog"><div class="bbar"><span style="--c:var(--good);width:${prog.toFixed(1)}%"></span></div><small>${L(`এ পর্যন্ত মিটেছে ${hgM(moved)}`, `${hgM(moved)} settled so far`)}</small></div>` : '';
+  const card = (s, i) => {
+    const from = hgPerson(ev, s.from), later = hgIsLater(from, c);
+    return `<div class="sg"><div class="sg-top"><div class="sg-who">${hgAv(from)}<i>→</i>${hgAv(hgPerson(ev, s.to))}</div>
+        <div class="sg-t"><b>${hgNm(ev, s.from)}</b> <span>${L('দেবে', 'pays')}</span> <b>${hgNm(ev, s.to)}</b>${later ? `<small class="warnc">⏳ ${L('পরের বিলে দেবে বলেছে', 'will pay with the next bill')}</small>` : ''}</div>
+        <div class="sg-a">${hgM(s.amt)}</div></div>
+      ${act ? `<div class="sg-btns"><button type="button" class="btn sm primary" data-action="hg-pay-full" data-i="${i}">${L('দিয়েছে ✓', 'Paid ✓')}</button><button type="button" class="btn sm" data-action="hg-pay-opts" data-i="${i}">${L('অন্যভাবে', 'Other way')}</button></div>` : ''}</div>`;
+  };
   return `<section class="card"><div class="card-head"><h2>${L('কে কাকে দেবে', 'Who pays whom')}</h2></div>
-    ${c.suggestions.length ? c.suggestions.map((s, i) => `<div class="hg-sugg"><span><b>${esc(pName(ev, s.from))}</b>${hgIsLater(hgPerson(ev, s.from), c) ? ' ⏳' : ''} ${L('দেবে', 'pays')} <b>${esc(pName(ev, s.to))}</b></span><b>${hgM(s.amt)}</b>
-        ${act ? `<button type="button" class="btn sm" data-action="hg-pay-full" data-i="${i}">${L('দিয়েছে ✓', 'Paid ✓')}</button><button type="button" class="btn sm" data-action="hg-pay-opts" data-i="${i}" aria-label="${L('আরও বিকল্প', 'More options')}">⋯</button>` : ''}</div>`).join('') +
-      `<p class="hint">${L('টাকা দিলে "দিয়েছে ✓"। কিছুটা দিলে বা অন্য কেউ দিলে ⋯ চাপুন।', 'Tap "Paid ✓" once paid. For part payment or someone else paying, tap ⋯.')}</p>${share}`
+    ${c.suggestions.length ? head + c.suggestions.map(card).join('') + `<p class="hint">${L('টাকা দিলে "দিয়েছে ✓"। কিছুটা দিলে বা অন্য কেউ দিলে "কিছুটা / অন্যভাবে"।', 'Tap "Paid ✓" once paid. For part payment or someone else paying use "Part / other".')}</p>${share}`
       : (allEven ? `<div class="bsum ok"><b>🎉 ${L('সবার হিসাব মিটে গেছে!', 'Everyone is even!')}</b><span>${L('কাউকে কিছু দিতে হবে না।', 'Nobody owes anything.')}</span></div>${withClose && act ? `<button type="button" class="btn primary block mt8" data-action="hg-settle">${icon('check', 18)} ${L('ইভেন্ট বন্ধ করুন', 'Close the event')}</button>` : ''}${share}`
         : `<p class="hint">${ev.participants.length >= 2 ? L('খরচ যোগ করলে এখানে দেখাবে কে কাকে কত দেবে।', 'Add expenses and this shows who pays whom.') : L('আগে বন্ধুদের নাম যোগ করুন।', 'Add your friends first.')}</p>`)}</section>`;
+}
+// প্রত্যেকের অবস্থা এক নজরে: বাঁয়ে লাল = দেবে, ডানে সবুজ = পাবে
+function hgBalanceBoard(ev, c) {
+  const rows = ev.participants.filter(p => p.active || c.final[p.id] !== 0).map(p => ({ p, f: c.final[p.id] })).sort((x, y) => y.f - x.f);
+  const max = Math.max(1, ...rows.map(r => Math.abs(r.f)));
+  if (!c.gross) return '';
+  return `<section class="card"><div class="card-head"><h2>${L('সবার অবস্থা', 'Where everyone stands')}</h2></div>
+    <div class="bb-legend"><span class="neg">◀ ${L('দেবে', 'Owes')}</span><span class="pos">${L('পাবে', 'Gets')} ▶</span></div>
+    ${rows.map(({ p, f }) => `<button type="button" class="bb2" data-action="hg-person-stmt" data-p="${p.id}">${hgAv(p)}
+      <span class="bb2-m"><span class="bb2-n"><b>${esc(p.name)}${p.org ? ' 👑' : ''}</b><b class="${f > 0 ? 'pos' : f < 0 ? 'neg' : ''}">${f === 0 ? L('মিটেছে ✓', 'Even ✓') : (f > 0 ? '+' : '−') + hgM(Math.abs(f))}</b></span>
+        <span class="bb2-bar"><i class="neg" style="width:${f < 0 ? (Math.abs(f) / max * 50).toFixed(1) : 0}%"></i><u></u><i class="pos" style="width:${f > 0 ? (f / max * 50).toFixed(1) : 0}%"></i></span></span></button>`).join('')}</section>`;
 }
 
 function hgHomeTab(ev, c) {
@@ -110,8 +131,8 @@ function hgHomeTab(ev, c) {
   ${hgPlanCard(ev, c)}
   ${hgWhereCard(ev, c)}
   <section class="card"><div class="card-head"><h2>${L('বন্ধুদের হিসাব', 'Each friend')}</h2><button type="button" class="link" data-action="tab" data-tab="people">${L('বিস্তারিত', 'Details')}</button></div>
-    <div class="plist">${hgOweRows(ev, c).map(({ p, f }) => `<button type="button" class="prow" data-action="hg-person-stmt" data-p="${p.id}"><span class="hgp-av">${esc((p.name || '?').trim().charAt(0).toUpperCase())}</span>
-      <span class="pmain"><b>${esc(p.name)}</b><small>${L('দিয়েছে', 'Paid')} ${hgM(c.paid[p.id])} · ${L('তার ভাগ', 'Share')} ${hgM(c.share[p.id])}</small></span>
+    <div class="plist">${hgOweRows(ev, c).map(({ p, f }) => `<button type="button" class="prow" data-action="hg-person-stmt" data-p="${p.id}">${hgAv(p)}
+      <span class="pmain"><b>${esc(p.name)}${p.org ? ' 👑' : ''}</b><small>${L('দিয়েছে', 'Paid')} ${hgM(c.paid[p.id])} · ${L('তার ভাগ', 'Share')} ${hgM(c.share[p.id])}</small></span>
       <span class="pend"><b class="${f > 0 ? 'pos' : f < 0 ? 'neg' : ''}">${hgM(Math.abs(f))}</b><small>${f > 0 ? L('পাবে', 'gets') : f < 0 ? L('দেবে', 'owes') : L('মিটেছে', 'even')}</small></span></button>`).join('') || `<p class="hint">${L('এখনও কেউ নেই।', 'No one yet.')}</p>`}</div></section>
   <details class="card more-card"><summary>${L('আরও হিসাব দেখুন', 'More details')} ${icon('chev', 20)}</summary>
     <section class="stat-grid">
@@ -137,6 +158,7 @@ function hgSettleTab(ev, c) {
   return `<div class="page-head"><h1>${L('মেটানো', 'Settle up')}</h1></div>
     ${hgIssuesHtml(ev, c)}
     ${hgWhoPays(ev, c, true)}
+    ${hgBalanceBoard(ev, c)}
     ${hgPoolCard(ev, c)}
     ${ev.status === 'active' ? `<button type="button" class="btn block" data-action="hg-money">💰 ${L('টাকা জমা নিলাম / শোধ পেলাম / ফেরত দিলাম', 'Money received / paid / returned')}</button>` : ''}
     <section class="card mt12"><div class="card-head"><h2>${L('টাকা দেওয়া-নেওয়া', 'Payments')}</h2></div>
@@ -205,6 +227,12 @@ document.addEventListener('input', e => { const el = e.target.closest && e.targe
 document.addEventListener('change', e => { const el = e.target.closest && e.target.closest('select[data-hg-filter], input[type=date][data-hg-filter]'); if (el) { hgF[el.dataset.hgFilter] = el.value; hgRefreshEventList(); } });
 
 Object.assign(ACTIONS, {
+  'hg-remind': async el => {
+    const ev = hgCur(); if (!ev) return; const s = hgEventCalc(ev).suggestions[Number(el.dataset.i)]; if (!s) return;
+    const txt = L(`${pName(ev, s.from)}, "${ev.name}"-এ তোমার ${hgM(s.amt)} বাকি আছে। ${pName(ev, s.to)}-কে সুবিধামতো দিয়ে দিও। ধন্যবাদ 🙏`, `Hi ${pName(ev, s.from)}, you still owe ${hgM(s.amt)} for "${ev.name}". Please pay ${pName(ev, s.to)} when you can. Thanks 🙏`);
+    try { if (navigator.share) { await navigator.share({ title: ev.name, text: txt }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+    toast((await hgCopy(txt)) ? L('বার্তা কপি হয়েছে, বন্ধুকে পাঠান', 'Message copied, send it to your friend') : L('কপি করা যায়নি', 'Could not copy'));
+  },
   'hg-events': () => openSheet(hgEventsSheet()),
   'hg-friends': () => openSheet(hgFriendsSheet()),
   'hg-history': () => { const ev = hgCur(); if (ev) openSheet(`${sheetHead(L('ইতিহাস ও সম্প্রতি মোছা', 'History & recently deleted'), esc(ev.name))}${hgSecHistory(ev)}`); },
@@ -300,8 +328,8 @@ Object.assign(ACTIONS, {
    সব সংখ্যা hgPlanCalc (hangout-calc.js) থেকে, কোনো আলাদা সূত্র নেই।
    ========================================================= */
 const hgPlanCatLabel = (ev, k) => (k === 'reserve' ? L('জরুরি রিজার্ভ', 'Emergency reserve') : hgCatLabel(ev, k));
-const HG_PLAN_COLORS = ['#A9A4F5', '#6FC3B2', '#F6C453', '#F29BB5', '#A8D58F', '#8FB5F5', '#E8A87C', '#C9B6E4', '#B5B5A0'];
-const hgPlanColor = (ev, k) => (k === 'reserve' ? '#7FE3A0' : HG_PLAN_COLORS[Math.max(0, ev.cats.findIndex(c => c.k === k)) % HG_PLAN_COLORS.length]);
+const HG_PLAN_COLORS = ['#D9BE6A', '#6FC3B2', '#F6C453', '#F29BB5', '#A8D58F', '#8FB5F5', '#E8A87C', '#C9B6E4', '#B5B5A0'];
+const hgPlanColor = (ev, k) => { if (k === 'reserve') return '#7FE3A0'; const i = ev.cats.findIndex(c => c.k === k); return HG_PLAN_COLORS[(i >= 0 ? i : [...k].reduce((q, ch) => q + ch.charCodeAt(0), 0)) % HG_PLAN_COLORS.length]; };
 // কোন খাতে বেশি গেলে কী করা যায়, ঘটনা-ভিত্তিক পরামর্শ
 const HG_CAT_TIPS = {
   food: ['খাবারে বেশি গেছে। বাকি বেলায় সস্তা জায়গা বা শেয়ার করে অর্ডার করুন।', 'Food is running high. Pick cheaper places or share dishes for the next meals.'],
@@ -362,34 +390,71 @@ function hgPlanCard(ev, c) {
         <div class="brow-meta"><span>${L('হঠাৎ খরচের জন্য হাতে রাখুন', 'Keep it for surprises')}</span><span class="${p.remaining >= p.reserveIdeal ? 'ok' : 'bad'}">${p.remaining >= p.reserveIdeal ? L('ঠিক আছে', 'OK') : hgM(p.reserveIdeal - Math.max(0, p.remaining)) + ' ' + L('কম', 'short')}</span></div></div></div></section>`;
 }
 
-/* ---------- বাজেট ঠিক করার ফর্ম: নিজের খাত যোগ, লাইভ % হিসাব ---------- */
-function hgPlanRow(ev, k, label, split, totTaka, isNew, tone) {
-  const ro = k === 'reserve';
-  return `<div class="bfrow ${ro ? 'auto' : ''}" data-row="${k}" ${isNew ? 'data-newrow="1"' : ''}><div class="bf-name"><i class="dot" style="--c:${hgPlanColor(ev, k)}"></i><span><b>${esc(label)}</b><small>${ro ? L('বাকিটা নিজে আসে', 'Takes whatever is left') : isNew ? `<a href="#" data-action="hg-plan-delcat" data-k="${k}" class="delnew">${L('বাদ দিন', 'remove')}</a>` : ''}</small></span></div>
+/* ---------- বাজেট ঠিক করার ফর্ম: অনুষ্ঠান বেছে নিন, সব খাত বদলান, নিজের খাত যোগ করুন ---------- */
+// অনুষ্ঠান ভেদে আদর্শ ভাগের পেছনের যুক্তি (অনলাইনে প্রচলিত পরিকল্পনা-নির্দেশিকা থেকে নেওয়া সাধারণ হিসাব, নিজের মতো বদলান)
+const HG_PLAN_NOTE = {
+  birthday_home: ['বাসায় জন্মদিনে ভেন্যু লাগে না, তাই খাবার ও কেক মিলে প্রায় অর্ধেক (৩৫-৪০%) যায়। সাজসজ্জা ১৫-২০%, বিনোদন ও রিটার্ন গিফট বাকিটা।', 'At home there is no venue cost, so food and cake take about half (35-40%). Decoration 15-20%, entertainment and favours the rest.'],
+  birthday_party: ['ভেন্যুতে করলে ভেন্যু ও খাবারই সবচেয়ে বড় (প্রায় ২৫% করে)। তারপর সাজসজ্জা, বিনোদন ১০-১৫% করে। শেষে কিছু ফাঁকা রাখুন।', 'At a venue, venue and food are the biggest (about 25% each), then decoration and entertainment at 10-15% each. Keep a buffer.'],
+  birthday: ['জন্মদিনের সাধারণ ভাগ: খাবার ও কেক ৩৫-৪০%, ভেন্যু বা বিনোদন ২০-২৫%, সাজসজ্জা ১৫-২০%, বাকিটা রিজার্ভ।', 'A typical birthday: food and cake 35-40%, venue or entertainment 20-25%, decoration 15-20%, the rest as buffer.'],
+  party: ['পার্টিতে খাবার-পানীয় মিলে ৫৫-৬০%। বিনোদন আর সাজসজ্জা ১০-১৫% করে। পরিষ্কারের খরচ ভুলে যাবেন না।', 'At a party food and drinks take 55-60%. Entertainment and decoration 10-15% each. Do not forget cleaning.'],
+  wedding: ['বিয়ে বা বড় অনুষ্ঠানে ভেন্যু ও খাবার মিলে প্রায় অর্ধেক। ছবি ১০%, সাজসজ্জা-ফুল ১৫% এর কাছাকাছি, পোশাক ৫-৮%। অন্তত ৫-১০% রিজার্ভ রাখুন।', 'For a wedding or large event, venue and catering take about half. Photos 10%, decor and flowers near 15%, attire 5-8%. Keep at least 5-10% in reserve.'],
+  eid: ['ঈদে পোশাক ও বাজার সবচেয়ে বেশি যায়। ঈদি, উপহার আর যাতায়াত আলাদা রাখুন, নাহলে শেষে টান পড়ে।', 'On Eid clothes and groceries take the most. Set eidi, gifts and travel apart, or the end gets tight.'],
+  restaurant: ['রেস্টুরেন্টে খাবার ও পানীয় ৮০-৮৫%। বাকিটা ভ্যাট, সার্ভিস চার্জ আর টিপস।', 'At a restaurant food and drinks take 80-85%; the rest is VAT, service charge and tips.'],
+  tour: ['ভ্রমণে থাকা ও যাতায়াত মিলে অর্ধেকের বেশি। খাবার ২০% এর কাছাকাছি। টিকেট আর হঠাৎ খরচের জন্য রিজার্ভ রাখুন।', 'On a trip, stay and travel take over half; food about 20%. Keep reserve for tickets and surprises.'],
+  picnic: ['পিকনিকে বাজার সবচেয়ে বড় (প্রায় ৪০%), তারপর যাতায়াত আর জায়গা ভাড়া।', 'At a picnic groceries are biggest (about 40%), then transport and place rent.'],
+  dayout: ['ডে আউটে খাবার, যাতায়াত আর টিকেট প্রায় সমান সমান।', 'On a day out, food, transport and tickets are roughly equal.'],
+  hotel: ['হোটেলে রুম ভাড়াই প্রায় ৭০%। বাকিটা খাবার ও অন্যান্য চার্জ।', 'At a hotel the room is about 70%; the rest is food and other charges.'],
+  hangout: ['আড্ডায় খাবার প্রায় অর্ধেক, যাতায়াত এক-চতুর্থাংশ।', 'In a hangout food is about half and transport a quarter.'],
+  family: ['পরিবার নিয়ে বেড়াতে খাবার ও যাতায়াত মিলে প্রায় ৫৫%।', 'On a family outing food and transport take about 55%.'],
+  office: ['অফিস বা ক্লাসের খরচে খাবার ও নাস্তাই বেশির ভাগ।', 'For office or class costs food and snacks are most of it.'],
+  household: ['মাসিক সংসারে ঘরভাড়া ২৫-৩৫%, বাজার ১৫-২৫%, যাতায়াত ১০% এর কাছাকাছি। সঞ্চয় আগে আলাদা করে রাখা ভালো (১০-২০%)। ৫০/৩০/২০ নিয়মও চলে: প্রয়োজন ৫০%, শখ ৩০%, সঞ্চয় ২০%।', 'For a monthly household rent is 25-35%, groceries 15-25%, transport near 10%. Set savings aside first (10-20%). The 50/30/20 rule also works: needs 50%, wants 30%, savings 20%.'],
+  daily: ['দৈনিক বাজারে চাল-ডাল-তেল, সবজি আর মাছ-মাংসই প্রায় পুরোটা।', 'Daily market spend is mostly staples, vegetables and meat or fish.'],
+  transport: ['যাতায়াতে ভাড়া সবচেয়ে বেশি, তারপর জ্বালানি।', 'In transport, fares come first, then fuel.'],
+  shopping: ['শপিংয়ে বেশির ভাগ কেনাকাটা, বাকিটা অন্যান্য।', 'Mostly purchases, the rest other costs.'],
+  custom: ['নিজের মতো খাত বানান। নিচে "আরও খাত" থেকে যত খুশি যোগ করুন।', 'Build your own list. Add as many as you like from "More categories" below.'],
+};
+const HG_PLAN_SKIP = ['discount', 'vat', 'service', 'other_charges'];
+const hgPlanTplId = ev => (ev.plan && ev.plan.tpl) || (HG_PLAN_DEFAULTS[ev.type] ? ev.type : 'custom');
+function hgPlanRow(ev, k, label, split, totTaka) {
+  const ro = k === 'reserve', hint = HG_CAT_HINT[k];
+  return `<div class="bfrow ${ro ? 'auto' : ''}" data-row="${k}"><div class="bf-name"><i class="dot" style="--c:${hgPlanColor(ev, k)}"></i><span><b>${esc(label)}</b><small>${ro ? L('বাকিটা নিজে আসে', 'Takes whatever is left') : hint ? esc(hint[isEN() ? 1 : 0]) : ''}</small></span>${ro ? '' : `<button type="button" class="rmrow" data-action="hg-plan-delcat" data-k="${k}" aria-label="${L('বাদ দিন', 'Remove')}">✕</button>`}</div>
     <div class="input-wrap"><input class="input" name="pc_${k}" inputmode="decimal" value="${esc(split || 0)}" ${ro ? 'readonly tabindex="-1"' : ''} aria-label="${esc(label)} %"><span class="suffix">%</span></div>
     <div class="input-wrap has-prefix"><span class="prefix">৳</span><input class="input" name="rs_${k}" inputmode="numeric" value="${Math.round(totTaka * (split || 0) / 100) || ''}" ${ro ? 'readonly tabindex="-1"' : ''} aria-label="${esc(label)} ৳"></div></div>`;
 }
+const hgPlanRowsHtml = (ev, keys, split, totTaka, names) => keys.map(k => hgPlanRow(ev, k, (names && names[k]) || hgPlanCatLabel(ev, k), split[k], totTaka)).join('');
+function hgPlanAddChips(ev, f) {
+  const have = new Set(hgPlanKeys(f));
+  return Object.keys(HG_CAT).filter(k => !have.has(k) && !HG_PLAN_SKIP.includes(k)).map(k => `<button type="button" class="cchip" data-action="hg-plan-addk" data-k="${k}">＋ ${esc(HG_CAT[k][isEN() ? 1 : 0])}</button>`).join('')
+    + ev.cats.filter(c => c.k.startsWith('c_') && !have.has(c.k)).map(c => `<button type="button" class="cchip" data-action="hg-plan-addk" data-k="${c.k}">＋ ${esc(isEN() ? c.en : c.bn)}</button>`).join('');
+}
 function hgPlanSheet(ev) {
-  const plan = ev.plan || { people: ev.participants.filter(p => p.active).length || ev.participants.length || 2, mode: 'total', total: 0, each: 0, split: hgPlanDefaults(ev.type, ev.cats.map(c => c.k)) };
-  const keys = ev.cats.map(c => c.k);
-  const split = Object.assign({}, plan.split);
-  keys.forEach(k => { if (split[k] == null) split[k] = 0; });
+  const tpl = hgPlanTplId(ev);
+  const tplKeys = t => (HG_PLAN_DEFAULTS[t] ? Object.keys(HG_PLAN_DEFAULTS[t]) : ev.cats.map(c => c.k));
+  const plan = ev.plan || { people: ev.participants.filter(p => p.active).length || ev.participants.length || 2, mode: 'total', total: 0, each: 0, split: hgPlanDefaults(tpl, tplKeys(tpl)) };
+  const keys = Object.keys(plan.split).filter(k => k !== 'reserve');
   const tot = hgPlanTotals(plan, plan.people);
   const amtVal = plan.mode === 'each' ? plan.each : plan.total;
-  const rows = keys.map(k => hgPlanRow(ev, k, hgPlanCatLabel(ev, k), split[k], fromMinor(tot.total), false)).join('');
+  const tplIds = Object.keys(HG_TYPES).filter(t => HG_PLAN_DEFAULTS[t]).concat('custom');
+  const tplChips = Object.keys(HG_TYPE_GROUPS).map(g => `<div class="tplgrp"><small>${esc(HG_TYPE_GROUPS[g][isEN() ? 1 : 0])}</small><div class="catpick">${tplIds.filter(t => (HG_TYPES[t] || {}).g === g).map(t => `<button type="button" class="cchip ${t === tpl ? 'on' : ''}" data-action="hg-plan-tpl" data-t="${t}">${HG_TYPES[t].icon} ${esc(hgTypeLabel(t))}</button>`).join('')}</div></div>`).join('');
   return `${sheetHead(L('আদর্শ বাজেট', 'Ideal budget'), esc(ev.name))}
-  <form data-form="hg-plan" data-live="hg-plan" data-newcats="{}" autocomplete="off">
-    <label class="field"><span>1. ${L('কয়জন যাবে / ছিল?', 'How many people?')}</span><input class="input" name="people" inputmode="numeric" value="${esc(plan.people)}"></label>
-    <div class="field"><span class="flabel">2. ${L('কীভাবে বাজেট ধরবেন?', 'How do you want to set it?')}</span>${seg('mode', [['total', L('মোট কত টাকা', 'Total money')], ['each', L('জনপ্রতি কত টাকা', 'Per person')]], plan.mode)}</div>
-    <label class="field"><span data-amtlabel>3. ${plan.mode === 'each' ? L('প্রত্যেকে কত টাকা দেবে?', 'How much per person?') : L('মোট কত টাকার বাজেট?', 'Total budget?')}</span>${moneyInput('amt', hgTaka(amtVal), plan.mode === 'each' ? L('যেমন: 5000', 'e.g. 5000') : L('যেমন: 25000', 'e.g. 25000'))}</label>
-    <div class="preview" data-plantotal></div>
-    <div class="section-title">${L('কোথায় কত খরচ করা ঠিক', 'Where the money should go')}</div>
-    <div class="plansticky" data-plansplit></div>
-    <div class="bf-head"><span>${L('খাত', 'Category')}</span><span>%</span><span>৳</span></div>
-    <div data-planrows>${rows}</div><div data-newrows></div>${hgPlanRow(ev, 'reserve', L('জরুরি রিজার্ভ', 'Emergency reserve'), split.reserve, fromMinor(tot.total), false)}
-    <div class="addcat"><span class="flabel">${L('নিজের খাত যোগ করুন (যেমন: ফুল, গিফট, বখশিশ)', 'Add your own category (e.g. flowers, gifts, tips)')}</span>
-      <div class="btn-row"><input class="input" name="newcat" maxlength="30" placeholder="${L('খাতের নাম', 'Category name')}"><button type="button" class="btn sm" data-action="hg-plan-addcat">${icon('plus', 16)} ${L('যোগ', 'Add')}</button></div></div>
-    <p class="hint">${L('অ্যাপ ইভেন্টের ধরন দেখে আদর্শ ভাগ ধরে দিয়েছে। % বা ৳ যেকোনোটা বদলান, অন্যটা মিলে যাবে। উপরের বারে দেখুন কত % ব্যবহার হলো আর কত বাকি।', 'The app suggests a split for this event type. Change either % or ৳ and the other follows. The bar above shows what is used and what is left.')}</p>
+  <form data-form="hg-plan" data-live="hg-plan" data-newcats="{}" data-tpl="${tpl}" autocomplete="off">
+    <section class="bstep"><h3 class="bs-h"><i>1</i><span>${L('কিসের বাজেট?', 'What is the budget for?')}</span></h3>
+      <p class="hint" style="margin-top:0">${L('একটা বেছে নিন, অ্যাপ সেই অনুষ্ঠানের জন্য সাধারণত যেভাবে টাকা ভাগ হয় সেভাবে সাজিয়ে দেবে। পছন্দ না হলে নিচে সবকিছু নিজের মতো বদলাতে পারবেন।', 'Pick one and the app lays out the usual split for it. If you do not like it, you can change everything below.')}</p>
+      ${tplChips}<div class="bsum mt8" data-plannote><b>💡 ${L('সাধারণ হিসাব', 'The usual split')}</b><span>${esc((HG_PLAN_NOTE[tpl] || HG_PLAN_NOTE.custom)[isEN() ? 1 : 0])}</span></div></section>
+    <section class="bstep"><h3 class="bs-h"><i>2</i><span>${L('কত টাকা, কয়জন?', 'How much money, how many people?')}</span></h3>
+      <label class="field"><span>${L('কয়জন যাবে / ছিল?', 'How many people?')}</span><input class="input" name="people" inputmode="numeric" value="${esc(plan.people)}"></label>
+      <div class="field"><span class="flabel">${L('কীভাবে বাজেট ধরবেন?', 'How do you want to set it?')}</span>${seg('mode', [['total', L('মোট কত টাকা', 'Total money')], ['each', L('জনপ্রতি কত টাকা', 'Per person')]], plan.mode)}</div>
+      <label class="field"><span data-amtlabel>${plan.mode === 'each' ? L('প্রত্যেকে কত টাকা দেবে?', 'How much per person?') : L('মোট কত টাকার বাজেট?', 'Total budget?')}</span>${moneyInput('amt', hgTaka(amtVal), plan.mode === 'each' ? L('যেমন: 5000', 'e.g. 5000') : L('যেমন: 25000', 'e.g. 25000'))}</label>
+      <div class="preview" data-plantotal></div></section>
+    <section class="bstep"><h3 class="bs-h"><i>3</i><span>${L('কোথায় কত খরচ করা ঠিক', 'Where the money should go')}</span></h3>
+      <div class="plansticky" data-plansplit></div>
+      <div class="bf-head"><span>${L('খাত', 'Category')}</span><span>%</span><span>৳</span></div>
+      <div data-planrows>${hgPlanRowsHtml(ev, keys, plan.split, fromMinor(tot.total))}</div>${hgPlanRow(ev, 'reserve', L('জরুরি রিজার্ভ', 'Emergency reserve'), plan.split.reserve, fromMinor(tot.total))}
+      <p class="hint">${L('% বা ৳ যেকোনোটা বদলান, অন্যটা মিলে যাবে। কোনো খাত দরকার না হলে ✕ চাপুন।', 'Change either % or ৳ and the other follows. Tap ✕ to drop a category you do not need.')}</p></section>
+    <section class="bstep"><h3 class="bs-h"><i>4</i><span>${L('আরও খাত যোগ করুন', 'More categories')}</span></h3>
+      <div class="catpick" data-planadd></div>
+      <div class="addcat"><span class="flabel">${L('নিজের খাত (যেমন: ফুল, বখশিশ, গিফট র‍্যাপ)', 'Your own category (e.g. flowers, tips, gift wrap)')}</span>
+        <div class="btn-row"><input class="input" name="newcat" maxlength="30" placeholder="${L('খাতের নাম', 'Category name')}"><button type="button" class="btn sm" data-action="hg-plan-addcat">${icon('plus', 16)} ${L('যোগ', 'Add')}</button></div></div></section>
     <button type="button" class="btn block" data-action="hg-plan-reset">${L('আদর্শ ভাগে ফিরুন', 'Back to the suggested split')}</button>
     <button class="btn primary block mt8" type="submit">${L('সেভ করুন', 'Save budget')}</button>
     ${ev.plan ? `<button type="button" class="btn danger block mt8" data-action="hg-plan-del">${icon('trash', 18)} ${L('বাজেট মুছুন', 'Remove budget')}</button>` : ''}</form>`;
@@ -401,11 +466,12 @@ function hgPlanForm(f) {
   return { people, mode, amt, tot: hgPlanTotals({ people, mode, total: mode === 'total' ? amt : 0, each: mode === 'each' ? amt : 0 }, people) };
 }
 const hgPlanKeys = f => $$('input[name^="pc_"]', f).map(i => i.name.slice(3)).filter(k => k !== 'reserve');
+const hgPlanNames = f => { try { return JSON.parse(f.dataset.newcats || '{}'); } catch (e) { return {}; } };
 LIVE['hg-plan'] = (f, t) => {
   const ev = hgCur(); if (!ev) return;
   const keys = hgPlanKeys(f);
   const r = hgPlanForm(f);
-  $('[data-amtlabel]', f).textContent = '3. ' + (r.mode === 'each' ? L('প্রত্যেকে কত টাকা দেবে?', 'How much per person?') : L('মোট কত টাকার বাজেট?', 'Total budget?'));
+  $('[data-amtlabel]', f).textContent = r.mode === 'each' ? L('প্রত্যেকে কত টাকা দেবে?', 'How much per person?') : L('মোট কত টাকার বাজেট?', 'Total budget?');
   const totTaka = fromMinor(r.tot.total);
   if (t && t.name) {
     if (t.name.startsWith('rs_') && totTaka > 0) f.elements['pc_' + t.name.slice(3)].value = round2(hgNum(t.value) / totTaka * 100);
@@ -422,7 +488,19 @@ LIVE['hg-plan'] = (f, t) => {
   sp.className = 'plansticky' + (over ? ' bad' : '');
   sp.innerHTML = `<div class="ps-top"><span>${over ? L(`<b>${pct(used - 100)}</b> বেশি! কোনো খাত কমান`, `<b>${pct(used - 100)}</b> too much! Lower a category`) : L(`ব্যবহার <b>${pct(used)}</b> · বাকি (রিজার্ভ) <b>${pct(res)}</b>`, `Used <b>${pct(used)}</b> · left (reserve) <b>${pct(res)}</b>`)}</span><span>${totTaka > 0 ? hgM(toMinor(totTaka * Math.min(used, 100) / 100)) + ' / ' + hgM(r.tot.total) : ''}</span></div>
     <div class="bbar"><span class="${over ? 'over' : used > 92 ? 'near' : ''}" style="--c:var(--lav);width:${clamp(used, 0, 100).toFixed(1)}%"></span></div>`;
+  const ad = $('[data-planadd]', f); if (ad && (!t || t.name === undefined || t.refresh)) ad.innerHTML = hgPlanAddChips(ev, f);
 };
+// টেমপ্লেট বা রিসেটের পর সারিগুলো নতুন করে সাজানো
+function hgPlanApply(f, t) {
+  const ev = hgCur(); if (!ev) return;
+  const keys = HG_PLAN_DEFAULTS[t] ? Object.keys(HG_PLAN_DEFAULTS[t]) : ev.cats.map(c => c.k);
+  const split = hgPlanDefaults(t, keys), tot = hgPlanForm(f).tot;
+  f.dataset.tpl = t; f.dataset.newcats = '{}';
+  $('[data-planrows]', f).innerHTML = hgPlanRowsHtml(ev, keys, split, fromMinor(tot.total));
+  $$('[data-action="hg-plan-tpl"]', f).forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  $('[data-plannote] span', f).textContent = (HG_PLAN_NOTE[t] || HG_PLAN_NOTE.custom)[isEN() ? 1 : 0];
+  runLive(f, f.elements.amt); const ad = $('[data-planadd]', f); ad.innerHTML = hgPlanAddChips(ev, f);
+}
 Object.assign(FORMS, {
   'hg-plan': f => {
     const ev = hgGuard(); if (!ev) return;
@@ -430,50 +508,63 @@ Object.assign(FORMS, {
     if (r.people < 1) return fail(f, L('কয়জন তা লিখুন (কমপক্ষে ১)', 'Enter how many people (at least 1)'), 'people');
     if (r.amt <= 0) return fail(f, L('টাকার পরিমাণ লিখুন', 'Enter the amount'), 'amt');
     const keys = hgPlanKeys(f);
+    if (!keys.length) return fail(f, L('অন্তত একটা খাত রাখুন', 'Keep at least one category'));
     const split = {};
     keys.forEach(k => { split[k] = clamp(hgNum(f.elements['pc_' + k].value), 0, 100); });
     const used = sum(Object.values(split));
     if (used > 100.001) return fail(f, L(`খাতগুলোর মোট ${pct(used)} হয়ে গেছে, ১০০% এর বেশি হতে পারে না`, `The categories add up to ${pct(used)}, over 100%`));
-    // নিজের যোগ করা খাত ইভেন্টের খাতের তালিকায়ও ঢোকে, তাই খরচ লেখার সময় বাছা যায়
-    let nc = {}; try { nc = JSON.parse(f.dataset.newcats || '{}'); } catch (e) { nc = {}; }
-    keys.forEach(k => { if (nc[k] && !ev.cats.some(c => c.k === k)) ev.cats.push({ k, bn: nc[k], en: nc[k] }); });
+    // বাজেটের খাত ইভেন্টের খাতের তালিকায়ও ঢোকে, তাই খরচ লেখার সময় বাছা যায়
+    const nc = hgPlanNames(f);
+    keys.forEach(k => {
+      if (ev.cats.some(c => c.k === k)) return;
+      if (HG_CAT[k]) ev.cats.push({ k, bn: HG_CAT[k][0], en: HG_CAT[k][1] });
+      else if (nc[k]) ev.cats.push({ k, bn: nc[k], en: nc[k] });
+    });
     split.reserve = round2(100 - used);
-    ev.plan = { people: r.people, mode: r.mode, total: r.tot.total, each: r.tot.each, split, updatedAt: Date.now() };
+    ev.plan = { people: r.people, mode: r.mode, total: r.tot.total, each: r.tot.each, split, tpl: f.dataset.tpl, updatedAt: Date.now() };
     closeSheet(); hgCommit(ev, `বাজেট ঠিক করা হয়েছে: ${hgM(r.tot.total)} (${r.people} জন)`, `Budget set: ${hgM(r.tot.total)} (${r.people} people)`);
   },
 });
 Object.assign(ACTIONS, {
-  'hg-plan': () => { const ev = hgGuard(); if (ev) openSheet(hgPlanSheet(ev)); },
-  'hg-plan-reset': el => {
+  'hg-plan': () => { const ev = hgGuard(); if (ev) { openSheet(hgPlanSheet(ev)); const f = $('form[data-form="hg-plan"]'); if (f) runLive(f, { refresh: true }); } },
+  'hg-plan-tpl': el => { const f = el.closest('form'); if (f) hgPlanApply(f, el.dataset.t); },
+  'hg-plan-reset': el => { const f = el.closest('form'); if (f) hgPlanApply(f, f.dataset.tpl); },
+  'hg-plan-addk': el => {
     const ev = hgCur(), f = el.closest('form'); if (!ev || !f) return;
-    const base = ev.cats.map(c => c.k), d = hgPlanDefaults(ev.type, base);
-    hgPlanKeys(f).forEach(k => { f.elements['pc_' + k].value = base.includes(k) ? (d[k] || 0) : 0; });
-    runLive(f, f.elements.amt);
+    const k = el.dataset.k, tot = hgPlanForm(f).tot, names = hgPlanNames(f);
+    if (!HG_CAT[k] && !ev.cats.some(c => c.k === k) && !names[k]) return;
+    $('[data-planrows]', f).insertAdjacentHTML('beforeend', hgPlanRow(ev, k, names[k] || hgPlanCatLabel(ev, k), 0, fromMinor(tot.total)));
+    const inp = f.elements['pc_' + k]; if (inp) { inp.focus(); inp.select(); }
+    runLive(f, { refresh: true }); $('[data-planadd]', f).innerHTML = hgPlanAddChips(ev, f);
   },
   'hg-plan-addcat': el => {
     const ev = hgCur(), f = el.closest('form'); if (!ev || !f) return;
     const name = f.elements.newcat.value.trim();
     if (!name) return fail(f, L('খাতের নাম লিখুন', 'Type a category name'), 'newcat');
-    if (hgPlanKeys(f).some(k => ((ev.cats.find(c => c.k === k) || {}).bn || '').toLowerCase() === name.toLowerCase()) || Object.values(JSON.parse(f.dataset.newcats || '{}')).some(n => n.toLowerCase() === name.toLowerCase())) return fail(f, L('এই নামে খাত আগে থেকেই আছে', 'That category already exists'), 'newcat');
-    const k = 'c_' + uid(), nc = JSON.parse(f.dataset.newcats || '{}'); nc[k] = name; f.dataset.newcats = JSON.stringify(nc);
+    const low = name.toLowerCase(), nc = hgPlanNames(f);
+    const exists = hgPlanKeys(f).some(k => hgPlanCatLabel(ev, k).toLowerCase() === low || (nc[k] || '').toLowerCase() === low);
+    if (exists) return fail(f, L('এই নামে খাত আগে থেকেই আছে', 'That category already exists'), 'newcat');
+    const old = ev.cats.find(c => c.bn.toLowerCase() === low || c.en.toLowerCase() === low);
+    const k = old ? old.k : 'c_' + uid();
+    if (!old) { nc[k] = name; f.dataset.newcats = JSON.stringify(nc); }
     const tot = hgPlanForm(f).tot;
-    const box = $('[data-newrows]', f); box.insertAdjacentHTML('beforeend', hgPlanRow(ev, k, name, 0, fromMinor(tot.total), true));
+    $('[data-planrows]', f).insertAdjacentHTML('beforeend', hgPlanRow(ev, k, name, 0, fromMinor(tot.total)));
     f.elements.newcat.value = ''; $$('.form-error', f).forEach(n => n.remove());
     const inp = f.elements['pc_' + k]; if (inp) inp.focus();
-    runLive(f, null);
+    runLive(f, { refresh: true }); $('[data-planadd]', f).innerHTML = hgPlanAddChips(ev, f);
   },
   'hg-plan-delcat': el => {
-    const f = el.closest('form'), k = el.dataset.k; if (!f) return;
+    const ev = hgCur(), f = el.closest('form'), k = el.dataset.k; if (!f) return;
     const row = $(`[data-row="${k}"]`, f); if (row) row.remove();
-    const nc = JSON.parse(f.dataset.newcats || '{}'); delete nc[k]; f.dataset.newcats = JSON.stringify(nc);
-    runLive(f, null);
+    const nc = hgPlanNames(f); delete nc[k]; f.dataset.newcats = JSON.stringify(nc);
+    runLive(f, { refresh: true }); if (ev) $('[data-planadd]', f).innerHTML = hgPlanAddChips(ev, f);
   },
   'hg-plan-del': () => { const ev = hgGuard(); if (!ev) return; if (!confirm(L('বাজেট মুছবেন? খরচের হিসাব ঠিক থাকবে।', 'Remove the budget? Your expenses stay.'))) return; delete ev.plan; closeSheet(); hgCommit(ev, 'বাজেট মোছা হয়েছে', 'Budget removed'); },
 });
 
 /* =========================================================
    টাকার লেনদেন (জমা নেওয়া, দেনা শোধ, ফেরত দেওয়া) এক ট্যাপের সুবিধা + জমা টাকার (পুলের) হিসাব
-   অর্গানাইজারের কাছে বন্ধুরা টাকা জমা দিতে পারে; কার কত জমা, কত খরচ, কাকে কত ফেরত দিতে হবে সব দেখায়।
+   হোস্টের কাছে বন্ধুরা টাকা জমা দিতে পারে; কার কত জমা, কত খরচ, কাকে কত ফেরত দিতে হবে সব দেখায়।
    ========================================================= */
 function hgPoolCard(ev, c) {
   const p = hgPoolCalc(ev, c);
@@ -610,15 +701,6 @@ Object.assign(ACTIONS, {
     p.later = { to: s.to, amt: s.amt, at: Date.now() };
     if (sheetOpen) closeSheet();
     hgCommit(ev, `${p.name}: ${hgM(s.amt)} পরের বিলে দেবে`, `${p.name} will pay ${hgM(s.amt)} with the next bill`, L(`${p.name}-এর ${hgM(s.amt)} পরের বিলে ধরা থাকল`, `${p.name}'s ${hgM(s.amt)} is kept for the next bill`));
-  },
-  'hg-pay-rest': el => {
-    const f = el.closest('form'), ev = hgCur(); if (!f || !ev) return;
-    const total = toMinor(f.elements.total.value);
-    const others = hgSum(ev.participants.filter(p => p.id !== el.dataset.p && f.elements['pay_' + p.id]).map(p => toMinor(f.elements['pay_' + p.id].value)));
-    if (total <= others) { toast(L('বাকি নেই: মোট টাকা আগেই দেওয়া হয়ে গেছে। কারও অঙ্ক কমালে বাকিটা বসবে।', 'Nothing left: the total is already covered. Lower one amount first.')); return; }
-    f.dataset.ppAuto = '';
-    f.elements['pay_' + el.dataset.p].value = fromMinor(total - others);
-    runLive(f, f.elements['pay_' + el.dataset.p]);
   },
   'hg-pay-spread': el => {
     const f = el.closest('form'), ev = hgCur(); if (!f || !ev) return;
