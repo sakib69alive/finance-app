@@ -216,6 +216,7 @@ function hgSecPeople(ev, c) {
     ${ev.participants.map(p => `<section class="card hg-pcard">${hgPersonCard(ev, c, p)}
       ${p.phone ? `<p class="hint">📞 ${esc(p.phone)}</p>` : ''}${p.note ? `<p class="hint">${esc(p.note)}</p>` : ''}
       ${p.joinedOn ? `<p class="hint">🗓️ ${L('যোগ দিয়েছে', 'Joined')}: ${fmtDate(p.joinedOn)}${ev.start ? ' (' + hgDayLabel(ev, p.joinedOn) + ')' : ''}</p>` : ''}
+      <button type="button" class="btn sm block mt8" data-action="hg-person-stmt" data-p="${p.id}">📒 ${L('পুরো হিসাব দেখুন', 'Full statement')}</button>
       ${ev.status === 'active' && !p.org ? `<button type="button" class="btn sm block mt8" data-action="hg-money" data-p="${p.id}">💰 ${L('টাকা জমা / শোধ / ফেরত', 'Money in / paid / returned')}</button>` : ''}
       ${ev.status === 'active' ? `<div class="btn-row mt8"><button type="button" class="btn sm" data-action="hg-edit-person" data-id="${p.id}">${icon('edit', 16)} ${L('এডিট', 'Edit')}</button>
         <button type="button" class="btn sm" data-action="hg-toggle-person" data-id="${p.id}">${p.active ? L('নিষ্ক্রিয় করুন', 'Deactivate') : L('সক্রিয় করুন', 'Activate')}</button>

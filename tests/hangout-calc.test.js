@@ -380,4 +380,22 @@ t('pool: a friend who still owes pays the organizer, and nothing is counted as a
   const p = hgPoolCalc(ev, hgEventCalc(ev)); assert.ok(!p.hasPool); assert.strictEqual(p.rows[0].settled, T(500)); assert.strictEqual(p.rows[0].final, 0);
 });
 
+
+// ---- একজনের পুরো স্টেটমেন্ট ----
+const { hgPersonStatement } = C;
+t('statement: every person running balance ends exactly at the final balance, all the way to 1 poisha', () => {
+  const ev = mkEv(['a', 'b', 'c']);
+  const e1 = exp('e1', 10001, [{ pid: 'a', amt: 10001 }], 'equal', { incl: ['a', 'b', 'c'] }); e1.date = '2026-10-10';
+  const e2 = exp('e2', T(300), [{ pid: 'b', amt: T(200) }, { pid: 'c', amt: T(100) }], 'percent', { values: { a: 50, b: 30, c: 20 } }); e2.date = '2026-10-11';
+  ev.expenses.push(e1, e2);
+  ev.refunds.push({ id: 'r', expenseId: 'e1', amt: 1234, by: 'a', date: '2026-10-12', createdAt: 1 });
+  ev.transfers.push({ id: 't1', kind: 'settlement', from: 'b', to: 'a', amt: 777, date: '2026-10-12', createdAt: 2 }, { id: 't2', kind: 'settlement', from: 'c', to: 'a', amt: 300, date: '2026-10-13', createdAt: 3, onBehalf: 'b' });
+  ev.decisions.push({ id: 'd', pid: 'b', side: 'payable', type: 'waive_partial', amt: 500, status: 'finalized', createdAt: 1, finalizedAt: 1 });
+  const c = hgEventCalc(ev); let total = 0;
+  ['a', 'b', 'c'].forEach(p => { const st = hgPersonStatement(ev, c, p); assert.ok(st.ok, p + ' ' + st.running + ' vs ' + st.final); total += st.running; });
+  assert.strictEqual(total, 0);
+  const sa = hgPersonStatement(ev, c, 'a'); assert.ok(sa.lines.some(l => l.kind === 'paid' && l.amt === 10001)); assert.ok(sa.lines.some(l => l.kind === 'refund'));
+  assert.ok(hgPersonStatement(ev, c, 'c').lines.some(l => l.kind === 'sent' && l.onBehalf === 'b'));
+});
+
 console.log(`\n${passed} tests passed`);

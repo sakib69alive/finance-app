@@ -355,6 +355,31 @@ function hgPoolCalc(ev, calc) {
   return { org: org.id, hasPool: any, collected: hgSum(Object.values(dep)), spent: calc.net, held, toReturn, toCollect, shortfall: Math.max(0, toReturn - held), rows };
 }
 
+/* ---------- একজনের পুরো স্টেটমেন্ট: প্রতিটা খরচ, টাকা দেওয়া-নেওয়া, মাফ, চলতি ব্যালেন্স (১ টাকা পর্যন্ত) ---------- */
+// effect: ব্যালেন্সের ওপর প্রভাব (+ = সে পাবে বাড়ল, − = সে দেবে বাড়ল)। শেষ running সবসময় calc.final এর সমান।
+function hgPersonStatement(ev, calc, pid) {
+  const lines = [];
+  const pe = Object.fromEntries(calc.per.map(x => [x.id, x]));
+  ev.expenses.filter(e => !e.del).forEach(e => {
+    const x = pe[e.id]; if (!x) return;
+    const share = (x.netAlloc && x.netAlloc[pid]) || 0;
+    const paid = (e.payers || []).filter(p => p.pid === pid).reduce((a, p) => a + p.amt, 0);
+    if (paid) lines.push({ at: e.date || '', ts: e.createdAt || 0, kind: 'paid', ref: e.id, title: e.title, amt: paid, effect: paid });
+    if (share) lines.push({ at: e.date || '', ts: e.createdAt || 0, kind: 'share', ref: e.id, title: e.title, amt: share, effect: -share, personal: e.personal === pid });
+  });
+  ev.refunds.filter(r => !r.del && r.by === pid).forEach(r => lines.push({ at: r.date || '', ts: r.createdAt || 0, kind: 'refund', ref: r.id, title: (ev.expenses.find(e => e.id === r.expenseId) || {}).title || '', amt: r.amt, effect: -r.amt }));
+  ev.transfers.filter(t => !t.del).forEach(t => {
+    if (t.from === pid) lines.push({ at: t.date || '', ts: t.createdAt || 0, kind: 'sent', sub: t.kind, ref: t.id, with: t.to, onBehalf: t.onBehalf || null, amt: t.amt, effect: t.amt, note: t.note || t.purpose || '' });
+    if (t.to === pid) lines.push({ at: t.date || '', ts: t.createdAt || 0, kind: 'received', sub: t.kind, ref: t.id, with: t.from, onBehalf: t.onBehalf || null, amt: t.amt, effect: -t.amt, note: t.note || t.purpose || '' });
+  });
+  lines.sort((a, b) => a.at.localeCompare(b.at) || a.ts - b.ts);
+  let run = 0;
+  lines.forEach(l => { run += l.effect; l.running = run; });
+  const adj = calc.adj[pid] || 0;
+  if (adj) { run += adj; lines.push({ at: '', ts: Infinity, kind: 'adjust', amt: Math.abs(adj), effect: adj, running: run }); }
+  return { lines, final: calc.final[pid], running: run, ok: run === calc.final[pid] };
+}
+
 /* ---------- ব্যক্তির অবস্থা (Status) ---------- */
 function hgPersonStatus(ev, calc, pid) {
   const ds = (ev.decisions || []).filter(d => !d.del && d.pid === pid);
@@ -472,5 +497,5 @@ function hgPlanCalc(ev, calc, now) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { hgDist, hgSplit, hgBill, hgExpenseAlloc, hgEventCalc, hgSuggest, hgApplyDecisions, hgPersonStatus, hgValidate, hgMerge, toMinor, hgMoney, HG_DECISION_TYPES, hgDecisionEffect, hgPlanDefaults, hgPlanTotals, hgPlanCalc, HG_RESERVE_PCT, hgPoolCalc };
+  module.exports = { hgDist, hgSplit, hgBill, hgExpenseAlloc, hgEventCalc, hgSuggest, hgApplyDecisions, hgPersonStatus, hgValidate, hgMerge, toMinor, hgMoney, HG_DECISION_TYPES, hgDecisionEffect, hgPlanDefaults, hgPlanTotals, hgPlanCalc, HG_RESERVE_PCT, hgPoolCalc, hgPersonStatement };
 }
