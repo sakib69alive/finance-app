@@ -367,7 +367,7 @@ Object.assign(FORMS, {
     const date = f.elements.date.value || today(), g = n => f.elements[n].value.trim();
     await hgFinish(ev, f, { title: `${med} · ${patient}`, category: 'medical', total, date, info: { kind: 'med', patient, med, strength: g('strength'), doctor: g('doctor'), dose: g('dose'), perDay: hgNum(g('perDay')), start: g('start'), end: g('end'), unit: toMinor(g('unit')), packs: hgNum(g('packs')), pharmacy: g('pharmacy'), remaining: hgNum(g('remaining')), ym: date.slice(0, 7) } });
   },
-  'hg-person': f => {
+  'hg-hperson': f => {
     const ev = hgGuard(); if (!ev) return; const name = f.elements.name.value.trim(); if (!name) return fail(f, L('নাম লিখুন', 'Enter a name'), 'name');
     const ppl = hgHH(ev).people, id = f.dataset.id, p = id && ppl.find(x => x.id === id);
     if (ppl.some(x => !x.del && x.id !== id && x.name.toLowerCase() === name.toLowerCase())) return fail(f, L('এই নামে সদস্য আছে', 'Someone with this name exists'), 'name');
@@ -386,7 +386,7 @@ Object.assign(ACTIONS, {
 });
 function hgPersonProfForm(p) {
   return `${sheetHead(`👤 ${p ? L('সদস্য এডিট', 'Edit person') : L('পরিবারের সদস্য', 'Family member')}`)}
-  <form data-form="hg-person" data-id="${p ? p.id : ''}" autocomplete="off">
+  <form data-form="hg-hperson" data-id="${p ? p.id : ''}" autocomplete="off">
     <label class="field"><span>${L('নাম', 'Name')}</span><input class="input" name="name" maxlength="40" value="${esc(p ? p.name : '')}"></label>
     <label class="field"><span>${L('পরিচিতিমূলক তথ্য (বয়স, রক্তের গ্রুপ…)', 'Details (age, blood group…)')}</span><input class="input" name="info" maxlength="80" value="${esc(p ? p.info : '')}"></label>
     <label class="field"><span>${L('চিকিৎসার নোট', 'Medical notes')}</span><input class="input" name="notes" maxlength="160" value="${esc(p ? p.notes : '')}"></label>

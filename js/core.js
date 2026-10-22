@@ -82,7 +82,7 @@ const LOGO = '<svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradien
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v63'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v65'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 // boot.js লোডের আগে খালি শেল; আসল ডেটা boot.js-এ মডিউল রেজিস্টার হওয়ার পরে আসে
 let state = { settings: { lang: 'bn' }, batches: [] };
