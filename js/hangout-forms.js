@@ -215,6 +215,8 @@ function hgExpenseForm(e, preset, scope0) {
       ${hgCheckRow('multi', L('একজনের বেশি দিয়েছে', 'More than one person paid'), multi)}
       <div class="hg-multi ${multi ? '' : 'hidden'}" data-multi><span class="hint">${L('১) যারা টাকা দিয়েছে তাদের ট্যাপ করুন, সমান ভাগ নিজে বসে যাবে। ২) আলাদা হলে নিচের ঘরে নিজে লিখুন।', '1) Tap everyone who paid and the amount is split equally for you. 2) If it differs, type it below.')}</span>
         <div class="chips payerchips">${people.map(p => `<label class="chip"><input type="checkbox" name="pp_${p.id}" ${payOf(p.id) ? 'checked' : ''}><span>${esc(p.name)}</span></label>`).join('')}<button type="button" class="qchip" data-action="hg-pay-allchips">${L('সবাই', 'Everyone')}</button></div>
+        <div class="payrow eachrow"><span class="pn">${L('প্রত্যেকে', 'Each paid')}</span><div class="pi">${moneyInput('each', '', L('যেমন 4444.40', 'e.g. 4444.40'))}</div></div>
+        <span class="hint" data-eachhint>${L('উপরে টিক দেওয়া সবাই যদি একই অঙ্ক দিয়ে থাকে, এখানে সেই অঙ্ক লিখুন, সবার ঘরে বসে যাবে।', 'If everyone ticked paid the same amount, type it here and it fills for all of them.')}</span>
         ${people.map(p => `<div class="payrow"><span class="pn">${esc(p.name)}</span><div class="pi">${moneyInput('pay_' + p.id, hgTaka(payOf(p.id)), '0')}</div><button type="button" class="qchip" data-action="hg-pay-rest" data-p="${p.id}">${L('বাকিটা', 'Rest')}</button></div>`).join('')}
         <div class="preview" data-paysum></div></div></div>
     ${isNew ? `<div class="qtitles ${scope === 'personal' ? '' : 'hidden'}" data-qpers>${[['কোক', 'Coke'], ['চা', 'Tea'], ['নাস্তা', 'Snack'], ['রিকশা', 'Rickshaw']].map(([bn, en]) => `<button type="button" class="qchip" data-action="hg-title-chip" data-k="" data-t="${L(bn, en)}">${L(bn, en)}</button>`).join('')}</div>` : ''}
@@ -280,7 +282,16 @@ LIVE['hg-expense'] = (f, t) => {
   if (t && t.name === 'forWho') f.elements.forWho.dataset.touched = '1';
   // যারা টাকা দিয়েছে তাদের চিপ থেকে সমান ভাগ (নিজে ঘরে লিখলে অটো বন্ধ)
   if (t && t.name && t.name.startsWith('pay_')) f.dataset.ppAuto = '';
-  if (t && t.name && (t.name.startsWith('pp_') || (t.name === 'total' && f.dataset.ppAuto === '1'))) {
+  const eachV = f.elements.each ? toMinor(f.elements.each.value) : 0;
+  if (t && t.name && (t.name === 'each' || (t.name.startsWith('pp_') && eachV))) {
+    ev.participants.forEach(p => {
+      const c = f.elements['pp_' + p.id], i = f.elements['pay_' + p.id];
+      if (c && i) i.value = c.checked && eachV ? fromMinor(eachV) : '';
+    });
+    f.dataset.ppAuto = '';
+  } else if (t && t.name && t.name.startsWith('pp_') && f.elements.each) f.elements.each.value = '';
+  if (t && t.name === 'total' && f.dataset.ppAuto === '1' && f.elements.each) f.elements.each.value = '';
+  if (t && t.name && ((t.name.startsWith('pp_') && !eachV) || (t.name === 'total' && f.dataset.ppAuto === '1'))) {
     const ticked = ev.participants.filter(p => f.elements['pp_' + p.id] && f.elements['pp_' + p.id].checked).map(p => p.id);
     const tot = toMinor(f.elements.total.value);
     const dist = hgDist(tot, Object.fromEntries(ticked.map(id => [id, 1])), ev.participants.map(p => p.id));
