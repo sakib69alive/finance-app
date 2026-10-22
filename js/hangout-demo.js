@@ -56,6 +56,7 @@ function hgDemoBuild() {
     opinions: { [all.find(id => id !== creditor)]: { s: 'no_response', note: '' } } });
   const second = all.filter(id => id !== debtor && id !== creditor)[0];
   trip.decisions.push({ id: 'demo-d3', pid: second, side: debtor === second ? 'payable' : (c1.final[second] < 0 ? 'payable' : 'receivable'), type: 'disputed', amt: null, others: [], reason: 'অঙ্ক নিয়ে আলোচনা চলছে', orgNote: '', status: 'disputed', date: dAgo(1), createdAt: now + 3, finalizedAt: null, opinions: {} });
+  trip.plan = { people: 4, mode: 'total', total: T(30000), each: T(7500), split: hgPlanDefaults('tour', trip.cats.map(c => c.k)) };
   log(trip, 'ডেমো ইভেন্ট তৈরি হয়েছে', 'Demo event created');
 
   /* ---- ইভেন্ট ২: ডিনার (মিটে যাওয়া) ---- */

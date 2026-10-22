@@ -370,6 +370,76 @@ function hgMerge(cur, inc) {
   return { events: cur.events.concat(evs), friends: cur.friends.concat(friends), added: evs.length, skipped: inc.events.length - evs.length };
 }
 
+/* ---------- আদর্শ বাজেট পরিকল্পনা: কয়জন, মোট (বা জনপ্রতি) বাজেট, খাতভিত্তিক আদর্শ ভাগ ---------- */
+// ইভেন্টের ধরন অনুযায়ী প্রস্তাবিত % (জরুরি রিজার্ভ আলাদা, সবসময় ৮%)
+const HG_RESERVE_PCT = 8;
+const HG_PLAN_DEFAULTS = {
+  tour: { transport: 25, fuel: 10, toll: 4, hotel: 30, food: 20, tickets: 5, other: 6 },
+  restaurant: { food: 66, drinks: 18, vat: 7, service: 5, other_charges: 4 },
+  picnic: { groceries: 40, transport: 25, location: 15, equipment: 8, games: 7, other: 5 },
+  dayout: { food: 35, transport: 25, tickets: 25, shopping: 10, misc: 5 },
+  hotel: { room: 68, food: 22, other_charges: 10 },
+  birthday: { food: 40, venue: 25, decoration: 15, gifts: 10, equipment: 5, other: 5 },
+  hangout: { food: 50, transport: 25, tickets: 10, shopping: 10, misc: 5 },
+  transport: { transport: 60, fuel: 25, toll: 10, other: 5 },
+  shopping: { shopping: 85, other: 15 },
+};
+// খাত অনুযায়ী % বানায় (সব মিলিয়ে ঠিক ১০০.০, ০.১ এর হিসাবে)। অজানা খাত থাকলে সমান ভাগ।
+function hgPlanDefaults(type, catKeys) {
+  const base = HG_PLAN_DEFAULTS[type] || {};
+  const w = {};
+  catKeys.forEach(k => { w[k] = base[k] || 0; });
+  if (!hgSum(Object.values(w))) catKeys.forEach(k => { w[k] = 1; }); // কাস্টম খাত: সমান
+  else catKeys.forEach(k => { if (!w[k]) w[k] = Math.max(2, Math.round(hgSum(Object.values(base)) / 20)); }); // নিজের যোগ করা খাতে অল্প একটু
+  const tenths = hgDist(1000 - HG_RESERVE_PCT * 10, w, catKeys);
+  const out = {};
+  catKeys.forEach(k => { out[k] = tenths[k] / 10; });
+  out.reserve = HG_RESERVE_PCT;
+  return out;
+}
+// plan = { people, mode:'total'|'each', total, each, split:{k:%, reserve:%} } (টাকা পয়সায়)
+function hgPlanTotals(plan, fallbackPeople) {
+  const people = Math.max(1, Math.floor(plan.people || fallbackPeople || 1));
+  const total = plan.mode === 'each' ? Math.round((plan.each || 0) * people) : Math.round(plan.total || 0);
+  return { people, total, each: people ? Math.round(total / people) : 0 };
+}
+// আসল খরচের সাথে মিলিয়ে: কোন খাতে কত যাওয়া উচিত, কোথায় বেশি, আর সতর্কবার্তার কোড
+function hgPlanCalc(ev, calc, now) {
+  const plan = ev.plan;
+  if (!plan) return null;
+  const t = hgPlanTotals(plan, ev.participants.length);
+  if (!(t.total > 0)) return null;
+  const keys = Object.keys(plan.split || {}).filter(k => k !== 'reserve');
+  const catKeys = keys.slice();
+  Object.keys(calc.catTotals).forEach(k => { if (calc.catTotals[k] > 0 && !catKeys.includes(k)) catKeys.push(k); });
+  const pctOf = k => Number((plan.split || {})[k] || 0);
+  const ideals = hgDist(t.total, Object.fromEntries(catKeys.concat('reserve').map(k => [k, Math.max(0, pctOf(k))])), catKeys.concat('reserve'));
+  const rows = catKeys.map(k => {
+    const spent = calc.catTotals[k] || 0, ideal = ideals[k] || 0;
+    return { k, pct: pctOf(k), ideal, spent, left: ideal - spent, over: spent > ideal, ratio: ideal > 0 ? spent / ideal : (spent > 0 ? 2 : 0) };
+  });
+  const spentAll = calc.net;
+  const reserveIdeal = ideals.reserve || 0;
+  const remaining = t.total - spentAll;
+  const flags = [];
+  if (spentAll > t.total) flags.push({ code: 'over_total', amt: spentAll - t.total, perPerson: Math.ceil((spentAll - t.total) / t.people) });
+  else if (spentAll > t.total * 0.85) flags.push({ code: 'near_total', amt: remaining });
+  else if (remaining < reserveIdeal && spentAll > 0) flags.push({ code: 'reserve_low', amt: reserveIdeal - remaining });
+  rows.forEach(r => { if (r.over) flags.push({ code: 'cat_over', k: r.k, amt: r.spent - r.ideal }); else if (r.ideal > 0 && r.ratio >= 0.85) flags.push({ code: 'cat_near', k: r.k, amt: r.left }); });
+  // সময়ের সাথে খরচের গতি: অর্ধেক সময়ে অর্ধেকের বেশি বাজেট গেলে সাবধান
+  let burn = null;
+  if (ev.start && ev.end && ev.end > ev.start && now) {
+    const s0 = Date.parse(ev.start), e0 = Date.parse(ev.end), n0 = Date.parse(now);
+    if (isFinite(s0) && isFinite(e0) && n0 >= s0 && n0 <= e0) {
+      const timePct = (n0 - s0) / (e0 - s0) * 100, budgetPct = spentAll / t.total * 100;
+      burn = { timePct, budgetPct };
+      if (budgetPct > timePct + 20 && budgetPct < 100) flags.push({ code: 'burn_fast', timePct, budgetPct });
+    }
+  }
+  const collected = calc.inKind.contribution ? hgSum(Object.values(calc.inKind.contribution)) : 0;
+  return { people: t.people, total: t.total, each: t.each, spent: spentAll, remaining, spentPerPerson: Math.round(spentAll / t.people), rows, reserveIdeal, reservePct: pctOf('reserve'), flags, burn, collected, short: Math.max(0, t.total - collected) };
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { hgDist, hgSplit, hgBill, hgExpenseAlloc, hgEventCalc, hgSuggest, hgApplyDecisions, hgPersonStatus, hgValidate, hgMerge, toMinor, hgMoney, HG_DECISION_TYPES, hgDecisionEffect };
+  module.exports = { hgDist, hgSplit, hgBill, hgExpenseAlloc, hgEventCalc, hgSuggest, hgApplyDecisions, hgPersonStatus, hgValidate, hgMerge, toMinor, hgMoney, HG_DECISION_TYPES, hgDecisionEffect, hgPlanDefaults, hgPlanTotals, hgPlanCalc, HG_RESERVE_PCT };
 }

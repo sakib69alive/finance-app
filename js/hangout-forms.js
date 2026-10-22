@@ -214,7 +214,8 @@ function hgExpenseForm(e, preset) {
     <div class="field"><span class="flabel">4. ${L('কাদের মধ্যে ভাগ হবে? (সমান ভাগ)', 'Who shares it? (split equally)')}</span>
       <div class="hg-incl ${advOpen ? 'hidden' : ''}" data-incl><div class="chips">${people.map(p => `<label class="chip"><input type="checkbox" name="inc_${p.id}" ${inclNow.includes(p.id) ? 'checked' : ''}><span>${esc(p.name)}</span></label>`).join('')}</div>
         <div class="hint">${L('যারা এই খরচে ছিল না তাদের টিক তুলে দিন।', 'Untick anyone who was not part of this.')}</div></div>
-      <div class="preview" data-split></div></div>
+      <div class="preview" data-split></div>
+      <div class="preview" data-budget></div></div>
     <details class="more" ${advOpen ? 'open' : ''}><summary>${L('অন্যভাবে ভাগ করতে চান? (শতাংশ, নির্দিষ্ট টাকা…)', 'Split differently? (percent, exact amounts…)')}</summary>
       <div class="hg-methods">${['selected', 'exact', 'percent', 'ratio', 'custom'].map(m => `<label class="chip"><input type="radio" name="method" value="${m}" ${method === m ? 'checked' : ''}><span>${m === 'selected' ? L('সমান ভাগ', 'Equal') : HG_METHODS[m][isEN() ? 1 : 0]}</span></label>`).join('')}</div>
       ${mset('exact', 'ex_', '0', '৳')}${mset('percent', 'pc_', '0', '%')}${mset('ratio', 'rt_', '1', '×')}${mset('custom', 'cu_', L('বাকিটা অটো', 'rest auto'), '৳')}</details>
@@ -274,11 +275,26 @@ LIVE['hg-expense'] = (f, t) => {
   pv.className = 'preview' + (r.total > 0 && ps !== r.total ? ' warn' : '');
   pv.innerHTML = r.total > 0 ? (ps === r.total ? `${L('মোট দেওয়া', 'Paid total')} <b class="pos">${hgM(ps)}</b> ✓` : L(`মোট দেওয়া <b>${hgM(ps)}</b>, খরচ ${hgM(r.total)}, পার্থক্য <b>${hgM(Math.abs(r.total - ps))}</b>`, `Paid <b>${hgM(ps)}</b> vs total ${hgM(r.total)}, off by <b>${hgM(Math.abs(r.total - ps))}</b>`)) : '';
   const sp = $('[data-split]', f);
+  const bud = $('[data-budget]', f); bud.className = 'preview'; bud.innerHTML = '';
   if (r.total <= 0) { sp.className = 'preview'; sp.innerHTML = ''; return; }
   if (r.split.ok) {
     sp.className = 'preview';
     sp.innerHTML = L('প্রত্যেকের ভাগ: ', 'Each pays: ') + r.people.filter(p => r.split.alloc[p.id] > 0).map(p => `${esc(p.name)} <b>${hgM(r.split.alloc[p.id])}</b>`).join(' · ');
   } else { sp.className = 'preview warn'; sp.innerHTML = esc(hgErr(r.split.error)); }
+  // বাজেট থাকলে: এই খরচের পর ওই খাত আর মোট বাজেটের কী অবস্থা হবে
+  const plan = ev.plan && hgPlanCalc(ev, hgEventCalc(ev), today());
+  if (plan) {
+    const id = f.dataset.id, old = id && ev.expenses.find(x => x.id === id);
+    const cat = f.elements.cat.value, back = old ? old.total : 0;
+    const row = plan.rows.find(x => x.k === cat);
+    const after = plan.spent + r.total - back;
+    const catAfter = row ? row.spent + r.total - (old && old.category === cat ? back : 0) : 0;
+    const catOver = row && catAfter > row.ideal;
+    const totalOver = after > plan.total;
+    bud.className = 'preview' + (totalOver ? ' danger' : (catOver ? ' warn' : ''));
+    bud.innerHTML = (row ? L(`${hgPlanCatLabel(ev, cat)} বাজেট: ${hgM(catAfter)} / ${hgM(row.ideal)}${catOver ? ` (<b class="neg">${hgM(catAfter - row.ideal)} বেশি</b>)` : ''}`, `${hgPlanCatLabel(ev, cat)} budget: ${hgM(catAfter)} / ${hgM(row.ideal)}${catOver ? ` (<b class="neg">${hgM(catAfter - row.ideal)} over</b>)` : ''}`) + '<br>' : '')
+      + (after <= plan.total ? L(`মোট বাজেটের ${hgM(plan.total - after)} বাকি থাকবে`, `${hgM(plan.total - after)} of the total budget left`) : L(`মোট বাজেটের ${hgM(after - plan.total)} বেশি হয়ে যাবে`, `${hgM(after - plan.total)} over the total budget`));
+  }
 };
 Object.assign(FORMS, {
   'hg-expense': async f => {

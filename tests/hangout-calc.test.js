@@ -263,4 +263,62 @@ t('importing the same backup twice does not duplicate events', () => {
   inc.events[0].id = 'ev2'; const m2 = hgMerge(cur, inc); assert.strictEqual(m2.events.length, 2); assert.strictEqual(m2.added, 1);
 });
 
+// ---- আদর্শ বাজেট পরিকল্পনা ----
+const { hgPlanDefaults, hgPlanTotals, hgPlanCalc } = C;
+const TYPE_CATS = { tour: ['transport', 'fuel', 'toll', 'hotel', 'food', 'tickets', 'other'], restaurant: ['food', 'drinks', 'vat', 'service', 'discount', 'other_charges'], hotel: ['room', 'food', 'other_charges'], custom: ['a', 'b', 'c'] };
+t('plan defaults always add up to exactly 100% (with the 8% reserve)', () => {
+  Object.entries(TYPE_CATS).forEach(([type, cats]) => {
+    const d = hgPlanDefaults(type, cats);
+    assert.strictEqual(Math.round(Object.values(d).reduce((a, b) => a + b, 0) * 10), 1000, type);
+    assert.strictEqual(d.reserve, 8);
+  });
+  assert.ok(hgPlanDefaults('tour', TYPE_CATS.tour).hotel > hgPlanDefaults('tour', TYPE_CATS.tour).tickets); // ভ্রমণে হোটেল বড় খাত
+});
+t('plan totals: total mode and per-person mode agree', () => {
+  assert.deepStrictEqual(hgPlanTotals({ people: 5, mode: 'total', total: T(25000) }, 3), { people: 5, total: T(25000), each: T(5000) });
+  assert.deepStrictEqual(hgPlanTotals({ people: 5, mode: 'each', each: T(5000) }, 3), { people: 5, total: T(25000), each: T(5000) });
+  assert.strictEqual(hgPlanTotals({ mode: 'total', total: T(900) }, 3).each, T(300)); // জন না দিলে অংশগ্রহণকারী সংখ্যা
+});
+const planEv = (extra = {}) => {
+  const ev = mkEv(['a', 'b', 'c', 'd'], Object.assign({ type: 'tour', start: '2026-10-10', end: '2026-10-14' }, extra));
+  ev.plan = { people: 4, mode: 'total', total: T(25000), split: hgPlanDefaults('tour', TYPE_CATS.tour) };
+  return ev;
+};
+t('plan: ideal amounts add up to the budget and nothing is flagged on an empty event', () => {
+  const ev = planEv(); const p = hgPlanCalc(ev, hgEventCalc(ev), '2026-10-12');
+  assert.strictEqual(p.rows.reduce((s, r) => s + r.ideal, 0) + p.reserveIdeal, T(25000));
+  assert.strictEqual(p.each, T(6250)); assert.strictEqual(p.remaining, T(25000)); assert.deepStrictEqual(p.flags, []);
+});
+t('plan: a category over its ideal share is flagged with the exact excess; extra cost per person when over budget', () => {
+  const ev = planEv();
+  ev.expenses.push(exp('h', T(12000), [{ pid: 'a', amt: T(12000) }], 'equal', { incl: ['a', 'b', 'c', 'd'] }, 'hotel'));
+  let p = hgPlanCalc(ev, hgEventCalc(ev), null);
+  const hot = p.rows.find(r => r.k === 'hotel'); assert.ok(hot.over); assert.ok(Math.abs(hot.ideal - T(25000) * hot.pct / 100) <= 1); assert.strictEqual(hot.spent - hot.ideal, T(12000) - hot.ideal);
+  assert.ok(p.flags.some(f => f.code === 'cat_over' && f.k === 'hotel'));
+  ev.expenses.push(exp('f', T(15000), [{ pid: 'a', amt: T(15000) }], 'equal', { incl: ['a', 'b', 'c', 'd'] }, 'food'));
+  p = hgPlanCalc(ev, hgEventCalc(ev), null);
+  const over = p.flags.find(f => f.code === 'over_total'); assert.strictEqual(over.amt, T(2000)); assert.strictEqual(over.perPerson, T(500));
+});
+t('plan: refunds lower the spent amount, unplanned categories are still counted, near-total warning', () => {
+  const ev = planEv();
+  ev.expenses.push(exp('x', T(21500), [{ pid: 'a', amt: T(21500) }], 'equal', { incl: ['a', 'b', 'c', 'd'] }, 'shopping'));
+  let p = hgPlanCalc(ev, hgEventCalc(ev), null);
+  assert.ok(p.rows.some(r => r.k === 'shopping' && r.spent === T(21500))); assert.ok(p.flags.some(f => f.code === 'near_total'));
+  ev.refunds.push({ id: 'r', expenseId: 'x', amt: T(1500), by: 'a' });
+  p = hgPlanCalc(ev, hgEventCalc(ev), null); assert.strictEqual(p.spent, T(20000));
+});
+t('plan: spending faster than time passes raises a burn-rate warning', () => {
+  const ev = planEv();
+  ev.expenses.push(exp('x', T(14000), [{ pid: 'a', amt: T(14000) }], 'equal', { incl: ['a', 'b', 'c', 'd'] }, 'hotel'));
+  const p = hgPlanCalc(ev, hgEventCalc(ev), '2026-10-11'); // ২৫% সময়ে ৫৬% বাজেট
+  assert.ok(p.flags.some(f => f.code === 'burn_fast')); assert.ok(p.burn.budgetPct > p.burn.timePct);
+  assert.ok(!hgPlanCalc(ev, hgEventCalc(ev), '2026-10-14').flags.some(f => f.code === 'burn_fast'));
+});
+t('plan: contributions collected are tracked against the target', () => {
+  const ev = planEv();
+  ev.transfers.push({ id: 't1', kind: 'contribution', from: 'b', to: 'a', amt: T(6250) }, { id: 't2', kind: 'contribution', from: 'c', to: 'a', amt: T(3000) });
+  const p = hgPlanCalc(ev, hgEventCalc(ev), null); assert.strictEqual(p.collected, T(9250)); assert.strictEqual(p.short, T(25000) - T(9250));
+});
+t('plan: no plan or zero budget gives null', () => { const ev = planEv(); delete ev.plan; assert.strictEqual(hgPlanCalc(ev, hgEventCalc(ev), null), null); });
+
 console.log(`\n${passed} tests passed`);

@@ -21,6 +21,7 @@ function hgEvPeriod(ev) { return ev.start ? fmtDate(ev.start) + (ev.end && ev.en
 /* ---------- সম্পূর্ণ মেমো ---------- */
 function hgMemoHtml(ev) {
   const c = hgEventCalc(ev), rows = hgReportRows(ev, c);
+  const plan = hgPlanCalc(ev, c, null);
   const t = (head, body) => `<table class="rt"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
   const exps = ev.expenses.filter(e => !e.del).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   const per = Object.fromEntries(c.per.map(x => [x.id, x]));
@@ -61,6 +62,8 @@ function hgMemoHtml(ev) {
       decs.map(d => { const ap = c.applied.find(x => x.id === d.id); const ops = Object.entries(d.opinions || {}).map(([pid, o]) => `${hgEsc(pName(ev, pid))}: ${hgOpLabel(o.s)}`).join('; ');
         return `<tr><td>${hgEsc(pName(ev, d.pid))}</td><td>${hgEsc(hgDecLabel(d.side, d.type))}${d.reason ? `<br><span class="sm">${hgEsc(d.reason)}</span>` : ''}</td><td class="n">${d.status === 'finalized' ? (ap && ap.amt ? hgM(ap.amt) : L('শুধু রেকর্ড', 'record only')) : (d.amt != null ? hgM(d.amt) + ' (' + L('প্রস্তাব', 'proposed') + ')' : '—')}</td><td>${hgDStatusLabel(d.status)}</td><td class="sm">${ops || '—'}</td></tr>`; }).join(''))}
       <p class="sm">${L('শুধু "চূড়ান্ত" সিদ্ধান্ত হিসাব বদলেছে। প্রস্তাবিত বা বিতর্কিত সিদ্ধান্ত পরিশোধ বলে গণ্য নয়।', 'Only Finalized decisions changed the numbers. Proposed or disputed decisions are never counted as paid.')}</p>` : ''}
+    ${plan ? `<h3>${L('৮ক. বাজেট বনাম আসল খরচ', '8a. Budget vs actual')}</h3><p class="sm">${L(`মোট বাজেট ${hgM(plan.total)} (${plan.people} জন, জনপ্রতি ${hgM(plan.each)}), খরচ ${hgM(plan.spent)}, ${plan.remaining >= 0 ? 'বাকি ' + hgM(plan.remaining) : 'বেশি ' + hgM(-plan.remaining)}`, `Budget ${hgM(plan.total)} (${plan.people} people, ${hgM(plan.each)} each), spent ${hgM(plan.spent)}, ${plan.remaining >= 0 ? hgM(plan.remaining) + ' left' : hgM(-plan.remaining) + ' over'}`)}</p>
+      ${t([L('খাত', 'Category'), L('আদর্শ', 'Ideal'), L('আসল', 'Actual'), L('পার্থক্য', 'Difference')], plan.rows.map(r => `<tr><td>${hgEsc(hgPlanCatLabel(ev, r.k))}</td><td class="n">${hgM(r.ideal)}</td><td class="n">${hgM(r.spent)}</td><td class="n">${r.over ? '+' + hgM(r.spent - r.ideal) : '−' + hgM(r.left)}</td></tr>`).join(''))}` : ''}
     <h3>${L('৯. মেটানোর অবস্থা', '9. Settlement status')}</h3>
     <p><b>${settledAll ? L('✓ সবার হিসাব মিটেছে', '✓ Everyone is settled') : L('বাকি আছে', 'Still open')}</b> · ${L('মিটেছে', 'settled')} ${rows.length - open.length}/${rows.length}</p>
     ${c.suggestions.length ? `<p>${L('কে কাকে কত দিলে মিটবে (প্রস্তাব)', 'Suggested payments to finish')}:</p><ul>${c.suggestions.map(s => `<li>${hgEsc(pName(ev, s.from))} → ${hgEsc(pName(ev, s.to))}: <b>${hgM(s.amt)}</b></li>`).join('')}</ul>` : ''}
