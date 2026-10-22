@@ -943,3 +943,5 @@ details.more[open] > summary::before { content: none; }
 .carry .crow .mut { color: var(--faint); }
 .carry .crow .pos { color: var(--good); } .carry .crow .neg { color: var(--danger); }
 .carry .csum { margin-top: 6px; padding-top: 8px; border-top: 1.5px dashed var(--border); font-size: 13px; color: var(--muted); }
+
+.payerchips { margin: 8px 0 12px; }

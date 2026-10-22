@@ -618,13 +618,10 @@ Object.assign(ACTIONS, {
     f.elements['pay_' + el.dataset.p].value = total > others ? fromMinor(total - others) : '';
     runLive(f, f.elements['pay_' + el.dataset.p]);
   },
-  'hg-pay-equal': el => {
+  'hg-pay-allchips': el => {
     const f = el.closest('form'), ev = hgCur(); if (!f || !ev) return;
-    const total = toMinor(f.elements.total.value);
-    const ids = ev.participants.filter(p => f.elements['pay_' + p.id] && f.elements['inc_' + p.id] && f.elements['inc_' + p.id].checked).map(p => p.id);
-    const d = hgDist(total, Object.fromEntries(ids.map(id => [id, 1])), ev.participants.map(p => p.id));
-    ev.participants.forEach(p => { if (f.elements['pay_' + p.id]) f.elements['pay_' + p.id].value = d[p.id] ? fromMinor(d[p.id]) : ''; });
-    runLive(f, null);
+    ev.participants.forEach(p => { const c = f.elements['pp_' + p.id]; if (c) c.checked = p.active; });
+    runLive(f, f.elements['pp_' + ev.participants[0].id]);
   },
   'hg-person-stmt': el => { const ev = hgCur(); if (ev) openSheet(hgPersonSheet(ev, el.dataset.p)); },
   'hg-stmt-copy': async el => { const ev = hgCur(); if (ev) toast((await hgCopy(hgStatementText(ev, hgEventCalc(ev), el.dataset.p))) ? L('কপি হয়েছে', 'Copied') : L('কপি করা যায়নি', 'Could not copy')); },

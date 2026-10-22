@@ -213,9 +213,9 @@ function hgExpenseForm(e, preset, scope0) {
     <div class="field"><span class="flabel">3. ${L('টাকা কে দিয়েছে?', 'Who paid?')}</span>
       <div data-one>${hgSelect('payOne', people.map(p => [p.id, esc(p.name)]), onePayer)}</div>
       ${hgCheckRow('multi', L('একজনের বেশি দিয়েছে', 'More than one person paid'), multi)}
-      <div class="hg-multi ${multi ? '' : 'hidden'}" data-multi><span class="hint">${L('কে কত দিয়েছে লিখুন', 'Enter how much each person paid')}</span>
+      <div class="hg-multi ${multi ? '' : 'hidden'}" data-multi><span class="hint">${L('১) যারা টাকা দিয়েছে তাদের ট্যাপ করুন, সমান ভাগ নিজে বসে যাবে। ২) আলাদা হলে নিচের ঘরে নিজে লিখুন।', '1) Tap everyone who paid and the amount is split equally for you. 2) If it differs, type it below.')}</span>
+        <div class="chips payerchips">${people.map(p => `<label class="chip"><input type="checkbox" name="pp_${p.id}" ${payOf(p.id) ? 'checked' : ''}><span>${esc(p.name)}</span></label>`).join('')}<button type="button" class="qchip" data-action="hg-pay-allchips">${L('সবাই', 'Everyone')}</button></div>
         ${people.map(p => `<div class="payrow"><span class="pn">${esc(p.name)}</span><div class="pi">${moneyInput('pay_' + p.id, hgTaka(payOf(p.id)), '0')}</div><button type="button" class="qchip" data-action="hg-pay-rest" data-p="${p.id}">${L('বাকিটা', 'Rest')}</button></div>`).join('')}
-        <button type="button" class="btn sm block mt8" data-action="hg-pay-equal">${L('সবাই সমান ভাগে দিয়েছে', 'Everyone paid an equal share')}</button>
         <div class="preview" data-paysum></div></div></div>
     ${isNew ? `<div class="qtitles ${scope === 'personal' ? '' : 'hidden'}" data-qpers>${[['কোক', 'Coke'], ['চা', 'Tea'], ['নাস্তা', 'Snack'], ['রিকশা', 'Rickshaw']].map(([bn, en]) => `<button type="button" class="qchip" data-action="hg-title-chip" data-k="" data-t="${L(bn, en)}">${L(bn, en)}</button>`).join('')}</div>` : ''}
     <div class="field"><span class="flabel">4. ${L('খরচটা কার?', 'Whose cost is it?')}</span>
@@ -278,6 +278,15 @@ LIVE['hg-expense'] = (f, t) => {
   const qp = $('[data-qpers]', f), qc = $('[data-qcat]', f); if (qp) qp.classList.toggle('hidden', !personalOn); if (qc) qc.classList.toggle('hidden', personalOn);
   if (t && t.name === 'payOne' && !f.elements.forWho.dataset.touched) f.elements.forWho.value = f.elements.payOne.value;
   if (t && t.name === 'forWho') f.elements.forWho.dataset.touched = '1';
+  // যারা টাকা দিয়েছে তাদের চিপ থেকে সমান ভাগ (নিজে ঘরে লিখলে অটো বন্ধ)
+  if (t && t.name && t.name.startsWith('pay_')) f.dataset.ppAuto = '';
+  if (t && t.name && (t.name.startsWith('pp_') || (t.name === 'total' && f.dataset.ppAuto === '1'))) {
+    const ticked = ev.participants.filter(p => f.elements['pp_' + p.id] && f.elements['pp_' + p.id].checked).map(p => p.id);
+    const tot = toMinor(f.elements.total.value);
+    const dist = hgDist(tot, Object.fromEntries(ticked.map(id => [id, 1])), ev.participants.map(p => p.id));
+    ev.participants.forEach(p => { const i = f.elements['pay_' + p.id]; if (i) i.value = dist[p.id] ? fromMinor(dist[p.id]) : ''; });
+    f.dataset.ppAuto = '1';
+  }
   const method = personalOn ? 'selected' : f.elements.method.value;
   $$('[data-vals]', f).forEach(d => d.classList.toggle('hidden', d.dataset.vals !== method));
   $('[data-incl]', f).classList.toggle('hidden', method !== 'selected');
