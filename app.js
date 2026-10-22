@@ -110,7 +110,7 @@ const statusLabel = s => ({ delivered: L('ডেলিভারড', 'Delivered'
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v21'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v22'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 function newBatch(o = {}) {
   return {
@@ -558,6 +558,9 @@ function batchForm(b) {
     <label class="field"><span>${L('কত দিনে টার্গেট বেচতে চান? (ঐচ্ছিক)', 'In how many days? (optional)')}</span>
       <div class="input-wrap"><input class="input" name="days" inputmode="numeric" value="${esc(v.days || '')}" placeholder="${L('যেমন: 30', 'e.g. 30')}"><span class="suffix">${L('দিন', 'days')}</span></div>
       <div class="hint">${L('দিলে হোমে প্রতিদিনের টার্গেট আর আজ কতটা এগোলেন দেখাবে। পরে যেকোনো সময় বদলানো যায়।', 'Home will show your daily target and today\'s progress. You can change it anytime.')}</div></label>
+    ${isNew ? `<div class="field"><span class="flabel">${L('আদর্শ বাজেট ভাগ (ঐচ্ছিক)', 'Ideal budget split (optional)')}</span>
+      ${seg('plan', Object.entries(PRESETS).map(([id, p]) => [id, isEN() ? p.en : p.bn]), 'balanced')}
+      <div class="hint" data-plan-preview></div></div>` : ''}
     <details class="more" ${isNew ? '' : 'open'}><summary>${L('অ্যাডভান্সড সেটিংস', 'Advanced settings')}</summary>
       <div class="row2">
         <label class="field"><span>${L('রিটার্ন/ড্যামেজ বাফার', 'Return/damage buffer')}</span><div class="input-wrap"><input class="input" name="returnRate" inputmode="decimal" value="${esc(v.returnRate)}"><span class="suffix">%</span></div></label>
@@ -758,6 +761,11 @@ function viewHome(b, c) {
   ${paceCard(b, c)}
 
   ${productDash(c)}
+
+  ${c.capital > 0 ? `<section class="card">
+    <div class="card-head"><h2>${L('আদর্শ বাজেট ভাগ', 'Ideal budget split')}</h2><button type="button" class="link" data-action="edit-budget">${L('বদলান', 'Edit')}</button></div>
+    ${budgetBlock(b, c)}
+  </section>` : ''}
   ${installCard()}
 
   ${next ? `<section class="card next-card"><small>${L('এখন যা করবেন', 'Do this next')}</small><p>${esc(next.t)}</p></section>` : ''}
@@ -776,9 +784,6 @@ function viewHome(b, c) {
     <h3 class="sub-title">${icon('spark', 18)} ${L('বিজনেস গাইড', 'Business guide')}</h3>
     <ul class="insights">${ins.slice(next ? 1 : 0).map(i => `<li class="insight ${i.lvl}">${esc(i.t)}</li>`).join('')}</ul>
     <p class="hint">${L('এই পরামর্শ আপনার দেওয়া হিসাব থেকে, ফোনেই তৈরি (ইন্টারনেট লাগে না)। লাভের নিশ্চয়তা নয়।', 'Built on this device from your own numbers (no internet). Not a guarantee of profit.')}</p>
-
-    <div class="card-head"><h3 class="sub-title">${L('টাকা কোথায় গেল', 'Where the money went')}</h3><button type="button" class="link" data-action="edit-budget">${L('বাজেট ও সীমা বদলান', 'Edit budget & limits')}</button></div>
-    ${budgetBlock(b, c)}
 
     <h3 class="sub-title">${L('টাকার মিলান (১ টাকারও হিসাব)', 'Money check (to the last taka)')}</h3>
     <div class="ledger">
@@ -843,34 +848,53 @@ function stepsCard(b, c) {
   </section>`;
 }
 
+// আদর্শ বাজেট: ডোনাট চার্ট + প্রতিটা খাতে আদর্শ বনাম আসল খরচ
 function budgetBlock(b, c) {
   const cap = c.capital;
   const actual = budgetActual(c), wr = warnRatio(b);
   const colorOf = k => `var(--c-${k})`;
-  const total = Math.max(cap, c.spent);
-  const stack = BUDGET_KEYS.filter(k => actual[k] > 0)
-    .map(k => `<span style="width:${(actual[k] / total * 100).toFixed(2)}%;background:${colorOf(k)}"></span>`).join('');
+  const ideal = Object.fromEntries(BUDGET_KEYS.map(k => [k, limitOf(b, k)]));
+  const idealSum = sum(Object.values(ideal)) || 1;
+  let acc = 0;
+  const segs = BUDGET_KEYS.filter(k => ideal[k] > 0).map(k => {
+    const p = ideal[k] / idealSum * 100;
+    const s = `<circle class="dseg" cx="21" cy="21" r="15.9155" stroke="${colorOf(k)}" stroke-dasharray="${Math.max(0, p - 0.6).toFixed(2)} ${(100 - Math.max(0, p - 0.6)).toFixed(2)}" stroke-dashoffset="${(25 - acc).toFixed(2)}"/>`;
+    acc += p;
+    return s;
+  }).join('');
+  const overKeys = BUDGET_KEYS.filter(k => k !== 'reserve' && actual[k] > ideal[k] + 0.5);
+  const overTotal = sum(overKeys.map(k => actual[k] - ideal[k]));
+  const reserveShort = Math.max(0, ideal.reserve - actual.reserve);
+  const spentPct = cap > 0 ? c.spent / cap * 100 : 0;
+  const summary = overKeys.length
+    ? `<div class="bsum bad"><b>${fmt(overTotal)} ${L('বাজেটের বেশি খরচ', 'over budget')}</b><span>${overKeys.map(k => `${bl(k)} +${fmt(actual[k] - ideal[k])}`).join(' · ')}</span></div>`
+    : (reserveShort > 0.5
+      ? `<div class="bsum warn"><b>${L('রিজার্ভ কমে গেছে', 'Reserve is low')}</b><span>${L(`আদর্শ রিজার্ভের চেয়ে ${fmt(reserveShort)} কম`, `${fmt(reserveShort)} below the ideal reserve`)}</span></div>`
+      : `<div class="bsum ok"><b>${L('সব খাত আদর্শ বাজেটের ভেতরে', 'All categories within budget')}</b><span>${L('এভাবেই চালিয়ে যান', 'Keep it up')}</span></div>`);
   const rowsHtml = BUDGET_KEYS.map(k => {
-    const rec = limitOf(b, k);
-    const fixed = toNum((b.limits || {})[k]) > 0;
+    const rec = ideal[k];
     const a = actual[k];
     const ratio = rec > 0 ? a / rec : (a > 0 ? 2 : 0);
-    const over = k !== 'reserve' && a > rec;
+    const over = k !== 'reserve' && a > rec + 0.5;
     const near = k !== 'reserve' && !over && a > 0 && ratio >= wr;
     let status;
-    if (k === 'reserve') status = a >= rec ? `<span class="ok">${L('ঠিক আছে', 'OK')}</span>` : `<span class="bad">${fmt(rec - a)} ${L('কম', 'short')}</span>`;
+    if (k === 'reserve') status = a >= rec - 0.5 ? `<span class="ok">${L('ঠিক আছে', 'OK')}</span>` : `<span class="bad">${fmt(rec - a)} ${L('কম', 'short')}</span>`;
     else if (over) status = `<span class="bad">${fmt(a - rec)} ${L('বেশি', 'over')}</span>`;
-    else status = near ? `<span class="nearc">${pct(ratio * 100)} ${L('খরচ', 'used')} · ${fmt(rec - a)} ${L('বাকি', 'left')}</span>` : `${fmt(rec - a)} ${L('বাকি', 'left')}`;
-    const limTxt = fixed ? `${k === 'reserve' ? L('ন্যূনতম', 'min') : L('সীমা', 'limit')} ${fmt(rec)}` : `${L('সীমা', 'limit')} ${toNum(b.budget[k])}%`;
+    else status = near ? `<span class="nearc">${fmt(rec - a)} ${L('বাকি', 'left')} · ${pct(ratio * 100)}</span>` : `<span>${fmt(rec - a)} ${L('বাকি', 'left')}</span>`;
+    const idealPct = cap > 0 ? rec / cap * 100 : 0;
     return `<div class="brow">
       <div class="brow-top"><i class="dot" style="--c:${colorOf(k)}"></i><span class="grow">${bl(k)}</span>
         <span class="amt">${fmt(a)} <small>/ ${fmt(rec)}</small></span></div>
       <div class="bbar"><span class="${over ? 'over' : near ? 'near' : ''}" style="--c:${colorOf(k)};width:${(clamp(ratio, 0, 1) * 100).toFixed(1)}%"></span></div>
-      <div class="brow-meta"><span>${cap > 0 ? pct(a / cap * 100) : '0%'} · ${limTxt}</span>${status}</div>
+      <div class="brow-meta"><span>${L('আদর্শ', 'Ideal')} ${pct(idealPct)} · ${L('খরচ', 'used')} ${cap > 0 ? pct(a / cap * 100) : '0%'}</span>${status}</div>
     </div>`;
   }).join('');
-  return `<div class="stack">${stack}</div>
-    <div class="legend">${BUDGET_KEYS.map(k => `<span><i style="--c:${colorOf(k)}"></i>${bl(k)}</span>`).join('')}</div>
+  return `<div class="donut-wrap">
+      <div class="donut"><svg viewBox="0 0 42 42" role="img" aria-label="${L('আদর্শ বাজেট ভাগ', 'Ideal budget split')}"><circle cx="21" cy="21" r="15.9155" class="dbg"/>${segs}</svg>
+        <div class="dcenter"><small>${L('মূলধন', 'Capital')}</small><b>${fmt(cap)}</b><em>${L('খরচ', 'spent')} ${pct(spentPct)}</em></div></div>
+      <div class="dlegend">${BUDGET_KEYS.map(k => `<div><i style="--c:${colorOf(k)}"></i><span>${bl(k)}</span><b>${pct(cap > 0 ? ideal[k] / cap * 100 : 0)}</b></div>`).join('')}</div>
+    </div>
+    ${summary}
     <div class="brows">${rowsHtml}</div>`;
 }
 
@@ -1245,21 +1269,44 @@ function viewMore(b, c) {
       'Hisabi · All data stays on this phone and never goes to a server.<br>Changing phones or deleting the app loses data, so back up now and then.')}<br><br>${L('বানিয়েছেন', 'Made by')} <a href="https://github.com/sakib69alive" target="_blank" rel="noopener">@sakib69alive</a></p>`;
 }
 
+const PRESETS = {
+  balanced: { bn: 'ভারসাম্য', en: 'Balanced', note: ['প্রস্তাবিত, বেশিরভাগ ব্যবসার জন্য', 'Suggested for most shops'], v: DEFAULT_BUDGET },
+  lean: { bn: 'কম ঝুঁকি', en: 'Low risk', note: ['বেশি রিজার্ভ, কম অ্যাড', 'More reserve, lighter ads'], v: { product: 55, shipping: 12, ads: 12, packaging: 5, courier: 3, other: 3, reserve: 10 } },
+  ads: { bn: 'অ্যাড-নির্ভর', en: 'Ad-driven', note: ['ভাইরাল প্রোডাক্টে বেশি অ্যাড', 'Heavier ads for viral items'], v: { product: 42, shipping: 12, ads: 30, packaging: 4, courier: 3, other: 3, reserve: 6 } },
+};
+const round2 = n => Math.round(n * 100) / 100;
+// ফর্মে দেখানোর % : ৳ সীমা আগে দেওয়া থাকলে সেটা % এ বদলে
+function budgetPcts(b) {
+  const cap = toNum(b.capital);
+  const out = {};
+  BUDGET_KEYS.forEach(k => {
+    const lim = toNum((b.limits || {})[k]);
+    out[k] = lim > 0 && cap > 0 ? round2(lim / cap * 100) : toNum(b.budget[k]);
+  });
+  const used = sum(BUDGET_KEYS.filter(k => k !== 'reserve').map(k => out[k]));
+  out.reserve = round2(Math.max(0, 100 - used));
+  return out;
+}
 function budgetForm(b) {
   const cap = toNum(b.capital);
-  return `${sheetHead(L('বাজেট পরিকল্পনা', 'Budget plan'), L(`মূলধন ${fmt(cap)} কোথায় কত রাখবেন`, `Where to put your ${fmt(cap)} capital`))}
+  const pc = budgetPcts(b);
+  return `${sheetHead(L('বাজেট পরিকল্পনা', 'Budget plan'), L(`মূলধন ${fmt(cap)} কোথায় কত খরচ করবেন`, `How to spend your ${fmt(cap)} capital`))}
   <form data-form="budget" data-live="budget" autocomplete="off">
-    ${BUDGET_KEYS.map(k => `<div class="field">
-      <span class="flabel"><i class="dot" style="--c:var(--c-${k})"></i>${bl(k)} <span class="muted" style="font-weight:500">· ${bh(k)}</span></span>
-      <div class="row2"><div class="input-wrap"><input class="input" name="${k}" inputmode="decimal" value="${esc(b.budget[k])}"><span class="suffix">%</span></div>
-      <div class="input-wrap has-prefix"><span class="prefix">৳</span><input class="input" name="lim_${k}" inputmode="decimal" value="${esc((b.limits || {})[k] || '')}"
-        placeholder="${Math.round(cap * toNum(b.budget[k]) / 100)}" aria-label="${bl(k)} ${k === 'reserve' ? L('ন্যূনতম ৳', 'minimum ৳') : L('সর্বোচ্চ ৳', 'maximum ৳')}"></div></div></div>`).join('')}
-    <div class="hint" style="margin:-4px 0 14px">${L('৳ ঘর খালি রাখলে % থেকে সীমা ধরা হবে। ৳ লিখলে সেটাই সীমা (রিজার্ভের জন্য ন্যূনতম)।', 'Leave ৳ empty to use the %. Type a taka amount to set a fixed limit (a minimum for the reserve).')}</div>
+    <div class="field"><span class="flabel">${L('তৈরি প্ল্যান বেছে নিন (পরে বদলাতে পারবেন)', 'Pick a ready plan (you can still edit)')}</span>
+      <div class="plans">${Object.entries(PRESETS).map(([id, p]) => `<button type="button" class="plan" data-action="budget-preset" data-p="${id}"><b>${isEN() ? p.en : p.bn}</b><small>${p.note[isEN() ? 1 : 0]}</small></button>`).join('')}</div></div>
+    <div class="bf-head"><span>${L('খাত', 'Category')}</span><span>%</span><span>৳</span></div>
+    ${BUDGET_KEYS.map(k => {
+      const ro = k === 'reserve';
+      return `<div class="bfrow ${ro ? 'auto' : ''}">
+      <div class="bf-name"><i class="dot" style="--c:var(--c-${k})"></i><span><b>${bl(k)}</b><small>${ro ? L('বাকিটা অটো এখানে আসে', 'The remainder, filled automatically') : bh(k)}</small></span></div>
+      <div class="input-wrap"><input class="input" name="${k}" inputmode="decimal" value="${esc(pc[k])}" ${ro ? 'readonly tabindex="-1"' : ''} aria-label="${bl(k)} %"><span class="suffix">%</span></div>
+      <div class="input-wrap has-prefix"><span class="prefix">৳</span><input class="input" name="lim_${k}" inputmode="numeric" value="${Math.round(cap * pc[k] / 100)}" ${ro ? 'readonly tabindex="-1"' : ''} aria-label="${bl(k)} ৳"></div></div>`;
+    }).join('')}
+    <div class="hint" style="margin:6px 0 14px">${L('% লিখলে ৳ নিজে বদলাবে, ৳ লিখলে % বদলাবে। রিজার্ভ বাকিটা নিজে নেয়, তাই মোট সবসময় ১০০%।', 'Type a % and the ৳ follows, type ৳ and the % follows. Reserve takes whatever is left, so the total is always 100%.')}</div>
     <label class="field"><span>${L('কত % খরচ হলে আগাম সতর্ক করবে', 'Warn me when a category reaches')}</span>
       <div class="input-wrap"><input class="input" name="warnAt" inputmode="decimal" value="${esc(b.warnAt ?? 80)}"><span class="suffix">%</span></div></label>
     <div class="preview" data-preview></div>
     <button class="btn primary block" type="submit">${L('সেভ করুন', 'Save')}</button>
-    <button type="button" class="btn block mt8" data-action="reset-budget">${L('প্রস্তাবিত ভাগে ফিরুন', 'Reset to suggested split')}</button>
   </form>`;
 }
 
@@ -1495,9 +1542,9 @@ const ACTIONS = {
   },
 
   'edit-budget': () => openSheet(budgetForm(activeBatch())),
-  'reset-budget': el => {
-    const f = el.closest('form');
-    BUDGET_KEYS.forEach(k => { f.elements[k].value = DEFAULT_BUDGET[k]; });
+  'budget-preset': el => {
+    const f = el.closest('form'), cap = toNum(activeBatch().capital), v = PRESETS[el.dataset.p].v;
+    BUDGET_KEYS.forEach(k => { f.elements[k].value = v[k]; f.elements['lim_' + k].value = Math.round(cap * v[k] / 100); });
     runLive(f, null);
   },
   calculator: () => openSheet(calcForm(activeBatch())),
@@ -1552,6 +1599,8 @@ const FORMS = {
       commit(SAVED());
     } else {
       const b = newBatch(data);
+      const plan = f.elements.plan && PRESETS[f.elements.plan.value];
+      if (plan) b.budget = { ...plan.v };
       state.batches.push(b);
       state.activeBatchId = b.id;
       tab = 'home'; trail = ['home'];
@@ -1640,12 +1689,14 @@ const FORMS = {
     commit(existing ? SAVED() : L('বিক্রি যোগ হয়েছে', 'Sale added'));
   },
   budget: f => {
-    const vals = Object.fromEntries(BUDGET_KEYS.map(k => [k, clamp(toNum(f.elements[k].value), 0, 100)]));
-    const total = sum(Object.values(vals));
-    if (Math.abs(total - 100) > 0.01) return fail(f, L(`সব মিলিয়ে ঠিক ১০০% হতে হবে (এখন ${pct(total)})`, `Must total exactly 100% (now ${pct(total)})`));
+    const keys = BUDGET_KEYS.filter(k => k !== 'reserve');
+    const vals = Object.fromEntries(keys.map(k => [k, clamp(toNum(f.elements[k].value), 0, 100)]));
+    const used = sum(Object.values(vals));
+    if (used > 100.001) return fail(f, L(`খাতগুলোর মোট ${pct(used)} হয়ে গেছে, ১০০% এর বেশি হতে পারে না। কোনো খাত কমান।`, `The categories add up to ${pct(used)}, which is over 100%. Lower one of them.`));
+    vals.reserve = round2(100 - used);
     const b = activeBatch();
     b.budget = vals;
-    b.limits = Object.fromEntries(BUDGET_KEYS.map(k => [k, toNum(f.elements['lim_' + k].value) > 0 ? toNum(f.elements['lim_' + k].value) : '']));
+    b.limits = {};
     b.warnAt = clamp(toNum(f.elements.warnAt.value) || 80, 10, 100);
     closeSheet();
     commit(L('বাজেট সেভ হয়েছে', 'Budget saved'));
@@ -1658,6 +1709,11 @@ const FORMS = {
 const LIVE = {
   batch: f => {
     const cap = toNum(f.elements.capital.value), t = toNum(f.elements.target.value);
+    const ph = $('[data-plan-preview]', f);
+    if (ph && f.elements.plan) {
+      const p = PRESETS[f.elements.plan.value] || PRESETS.balanced;
+      ph.innerHTML = p.note[isEN() ? 1 : 0] + (cap > 0 ? '<br>' + ['product', 'ads', 'shipping', 'reserve'].map(k => `${bl(k)} <b>${p.v[k]}%</b> (${fmt(cap * p.v[k] / 100)})`).join(' · ') : '');
+    }
     const h = $('[data-target-hint]', f);
     if (!h) return;
     if (cap > 0 && t > 0) {
@@ -1699,6 +1755,16 @@ const LIVE = {
       html += b.products.length > 1
         ? `<span class="muted">${L(`সব প্রোডাক্টে ভাগ হবে: ${by} অনুযায়ী।`, `Split across all products by ${by}.`)}</span>`
         : (b.products.length ? '' : `<span class="muted">${L('এখনও প্রোডাক্ট নেই। প্রোডাক্ট যোগ করলে এই খরচ তাতে ভাগ হবে।', 'No products yet. This cost will be split once you add some.')}</span>`);
+    }
+    const tot = perUnit ? amt * units : amt;
+    if (tot > 0 && toNum(b.capital) > 0) {
+      const c = compute(b), editing = f.dataset.id && b.expenses.find(e => e.id === f.dataset.id);
+      const back = editing ? toNum(editing.amount) : 0;
+      const before = budgetActual(c)[cat] - (editing && editing.category === cat ? back : 0);
+      const lim = limitOf(b, cat), after = before + tot, diff = after - lim;
+      html += `<div class="bimpact ${diff > 0 ? 'bad' : ''}"><b>${bl(cat)} ${L('বাজেট', 'budget')}</b>: ${fmt(after)} / ${fmt(lim)}<br>
+        ${diff > 0 ? `<b class="neg">${fmt(diff)} ${L('বেশি হয়ে যাবে', 'over budget')}</b>` : `${fmt(-diff)} ${L('বাকি থাকবে', 'will be left')}`}
+        · ${L('হাতে থাকবে', 'Cash left')} <b>${fmt(c.cash + back - tot)}</b></div>`;
     }
     $('[data-preview]', f).innerHTML = html;
   },
@@ -1744,21 +1810,24 @@ const LIVE = {
     else if (t.name === 'price') f.elements.range.value = toNum(t.value);
     $('[data-sim-out]', f).innerHTML = simOut(c, x, toNum(f.elements.price.value));
   },
-  budget: f => {
+  budget: (f, t) => {
     const cap = toNum(activeBatch().capital);
-    let total = 0;
-    BUDGET_KEYS.forEach(k => {
-      const v = toNum(f.elements[k].value);
-      total += v;
-      f.elements['lim_' + k].placeholder = Math.round(cap * v / 100);
-    });
+    const keys = BUDGET_KEYS.filter(k => k !== 'reserve');
+    if (t && t.name && cap > 0) {
+      if (t.name.startsWith('lim_')) f.elements[t.name.slice(4)].value = round2(toNum(t.value) / cap * 100);
+      else if (keys.includes(t.name)) f.elements['lim_' + t.name].value = Math.round(cap * toNum(t.value) / 100);
+    }
+    const used = sum(keys.map(k => toNum(f.elements[k].value)));
+    const res = round2(Math.max(0, 100 - used));
+    f.elements.reserve.value = res;
+    f.elements.lim_reserve.value = Math.round(cap * res / 100);
     const pv = $('[data-preview]', f);
-    const ok = Math.abs(total - 100) < 0.01;
-    pv.className = 'preview' + (ok ? '' : ' warn');
-    pv.innerHTML = ok
-      ? `${L('মোট', 'Total')} <b class="pos">100%</b> ✓`
-      : L(`মোট <b>${pct(total)}</b> হয়েছে, ১০০% হতে হবে (${total > 100 ? `${pct(total - 100)} বেশি` : `${pct(100 - total)} বাকি`})`,
-        `Total is <b>${pct(total)}</b>, must be 100% (${total > 100 ? `${pct(total - 100)} over` : `${pct(100 - total)} left`})`);
+    const over = used > 100.001;
+    pv.className = 'preview' + (over ? ' danger' : '');
+    pv.innerHTML = over
+      ? L(`খাতগুলো মিলিয়ে <b>${pct(used)}</b> হয়ে গেছে, ${pct(used - 100)} বেশি। কোনো খাত কমান।`, `Categories add up to <b>${pct(used)}</b>, ${pct(used - 100)} over. Lower one of them.`)
+      : L(`খরচের জন্য <b>${pct(used)}</b> (${fmt(cap * used / 100)}) · রিজার্ভ <b>${pct(res)}</b> (${fmt(cap * res / 100)}) · মোট <b class="pos">100%</b> ✓`,
+        `Spending <b>${pct(used)}</b> (${fmt(cap * used / 100)}) · reserve <b>${pct(res)}</b> (${fmt(cap * res / 100)}) · total <b class="pos">100%</b> ✓`);
   },
   calc: f => {
     const g = n => toNum(f.elements[n].value);
