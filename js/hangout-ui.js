@@ -52,8 +52,8 @@ function hgStepsCard(ev, c) {
   const people = ev.participants.length, exps = ev.expenses.filter(e => !e.del).length;
   const allEven = c.gross > 0 && ev.participants.every(p => c.final[p.id] === 0);
   const steps = [
-    { done: people >= 2, t: L('বন্ধুদের নাম যোগ করুন', 'Add your friends'), a: 'hg-add-person', btn: L('বন্ধু যোগ করুন', 'Add friend') },
-    { done: exps > 0, t: L('প্রথম খরচটা লিখুন', 'Add the first expense'), a: 'hg-add-expense', btn: L('খরচ লিখুন', 'Add expense'), need: people >= 2 },
+    { done: people >= hgTerm(ev).min, t: hgTerm(ev).step, a: 'hg-add-person', btn: hgTerm(ev).add },
+    { done: exps > 0, t: L('প্রথম খরচটা লিখুন', 'Add the first expense'), a: 'hg-add-expense', btn: L('খরচ লিখুন', 'Add expense'), need: people >= hgTerm(ev).min },
     { done: allEven, t: L('কে কাকে দেবে দেখে মিটিয়ে নিন', 'See who pays whom'), a: 'tab', data: 'data-tab="settle"', btn: L('মেটানো দেখুন', 'Open Settle'), need: exps > 0 },
   ];
   if (steps.every(s => s.done) || ev.status !== 'active') return '';
@@ -93,11 +93,51 @@ function hgBalanceBoard(ev, c) {
   return `<section class="card"><div class="card-head"><h2>${L('সবার অবস্থা', 'Where everyone stands')}</h2></div>
     <div class="bb-legend"><span class="neg">◀ ${L('দেবে', 'Owes')}</span><span class="pos">${L('পাবে', 'Gets')} ▶</span></div>
     ${rows.map(({ p, f }) => `<button type="button" class="bb2" data-action="hg-person-stmt" data-p="${p.id}">${hgAv(p)}
-      <span class="bb2-m"><span class="bb2-n"><b>${esc(p.name)}${p.org ? ' 👑' : ''}</b><b class="${f > 0 ? 'pos' : f < 0 ? 'neg' : ''}">${f === 0 ? L('মিটেছে ✓', 'Even ✓') : (f > 0 ? '+' : '−') + hgM(Math.abs(f))}</b></span>
+      <span class="bb2-m"><span class="bb2-n"><b>${esc(p.name)}</b><b class="${f > 0 ? 'pos' : f < 0 ? 'neg' : ''}">${f === 0 ? L('মিটেছে ✓', 'Even ✓') : (f > 0 ? '+' : '−') + hgM(Math.abs(f))}</b></span>
         <span class="bb2-bar"><i class="neg" style="width:${f < 0 ? (Math.abs(f) / max * 50).toFixed(1) : 0}%"></i><u></u><i class="pos" style="width:${f > 0 ? (f / max * 50).toFixed(1) : 0}%"></i></span></span></button>`).join('')}</section>`;
 }
 
+function hgDueCard(ev) {
+  const gs = hgDueGroups(ev), open = gs.filter(g => g.rem > 0), act = ev.status === 'active';
+  const owe = sum(open.filter(g => g.dir === 'owe').map(g => g.rem)), get = sum(open.filter(g => g.dir === 'get').map(g => g.rem));
+  return `<section class="card"><div class="card-head"><h2>${L('বাকির খাতা', 'Credit book')}</h2>${act ? `<button type="button" class="link" data-action="hg-due-add">+ ${L('বাকি লিখুন', 'Add')}</button>` : ''}</div>
+    <div class="minis"><div class="mini"><small>${L('আমি দেব', 'I owe')}</small><b class="${owe ? 'neg' : ''}">${hgM(owe)}</b></div><div class="mini"><small>${L('আমি পাব', 'I am owed')}</small><b class="${get ? 'pos' : ''}">${hgM(get)}</b></div></div>
+    ${open.length ? `<div class="list mt8">${open.map(g => `<button type="button" class="lrow" data-action="hg-due-open" data-k="${esc(g.key)}"><span class="lic">${g.dir === 'owe' ? '📤' : '📥'}</span><span class="lmain"><b>${esc(g.who)}</b><small>${g.dir === 'owe' ? L('আমি দেব', 'I owe') : L('আমি পাব', 'I am owed')} · ${g.dues.filter(d => hgDueRem(d) > 0).map(d => esc(d.title || L('বাকি', 'credit'))).slice(0, 2).join(', ')}</small></span><span class="lend"><b class="${g.dir === 'owe' ? 'neg' : 'pos'}">${hgM(g.rem)}</b></span></button>`).join('')}</div>`
+      : `<p class="hint" style="margin:8px 0 0">${gs.length ? L('সব বাকি মিটে গেছে 🎉', 'All settled 🎉') : L('বাকিতে কিছু কিনলে খরচ লেখার সময় "বাকিতে কিনেছি" টিক দিন। কে কত পাবে বা কার কাছে কত দেবেন এখানে জমা থাকবে।', 'When you buy on credit tick "Bought on credit" while adding the expense. Who is owed what is kept here.')}</p>`}
+    ${gs.filter(g => g.rem === 0).length ? `<details class="more mt8"><summary>${L('মিটে যাওয়া', 'Settled')} · ${gs.filter(g => g.rem === 0).length}</summary><div class="list">${gs.filter(g => g.rem === 0).map(g => `<button type="button" class="lrow" data-action="hg-due-open" data-k="${esc(g.key)}"><span class="lic">✅</span><span class="lmain"><b>${esc(g.who)}</b><small>${hgM(g.total)}</small></span></button>`).join('')}</div></details>` : ''}</section>`;
+}
+function hgSoloHome(ev, c) {
+  if (typeof hgIsHouse === 'function' && hgIsHouse(ev)) return hgHouseHome(ev, c);
+  const act = ev.status === 'active';
+  const exps = ev.expenses.filter(e => !e.del);
+  const todayT = c.byDay[today()] ? c.byDay[today()].total : 0;
+  const first = c.days.filter(Boolean)[0];
+  const span = first ? Math.max(1, daysBetween(first, today()) + 1) : 1;
+  const cats = ev.cats.filter(k => !['discount', 'vat', 'service', 'other_charges'].includes(k.k));
+  const lock = act ? '' : `<div class="hg-lock ${ev.status}"><span>${ev.status === 'settled' ? L('এই হিসাব বন্ধ করা আছে। বদলাতে আবার খুলুন।', 'This is closed. Reopen it to change anything.') : L('এটা আর্কাইভে আছে।', 'This is archived.')}</span><button type="button" class="btn sm" data-action="${ev.status === 'settled' ? 'hg-reopen' : 'hg-restore'}">${ev.status === 'settled' ? L('আবার খুলুন', 'Reopen') : L('রিস্টোর', 'Restore')}</button></div>`;
+  const recent = exps.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 5);
+  return `${lock}${hgIssuesHtml(ev, c)}
+  <section class="hero tappable" data-action="hg-hero-detail" role="button" tabindex="0" aria-label="${L('পুরো হিসাব দেখুন', 'See the full breakdown')}">
+    <div class="hero-top"><div><div class="hero-label">${L('মোট খরচ', 'Total spent')}</div><div class="hero-target">${hgM(c.net)}</div>
+      <div class="hero-sub">${(HG_TYPES[ev.type] || HG_TYPES.custom).icon} ${hgTypeLabel(ev.type)}</div></div></div>
+    <div class="hero-chips"><div><small>${L('আজ', 'Today')}</small><b>${hgM(todayT)}</b></div><div><small>${L('গড় প্রতিদিন', 'Daily average')}</small><b>${hgM(Math.round(c.net / span))}</b></div><div><small>${L('খরচ', 'Entries')}</small><b>${exps.length}</b></div></div>
+    <div class="hero-more">${L('ট্যাপ করে পুরো হিসাব দেখুন', 'Tap for the full breakdown')} ${icon('chev', 16)}</div></section>
+  ${act ? `<div class="quick four"><button type="button" class="qbtn" data-action="hg-add-expense"><span class="qi">${icon('receipt')}</span>${L('খরচ লিখুন', 'Add expense')}</button>
+    <button type="button" class="qbtn" data-action="hg-due-add"><span class="qi">${icon('clock')}</span>${L('বাকি', 'Credit')}</button>
+    <button type="button" class="qbtn" data-action="hg-plan"><span class="qi">${icon('wallet')}</span>${L('বাজেট', 'Budget')}</button>
+    <button type="button" class="qbtn" data-action="hg-rep-slip"><span class="qi">${icon('doc')}</span>${L('রিপোর্ট', 'Report')}</button></div>` : ''}
+  ${act ? `<section class="card"><div class="card-head"><h2>${L('কোন খাতে খরচ?', 'Which category?')}</h2></div><p class="hint" style="margin:0 0 10px">${L('খাতে ট্যাপ করলেই সেই খাতের খরচ লেখার ফর্ম খুলবে।', 'Tap a category to add an expense in it.')}</p>
+    <div class="ctiles">${cats.map(k => `<button type="button" class="ctile" data-action="hg-add-cat" data-k="${k.k}"><b>${esc(isEN() ? k.en : k.bn)}</b><small>${c.catTotals[k.k] > 0 ? hgM(c.catTotals[k.k]) : L('যোগ করুন', 'Add')}</small></button>`).join('')}</div></section>` : ''}
+  ${hgPlanCard(ev, c)}
+  ${recent.length ? `<section class="card"><div class="card-head"><h2>${L('সাম্প্রতিক খরচ', 'Recent expenses')}</h2><button type="button" class="link" data-action="tab" data-tab="expenses">${L('সব দেখুন', 'See all')}</button></div>
+    <div class="list">${recent.map(e => `<button type="button" class="lrow" data-action="hg-edit-expense" data-id="${e.id}"><span class="lic">${e.mode === 'bill' ? '🧾' : '💸'}</span><span class="lmain"><b>${esc(e.title)}</b><small>${esc(hgCatLabel(ev, e.category))} · ${fmtDate(e.date)}</small></span><span class="lend"><b>${hgM(e.total)}</b></span></button>`).join('')}</div></section>` : ''}
+  ${hgWhereCard(ev, c)}
+  ${ev.participants.length > 1 ? `<section class="card"><div class="card-head"><h2>${hgTerm(ev).each}</h2></div><div class="plist">${hgOweRows(ev, c).map(({ p, f }) => `<button type="button" class="prow" data-action="hg-person-stmt" data-p="${p.id}">${hgAv(p)}<span class="pmain"><b>${esc(p.name)}</b><small>${L('দিয়েছে', 'Paid')} ${hgM(c.paid[p.id])} · ${L('তার ভাগ', 'Share')} ${hgM(c.share[p.id])}</small></span><span class="pend"><b class="${f > 0 ? 'pos' : f < 0 ? 'neg' : ''}">${hgM(Math.abs(f))}</b><small>${f > 0 ? L('পাবে', 'gets') : f < 0 ? L('দেবে', 'owes') : L('মিটেছে', 'even')}</small></span></button>`).join('')}</div></section>` : ''}
+  ${hgDueCard(ev)}`;
+}
+
 function hgHomeTab(ev, c) {
+  if (hgSolo(ev)) return hgSoloHome(ev, c);
   const open = sum(ev.participants.map(p => Math.max(0, c.final[p.id])));
   const evenCount = ev.participants.filter(p => c.final[p.id] === 0).length;
   const progress = ev.participants.length && c.gross ? evenCount / ev.participants.length : 0;
@@ -114,7 +154,7 @@ function hgHomeTab(ev, c) {
         <div class="hero-sub">${(HG_TYPES[ev.type] || HG_TYPES.custom).icon} ${hgTypeLabel(ev.type)}${ev.start ? ' · ' + fmtDate(ev.start) : ''}${ev.location ? ' · ' + esc(ev.location) : ''}</div></div>
       <div class="ringcap">${ring(progress)}<small>${L('মিটেছে', 'settled')}</small></div></div>
     <div class="hero-chips">
-      <div><small>${L('বন্ধু', 'Friends')}</small><b>${ev.participants.length}</b></div>
+      <div><small>${hgTerm(ev).one}</small><b>${ev.participants.length}</b></div>
       <div><small>${L('খরচ', 'Expenses')}</small><b>${exps.length}</b></div>
       <div><small>${L('বাকি আছে', 'To settle')}</small><b>${hgM(open)}</b></div></div>
     <div class="hero-more">${L('ট্যাপ করে পুরো হিসাব দেখুন', 'Tap for the full breakdown')} ${icon('chev', 16)}</div>
@@ -130,9 +170,9 @@ function hgHomeTab(ev, c) {
   ${hgPoolCard(ev, c)}
   ${hgPlanCard(ev, c)}
   ${hgWhereCard(ev, c)}
-  <section class="card"><div class="card-head"><h2>${L('বন্ধুদের হিসাব', 'Each friend')}</h2><button type="button" class="link" data-action="tab" data-tab="people">${L('বিস্তারিত', 'Details')}</button></div>
+  <section class="card"><div class="card-head"><h2>${hgTerm(ev).each}</h2><button type="button" class="link" data-action="tab" data-tab="people">${L('বিস্তারিত', 'Details')}</button></div>
     <div class="plist">${hgOweRows(ev, c).map(({ p, f }) => `<button type="button" class="prow" data-action="hg-person-stmt" data-p="${p.id}">${hgAv(p)}
-      <span class="pmain"><b>${esc(p.name)}${p.org ? ' 👑' : ''}</b><small>${L('দিয়েছে', 'Paid')} ${hgM(c.paid[p.id])} · ${L('তার ভাগ', 'Share')} ${hgM(c.share[p.id])}</small></span>
+      <span class="pmain"><b>${esc(p.name)}</b><small>${L('দিয়েছে', 'Paid')} ${hgM(c.paid[p.id])} · ${L('তার ভাগ', 'Share')} ${hgM(c.share[p.id])}</small></span>
       <span class="pend"><b class="${f > 0 ? 'pos' : f < 0 ? 'neg' : ''}">${hgM(Math.abs(f))}</b><small>${f > 0 ? L('পাবে', 'gets') : f < 0 ? L('দেবে', 'owes') : L('মিটেছে', 'even')}</small></span></button>`).join('') || `<p class="hint">${L('এখনও কেউ নেই।', 'No one yet.')}</p>`}</div></section>
   <details class="card more-card"><summary>${L('আরও হিসাব দেখুন', 'More details')} ${icon('chev', 20)}</summary>
     <section class="stat-grid">
@@ -144,7 +184,7 @@ function hgHomeTab(ev, c) {
 
 /* ---------- বন্ধুরা, খরচ ---------- */
 function hgPeopleTab(ev, c) {
-  return `<div class="page-head"><h1>${L('বন্ধুরা', 'Friends')}</h1>${ev.status === 'active' ? `<button type="button" class="btn primary sm" data-action="hg-add-person">${icon('plus', 18)} ${L('বন্ধু', 'Friend')}</button>` : ''}</div>
+  return `<div class="page-head"><h1>${hgTerm(ev).tab}</h1>${ev.status === 'active' ? `<button type="button" class="btn primary sm" data-action="hg-add-person">${icon('plus', 18)} ${hgTerm(ev).one}</button>` : ''}</div>
     <div class="hg-body">${hgSecPeople(ev, c)}</div>`;
 }
 function hgExpensesTab(ev, c) {
@@ -194,7 +234,7 @@ function hgMoreTab(ev, c) {
     <div class="menu">${mi('hg-backup', 'download', L('Hangout ব্যাকআপ নিন', 'Back up Hangout data'), L('রসিদের ছবিসহ, আলাদা ফাইলে', 'Receipt photos included, separate file'))}
       ${mi('hg-import', 'upload', L('Hangout ব্যাকআপ রিস্টোর', 'Restore Hangout backup'), L('ডুপ্লিকেট ছাড়া মিলিয়ে নিন', 'Merge without duplicates'))}
       ${hasPrev ? mi('hg-undo-import', 'undo', L('শেষ রিস্টোর ফেরান', 'Undo last restore'), L('রিস্টোরের আগের অবস্থায় যান', 'Go back to before the restore')) : ''}
-      ${hg().events.some(e => e.demo) ? mi('hg-demo-clear', 'trash', L('ডেমো ডেটা মুছুন', 'Remove demo data'), L('শুধু ডেমো যাবে, আপনার ডেটা থাকবে', 'Only the demo goes; your data stays')) : mi('hg-demo-load', 'plus', L('ডেমো ডেটা আনুন', 'Load demo data'), L('দেখে শেখার জন্য নমুনা ইভেন্ট', 'Sample events to learn from'))}</div>
+      </div>
     ${dead.length ? `<div class="section-title">${L('সম্প্রতি মোছা ইভেন্ট', 'Recently deleted events')} · ${dead.length}</div><div class="list">${dead.map(e => `<div class="lrow"><span class="lic">🗑️</span><span class="lmain"><b>${esc(e.name)}</b><small>${hgFmtTime(e.del)}</small></span>
       <button type="button" class="btn sm" data-action="hg-restore-event" data-id="${e.id}">${L('ফেরত', 'Restore')}</button><button type="button" class="btn sm danger" data-action="hg-purge-event" data-id="${e.id}">${icon('trash', 16)}</button></div>`).join('')}</div>` : ''}
     <button type="button" class="btn danger block mt12" data-action="hg-del-event">${icon('trash', 18)} ${L(`"${esc(ev.name)}" ইভেন্ট ডিলিট`, `Delete event "${esc(ev.name)}"`)}</button>
@@ -227,6 +267,7 @@ document.addEventListener('input', e => { const el = e.target.closest && e.targe
 document.addEventListener('change', e => { const el = e.target.closest && e.target.closest('select[data-hg-filter], input[type=date][data-hg-filter]'); if (el) { hgF[el.dataset.hgFilter] = el.value; hgRefreshEventList(); } });
 
 Object.assign(ACTIONS, {
+  'hg-add-cat': el => { const ev = hgCur(); if (!ev) return; hgEnsureMe(ev); const g = hgGuard(); if (g) openSheet(hgExpenseForm(null, el.dataset.k)); },
   'hg-remind': async el => {
     const ev = hgCur(); if (!ev) return; const s = hgEventCalc(ev).suggestions[Number(el.dataset.i)]; if (!s) return;
     const txt = L(`${pName(ev, s.from)}, "${ev.name}"-এ তোমার ${hgM(s.amt)} বাকি আছে। ${pName(ev, s.to)}-কে সুবিধামতো দিয়ে দিও। ধন্যবাদ 🙏`, `Hi ${pName(ev, s.from)}, you still owe ${hgM(s.amt)} for "${ev.name}". Please pay ${pName(ev, s.to)} when you can. Thanks 🙏`);
@@ -407,7 +448,7 @@ const HG_PLAN_NOTE = {
   hangout: ['আড্ডায় খাবার প্রায় অর্ধেক, যাতায়াত এক-চতুর্থাংশ।', 'In a hangout food is about half and transport a quarter.'],
   family: ['পরিবার নিয়ে বেড়াতে খাবার ও যাতায়াত মিলে প্রায় ৫৫%।', 'On a family outing food and transport take about 55%.'],
   office: ['অফিস বা ক্লাসের খরচে খাবার ও নাস্তাই বেশির ভাগ।', 'For office or class costs food and snacks are most of it.'],
-  household: ['মাসিক সংসারে ঘরভাড়া ২৫-৩৫%, বাজার ১৫-২৫%, যাতায়াত ১০% এর কাছাকাছি। সঞ্চয় আগে আলাদা করে রাখা ভালো (১০-২০%)। ৫০/৩০/২০ নিয়মও চলে: প্রয়োজন ৫০%, শখ ৩০%, সঞ্চয় ২০%।', 'For a monthly household rent is 25-35%, groceries 15-25%, transport near 10%. Set savings aside first (10-20%). The 50/30/20 rule also works: needs 50%, wants 30%, savings 20%.'],
+  household: ['মাসিক সংসারে বাজার ২৫-৩৫%, পড়াশোনা ১০-২০%, চিকিৎসা ৮-১২%, বিল (বিদ্যুৎ, গ্যাস, পানি, ইন্টারনেট) মিলে প্রায় ১৫%। সঞ্চয় আগে আলাদা করে রাখা ভালো (১০-২০%)।', 'For a monthly household groceries 25-35%, education 10-20%, medical 8-12%, bills (power, gas, water, internet) about 15% together. Set savings aside first (10-20%).'],
   daily: ['দৈনিক বাজারে চাল-ডাল-তেল, সবজি আর মাছ-মাংসই প্রায় পুরোটা।', 'Daily market spend is mostly staples, vegetables and meat or fish.'],
   transport: ['যাতায়াতে ভাড়া সবচেয়ে বেশি, তারপর জ্বালানি।', 'In transport, fares come first, then fuel.'],
   shopping: ['শপিংয়ে বেশির ভাগ কেনাকাটা, বাকিটা অন্যান্য।', 'Mostly purchases, the rest other costs.'],

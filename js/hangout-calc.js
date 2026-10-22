@@ -458,7 +458,7 @@ const HG_PLAN_DEFAULTS = {
   wedding: { venue: 28, cook: 22, decoration: 10, flowers: 4, photo: 10, clothes: 7, beauty: 4, invites: 3, gifts: 4, transport: 4, other: 4 },
   eid: { clothes: 35, groceries: 22, food: 10, eidi: 8, gifts: 8, transport: 8, decoration: 4, other: 5 },
   daily: { staples: 30, vegetables: 20, meat: 25, snacks: 8, transport: 7, other: 10 },
-  household: { rent: 30, groceries: 22, electricity: 5, gaswater: 3, internet: 4, transport: 8, medical: 6, education: 8, househelp: 4, savings: 10, family: 3, other: 5 },
+  household: { groceries: 28, electricity: 6, gas: 3, water: 2, internet: 5, medical: 10, education: 15, househelp: 6, savings: 12, cleaning: 4, family: 4, other: 5 },
   family: { food: 30, transport: 25, tickets: 20, shopping: 15, other: 10 },
   office: { food: 55, snacks: 15, drinks: 12, transport: 12, other: 6 },
   hangout: { food: 50, transport: 25, tickets: 10, shopping: 10, misc: 5 },
@@ -521,6 +521,48 @@ function hgPlanCalc(ev, calc, now) {
   return { people: t.people, total: t.total, each: t.each, spent: spentAll, remaining, spentPerPerson: Math.round(spentAll / t.people), rows, reserveIdeal, reservePct: pctOf('reserve'), flags, burn, collected, short: Math.max(0, t.total - collected) };
 }
 
+/* ---------- দেনা-পাওনার রেকর্ড (বিল, ফি, চিকিৎসা): খরচ একবারই ধরা হয়, পেমেন্ট আলাদা জমা হয় ---------- */
+// e.pays = [{ id, amt, date, method, note }]। পুরোনো "বাকির খাতা" (dues) যুক্ত থাকলে তার বাকিও ধরা হয়
+const hgPaid = e => hgSum((e.pays || []).filter(p => !p.del).map(p => p.amt));
+const hgIsObl = e => Array.isArray(e.pays);
+function hgOblRem(ev, e) {
+  const own = hgIsObl(e) ? Math.max(0, e.total - hgPaid(e)) : 0;
+  const legacy = ((ev && ev.dues) || []).filter(d => !d.del && d.expenseId === e.id).reduce((q, d) => q + Math.max(0, d.amt - hgSum((d.payments || []).map(p => p.amt))), 0);
+  return own + legacy;
+}
+// unpaid | partial | paid | overdue (নির্ধারিত তারিখ পার হয়ে গেলে এবং বাকি থাকলে)
+function hgOblStatus(ev, e, now) {
+  const rem = hgOblRem(ev, e);
+  if (rem <= 0) return 'paid';
+  const due = e.info && e.info.dueDate;
+  if (due && now && due < now) return 'overdue';
+  return hgPaid(e) > 0 || rem < e.total ? 'partial' : 'unpaid';
+}
+// বিলের খরচ বিলের মাসে ধরা হয় (এপ্রিলের বিল মে মাসে দিলেও এপ্রিলেই থাকে), বাকি খরচ কেনার তারিখের মাসে
+const hgExpYm = e => (e.info && e.info.ym) || (e.date || '').slice(0, 7);
+const hgDaysIn = ym => { const [y, m] = ym.split('-').map(Number); return new Date(Date.UTC(y, m, 0)).getUTCDate(); };
+// মাসিক কেন্দ্রীয় হিসাব: মাসের শুরুতে কত ছিল, কত এল, কত গেল, কত বাকি, কোন খাতে কত, কোন বিল বাকি
+function hgCentralMonth(ev, ym, now) {
+  const hh = ev.hh || {}, m = (hh.months || {})[ym] || {};
+  const opening = m.opening != null ? m.opening : ((hh.income || {})[ym] || 0), carry = m.carry || 0;
+  const inc = (m.inc || []).filter(x => !x.del);
+  const extra = hgSum(inc.filter(x => x.kind === 'extra').map(x => x.amt)), borrowed = hgSum(inc.filter(x => x.kind === 'borrow').map(x => x.amt));
+  const exps = (ev.expenses || []).filter(e => !e.del && hgExpYm(e) === ym);
+  const cats = {}; exps.forEach(e => { cats[e.category] = (cats[e.category] || 0) + e.total; });
+  const spent = hgSum(Object.values(cats));
+  const start = opening + carry, available = start + extra + borrowed, budget = m.budget > 0 ? m.budget : null;
+  const base = available > 0 ? available : (budget || 0);
+  const remaining = base > 0 ? base - spent : null;
+  const catBudgets = m.cats || {};
+  const catRows = Object.keys(cats).concat(Object.keys(catBudgets).filter(k => !(k in cats))).map(k => ({ k, spent: cats[k] || 0, budget: catBudgets[k] > 0 ? catBudgets[k] : null })).map(r => Object.assign(r, { over: r.budget != null && r.spent > r.budget })).sort((a, b) => b.spent - a.spent);
+  let proj = null;
+  if (now && now.slice(0, 7) === ym) { const d = Number(now.slice(8, 10)), dim = hgDaysIn(ym); if (d >= 3 && spent > 0) proj = spent + Math.round(spent / d * (dim - d)); }
+  const unpaid = [];
+  (ev.expenses || []).filter(e => !e.del).forEach(e => { const rem = hgOblRem(ev, e); if (rem > 0) unpaid.push({ e, rem, status: hgOblStatus(ev, e, now), dueDate: (e.info && e.info.dueDate) || '' }); });
+  unpaid.sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'));
+  return { opening, carry, extra, borrowed, start, available, budget, spent, remaining, cats, catRows, top: catRows.find(r => r.spent > 0) || null, proj, unpaid, unpaidMonth: hgSum(exps.map(e => hgOblRem(ev, e))), over: catRows.filter(r => r.over), budgetOver: budget != null && spent > budget };
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { hgDist, hgSplit, hgBill, hgExpenseAlloc, hgEventCalc, hgSuggest, hgApplyDecisions, hgPersonStatus, hgValidate, hgMerge, toMinor, hgMoney, HG_DECISION_TYPES, hgDecisionEffect, hgPlanDefaults, hgPlanTotals, hgPlanCalc, HG_RESERVE_PCT, hgPoolCalc, hgPersonStatement };
+  module.exports = { hgExpYm, hgPaid, hgIsObl, hgOblRem, hgOblStatus, hgCentralMonth, hgDist, hgSplit, hgBill, hgExpenseAlloc, hgEventCalc, hgSuggest, hgApplyDecisions, hgPersonStatus, hgValidate, hgMerge, toMinor, hgMoney, HG_DECISION_TYPES, hgDecisionEffect, hgPlanDefaults, hgPlanTotals, hgPlanCalc, HG_RESERVE_PCT, hgPoolCalc, hgPersonStatement };
 }

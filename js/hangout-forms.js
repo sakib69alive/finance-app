@@ -47,7 +47,7 @@ function hgSecDecisions(ev, c) {
     return `<section class="card hg-dec ${d.status}"><div class="card-head"><h2>${esc(pName(ev, d.pid))}</h2>${hgBadge('d-' + d.status, hgDStatusLabel(d.status))}</div>
       <p><b>${hgDecLabel(d.side, d.type)}</b>${d.amt != null ? ` · ${hgM(d.amt)}` : (eff !== 'none' ? ` · ${L('পুরোটা', 'full amount')}` : '')}</p>
       ${(d.others || []).length ? `<p class="hint">${L('সংশ্লিষ্ট', 'Involving')}: ${d.others.map(id => esc(pName(ev, id))).join(', ')}</p>` : ''}
-      ${d.reason ? `<p class="hint">${esc(d.reason)}</p>` : ''}${d.orgNote ? `<p class="hint">${L('হোস্টের নোট', 'Host note')}: ${esc(d.orgNote)}</p>` : ''}
+      ${d.reason ? `<p class="hint">${esc(d.reason)}</p>` : ''}${d.orgNote ? `<p class="hint">${L('নোট', 'Note')}: ${esc(d.orgNote)}</p>` : ''}
       <p class="hint">${opSummary(d)}</p>
       ${d.status === 'finalized' ? `<div class="bsum ok"><b>${ap && ap.amt ? L(`প্রয়োগ হয়েছে: ${hgM(ap.amt)}`, `Applied: ${hgM(ap.amt)}`) : L('শুধু রেকর্ড (হিসাব বদলায়নি)', 'Record only (no change to balances)')}</b></div>`
         : `<p class="hint">${L('এটা এখনও হিসাব বদলায়নি। চূড়ান্ত করলে তবেই প্রযোজ্য হবে।', 'This has not changed any balance yet. It applies only once finalized.')}</p>`}
@@ -59,7 +59,7 @@ function hgSecDecisions(ev, c) {
         <button type="button" class="btn sm danger" data-action="hg-del-decision" data-id="${d.id}">${icon('trash', 16)}</button></div>` : ''}</section>`;
   };
   return `${hgIssuesHtml(ev, c)}
-    <div class="bsum"><b>${L('নিয়ম', 'How this works')}</b><span>${L('মতামত লিখলেই হিসাব বদলায় না। হোস্ট সমঝোতা নিশ্চিত করে "চূড়ান্ত" করলে তবেই প্রযোজ্য। মওকুফ কখনো পরিশোধ বা নতুন খরচ নয়, মূল খরচের ইতিহাস অক্ষত থাকে।', 'Writing an opinion changes nothing. Only a Finalized decision applies. A waiver is never a payment or a new expense, and the original expenses stay intact.')}</span></div>
+    <div class="bsum"><b>${L('নিয়ম', 'How this works')}</b><span>${L('মতামত লিখলেই হিসাব বদলায় না। সবাই সমঝোতা নিশ্চিত করে "চূড়ান্ত" করলে তবেই প্রযোজ্য। মওকুফ কখনো পরিশোধ বা নতুন খরচ নয়, মূল খরচের ইতিহাস অক্ষত থাকে।', 'Writing an opinion changes nothing. Only a Finalized decision applies. A waiver is never a payment or a new expense, and the original expenses stay intact.')}</span></div>
     <div class="section-title">${L('ব্যক্তি অনুযায়ী হিসাব', 'Per-person balance')}</div>
     ${ev.participants.map(row).join('') || empty('🤝', L('কেউ নেই', 'No one'), '')}
     <div class="section-title">${L('সিদ্ধান্তসমূহ', 'Decisions')} · ${ds.length}</div>
@@ -86,6 +86,13 @@ function hgSecHistory(ev) {
 }
 
 /* ---------- ইভেন্ট ফর্ম ---------- */
+// ইভেন্টের ধরন: প্রতিটা কার্ডে আইকন, নাম, এক লাইনের মানে আর কোন কোন খাত থাকবে তার নমুনা
+function hgTypePicker(sel) {
+  return `<div class="field"><span class="flabel">${L('কী ধরনের ইভেন্ট?', 'What kind of event?')}</span>
+    <p class="hint" style="margin-top:0">${L('ধরন বাছলে খরচের খাত আর আদর্শ বাজেট নিজে সেট হয়। নিচে নিজের মতো বদলানো যাবে।', 'The type sets the categories and the ideal budget. You can change both below.')}</p>
+    ${Object.keys(HG_TYPE_GROUPS).map(g => `<div class="tgrp"><h4>${esc(HG_TYPE_GROUPS[g][isEN() ? 1 : 0])}</h4><div class="tgrid">${Object.keys(HG_TYPES).filter(k => HG_TYPES[k].g === g).map(k => { const t = HG_TYPES[k];
+      return `<label class="tcard"><input type="radio" name="type" value="${k}" ${k === sel ? 'checked' : ''}><span class="tc"><span class="tc-top"><span class="tc-i">${t.icon}</span><b>${esc(hgTypeLabel(k))}</b></span><small>${esc(hgTypeDesc(k))}</small><em>${t.cats.filter(c => !['discount', 'vat', 'service', 'other_charges', 'other', 'misc'].includes(c)).slice(0, 3).map(c => esc(HG_CAT[c][isEN() ? 1 : 0])).join(' · ')}</em></span></label>`; }).join('')}</div></div>`).join('')}</div>`;
+}
 function hgEventForm(ev, inline) {
   const v = ev || { name: '', type: 'hangout', start: today(), end: '', location: '', notes: '' };
   const cats = ev ? ev.cats : hgCatsFor(v.type);
@@ -93,10 +100,9 @@ function hgEventForm(ev, inline) {
   return `${head}
   <form data-form="hg-event" data-live="hg-event" data-id="${ev ? ev.id : ''}" autocomplete="off">
     <label class="field"><span>${L('ইভেন্টের নাম', 'Event name')}</span><input class="input" name="name" maxlength="60" value="${esc(v.name)}" placeholder="${L('যেমন: কক্সবাজার ট্রিপ', "e.g. Cox's Bazar trip")}"></label>
-    ${ev ? '' : `<label class="field"><span>${L('কারা কারা ছিল? (প্রতি লাইনে একজন)', 'Who was there? (one name per line)')}</span><textarea class="input hg-ta" name="people" rows="3" placeholder="${L('সাকিব\nরাফি\nমিম', 'Sakib\nRafi\nMim')}"></textarea><span class="hint">👑 ${L('প্রথম নামটাই <b>হোস্ট</b> (যে হিসাব রাখছে, সাধারণত আপনি)। পরে বদলানো যায়।', 'The first name is the <b>host</b> (the one keeping the books, usually you). You can change it later.')}</span></label>
+    ${ev ? '' : `<label class="field"><span>${L('কারা কারা ছিল? (প্রতি লাইনে একজন)', 'Who was there? (one name per line)')}</span><textarea class="input hg-ta" name="people" rows="3" placeholder="${L('সাকিব\nরাফি\nমিম', 'Sakib\nRafi\nMim')}"></textarea></label>
       ${hg().friends.length ? `<div class="field"><span class="flabel">${L('অথবা সেভ করা বন্ধুদের থেকে বাছুন', 'Or pick from saved friends')}</span><div class="chips">${hg().friends.map(f => `<label class="chip"><input type="checkbox" name="fr_${f.id}"><span>${esc(f.name)}</span></label>`).join('')}</div></div>` : ''}`}
-    <label class="field"><span>${L('কী ধরনের ইভেন্ট?', 'What kind of event?')}</span><select class="input" name="type">${Object.keys(HG_TYPE_GROUPS).map(g => `<optgroup label="${esc(HG_TYPE_GROUPS[g][isEN() ? 1 : 0])}">${Object.keys(HG_TYPES).filter(k => HG_TYPES[k].g === g).map(k => `<option value="${k}" ${k === v.type ? 'selected' : ''}>${HG_TYPES[k].icon} ${esc(hgTypeLabel(k))}</option>`).join('')}</optgroup>`).join('')}</select>
-      <span class="hint">${L('ধরন বাছলে খরচের খাত আর আদর্শ বাজেট নিজে সেট হবে। নিচে নিজের মতো বদলানো যাবে।', 'The type sets the expense categories and the ideal budget. You can change both below.')}</span></label>
+    ${hgTypePicker(v.type)}
     <details class="more" ${ev ? 'open' : ''}><summary>${L('আরও তথ্য (তারিখ, জায়গা, খাত) — ঐচ্ছিক', 'More details (dates, place, categories) — optional')}</summary>
       <div class="row2"><label class="field"><span>${L('শুরু', 'Start')}</span><input class="input" type="date" name="start" value="${esc(v.start || '')}"></label>
         <label class="field"><span>${L('শেষ', 'End')}</span><input class="input" type="date" name="end" value="${esc(v.end || '')}"></label></div>
@@ -134,7 +140,6 @@ function hgPersonForm(ev, p) {
     <label class="field"><span>${L('নোট', 'Notes')}</span><input class="input" name="note" maxlength="120" value="${esc(p ? p.note : '')}"></label>
     <label class="field"><span>${L('কবে থেকে ছিল? (ফাঁকা = শুরু থেকে)', 'Since when? (blank = from the start)')}</span><input class="input" type="date" name="joined" value="${esc(p ? (p.joinedOn || '') : (ev.expenses.some(e => !e.del) ? today() : ''))}">
       <div class="hint">${L('মাঝপথে যোগ দিলে তারিখ দিন। এর আগের খরচে তাকে ধরা হবে না, তাই পুরোনো হিসাব বদলাবে না।', 'If someone joins midway, set the date. Earlier expenses will not include them, so old numbers stay the same.')}</div></label>
-    ${hgCheckRow('host', '👑 ' + L('এই ইভেন্টের হোস্ট (যে হিসাব রাখছে)', 'Host of this event (keeps the books)'), !!(p && p.org))}
     ${p ? '' : `<input type="hidden" name="friendId" value="">`}
     <button class="btn primary block" type="submit">${p ? L('সেভ করুন', 'Save') : L('যোগ করুন', 'Add')}</button></form>`;
 }
@@ -193,12 +198,23 @@ async function hgSaveReceipt(expense, f) {
     return true;
   } catch (err) { return false; }
 }
+// "বাকিতে কিনেছি": সেভ করলে খরচের সাথে সাথে বাকির খাতায় কার কাছে কত বাকি তা উঠে যায়
+function hgCreditBlock(ev, e) {
+  const linked = e && (ev.dues || []).find(d => !d.del && d.expenseId === e.id);
+  if (linked) return `<div class="bsum"><b>${L('বাকিতে কেনা', 'Bought on credit')} · ${esc(linked.who)}</b><span>${L('বাকির খাতায় দেখুন ও পরিশোধ লিখুন।', 'See it in the credit book and record payments there.')}</span></div>`;
+  if (e) return '';
+  const who = [...new Set((ev.dues || []).filter(d => !d.del && d.dir === 'owe').map(d => d.who))];
+  return `<div class="field credit"><label class="chk"><input type="checkbox" name="onCredit"><span>🧾 ${L('বাকিতে কিনেছি', 'Bought on credit')}</span></label>
+    <div class="hidden" data-credit><label class="field"><span>${L('কার কাছে বাকি? (দোকান বা নাম)', 'Owed to whom? (shop or name)')}</span><input class="input" name="creditWho" maxlength="40" list="hg-whos"></label>
+      <label class="field"><span>${L('এখন কত দিলেন? (না দিলে ফাঁকা)', 'Paid now? (blank if nothing)')}</span>${moneyInput('creditPaid', '', '0')}</label>
+      <div class="preview" data-creditsum></div><datalist id="hg-whos">${who.map(w => `<option value="${esc(w)}">`).join('')}</datalist></div></div>`;
+}
 function hgExpenseForm(e, preset, scope0) {
   const ev = hgCur();
   const isNew = !e;
   const usedIds = e ? e.payers.map(p => p.pid).concat((e.spec && e.spec.incl) || [], Object.keys((e.spec && e.spec.values) || {})) : [];
   const people = hgPickable(ev, usedIds);
-  const v = e || { title: '', category: preset || ev.cats[0].k, date: today(), desc: '', total: 0, payers: [], method: 'selected', spec: { incl: people.filter(p => p.active && (!p.joinedOn || p.joinedOn <= today())).map(p => p.id), values: {} }, note: '', meta: {} };
+  const v = e || { title: preset && hgSimple(ev) ? hgCatLabel(ev, preset) : '', category: preset || ev.cats[0].k, date: today(), desc: '', total: 0, payers: [], method: 'selected', spec: { incl: people.filter(p => p.active && (!p.joinedOn || p.joinedOn <= today())).map(p => p.id), values: {} }, note: '', meta: {} };
   hgPendingReceipt = undefined;
   const method = v.method === 'equal' ? 'selected' : v.method;
   const inclNow = v.method === 'equal' ? people.filter(p => p.active || ((v.spec && v.spec.incl) || []).includes(p.id)).map(p => p.id) : (v.spec.incl || []);
@@ -215,7 +231,7 @@ function hgExpenseForm(e, preset, scope0) {
       <div class="input-wrap ${suffix === '৳' ? 'has-prefix' : ''}">${suffix === '৳' ? '<span class="prefix">৳</span>' : ''}<input class="input" name="${pre}${p.id}" inputmode="decimal" value="${esc(val(p.id, m) === 0 ? '' : val(p.id, m))}" placeholder="${ph}">${suffix !== '৳' ? `<span class="suffix">${suffix}</span>` : ''}</div></label>`).join('')}</div>`;
   const advOpen = method !== 'selected';
   return `${sheetHead(isNew ? L('নতুন খরচ', 'New expense') : L('খরচ এডিট', 'Edit expense'), esc(ev.name))}
-  <form data-form="hg-expense" data-live="hg-expense" data-id="${e ? e.id : ''}" data-rid="${e && e.receipt ? e.receipt : ''}" autocomplete="off">
+  <form data-form="hg-expense" data-live="hg-expense" data-simple="${hgSimple(ev) ? 1 : 0}" data-id="${e ? e.id : ''}" data-rid="${e && e.receipt ? e.receipt : ''}" autocomplete="off">
     <label class="field"><span>1. ${L('কিসের খরচ?', 'What was it for?')}</span><input class="input" name="title" maxlength="60" value="${esc(v.title)}" placeholder="${L('লিখুন বা নিচ থেকে বাছুন', 'Type, or tap one below')}"></label>
     ${hgCatPicker(ev, v.category, L('খাত (ট্যাপ করে বাছুন)', 'Category (tap one)'))}
     <label class="field"><span>2. ${L('মোট কত টাকা?', 'How much in total?')}</span>${moneyInput('total', hgTaka(v.total), '0')}</label>
@@ -226,17 +242,18 @@ function hgExpenseForm(e, preset, scope0) {
       <div class="chips mt8"><button type="button" class="qchip" data-action="hg-exp-pct" data-k="+" data-v="15">VAT 15%</button><button type="button" class="qchip" data-action="hg-exp-pct" data-k="+" data-v="10">${L('সার্ভিস ১০%', 'Service 10%')}</button><button type="button" class="qchip" data-action="hg-exp-pct" data-k="+" data-v="5">${L('টিপস ৫%', 'Tip 5%')}</button><button type="button" class="qchip" data-action="hg-exp-pct" data-k="-" data-v="10">${L('ছাড় ১০%', '10% off')}</button><button type="button" class="qchip" data-action="hg-exp-pct" data-k="reset">↺ ${L('মূল টাকা', 'Original')}</button></div>
       <div class="preview hidden" data-pctnote></div></details>
     <div class="eachstrip hidden" data-each></div>
+    ${hgSimple(ev) ? hgCreditBlock(ev, e) : ''}
     ${isNew ? `<div class="qtitles ${scope === 'personal' ? '' : 'hidden'}" data-qpers>${[['কোক', 'Coke'], ['চা', 'Tea'], ['নাস্তা', 'Snack'], ['রিকশা', 'Rickshaw']].map(([bn, en]) => `<button type="button" class="qchip" data-action="hg-title-chip" data-k="" data-t="${L(bn, en)}">${L(bn, en)}</button>`).join('')}</div>` : ''}
-    <div class="field"><span class="flabel">3. ${L('খরচটা কার?', 'Whose cost is it?')}</span>
+    <div class="field simplehide"><span class="flabel">3. ${L('খরচটা কার?', 'Whose cost is it?')}</span>
       <div class="hg-methods"><label class="chip"><input type="radio" name="scope" value="group" ${scope === 'group' ? 'checked' : ''}><span>👥 ${L('সবার মধ্যে ভাগ', 'Shared by the group')}</span></label>
         <label class="chip"><input type="radio" name="scope" value="personal" ${scope === 'personal' ? 'checked' : ''}><span>👤 ${L('শুধু একজনের (ব্যক্তিগত)', 'Only one person (personal)')}</span></label></div>
       <div class="hg-multi ${scope === 'personal' ? '' : 'hidden'}" data-personal><span class="hint">${L('কার খরচ? (যেমন কেউ একা কোক খেল, শুধু তার হিসাবে যাবে, অন্য কারও ভাগে নয়)', 'Whose cost? (e.g. someone had a coke alone: it goes only to them)')}</span>${hgSelect('forWho', people.map(p => [p.id, esc(p.name)]), forWho)}</div></div>
-    <div class="field ${scope === 'personal' ? 'hidden' : ''}" data-groupbox><span class="flabel">4. ${L('কাদের মধ্যে ভাগ হবে? (সমান ভাগ)', 'Who shares it? (split equally)')}</span>
+    <div class="field simplehide ${scope === 'personal' ? 'hidden' : ''}" data-groupbox><span class="flabel">4. ${L('কাদের মধ্যে ভাগ হবে? (সমান ভাগ)', 'Who shares it? (split equally)')}</span>
       <div class="hg-incl ${advOpen ? 'hidden' : ''}" data-incl><div class="chips">${people.map(p => `<label class="chip"><input type="checkbox" name="inc_${p.id}" ${inclNow.includes(p.id) ? 'checked' : ''}><span>${esc(p.name)}${p.joinedOn ? ` <small>(${L('থেকে', 'from')} ${fmtDate(p.joinedOn)})</small>` : ''}</span></label>`).join('')}</div>
         <div class="hint">${L('যারা এই খরচে ছিল না তাদের টিক তুলে দিন।', 'Untick anyone who was not part of this.')}</div></div>
       <div class="preview" data-split></div>
       <div class="preview" data-budget></div></div>
-    <div class="field"><span class="flabel">5. ${L('টাকা কে দিয়েছে?', 'Who paid?')}</span>
+    <div class="field simplehide"><span class="flabel">5. ${L('টাকা কে দিয়েছে?', 'Who paid?')}</span>
       <div data-one>${hgSelect('payOne', people.map(p => [p.id, esc(p.name)]), onePayer)}</div>
       ${hgCheckRow('multi', L('একজনের বেশি দিয়েছে', 'More than one person paid'), multi)}
       <div class="hg-multi ${multi ? '' : 'hidden'}" data-multi><span class="hint">${L('১) যারা টাকা দিয়েছে তাদের ট্যাপ করুন, সমান ভাগ নিজে বসে যাবে। ২) আলাদা হলে নিচের ঘরে নিজে লিখুন।', '1) Tap everyone who paid and the amount is split equally for you. 2) If it differs, type it below.')}</span>
@@ -246,11 +263,12 @@ function hgExpenseForm(e, preset, scope0) {
         <span class="hint" data-eachhint>${L('উপরে টিক দেওয়া সবাই যদি একই অঙ্ক দিয়ে থাকে, এখানে সেই অঙ্ক লিখুন, সবার ঘরে বসে যাবে।', 'If everyone ticked paid the same amount, type it here and it fills for all of them.')}</span>
         ${people.map(p => `<div class="payrow"><span class="pn">${esc(p.name)}</span><div class="pi">${moneyInput('pay_' + p.id, hgTaka(payOf(p.id)), '0')}</div><button type="button" class="qchip" data-action="hg-pay-rest" data-p="${p.id}">${L('বাকিটা', 'Rest')}</button></div>`).join('')}
         <div class="preview" data-paysum></div></div></div>
-    <details class="more" data-carrybox open><summary><span class="ds-t">👥 ${L('এই খরচের পর কার কত বাকি', 'After this expense')}</span><small>${L('আগের বাকিসহ', 'Including earlier dues')}</small></summary><div class="carry" data-carry></div></details>
-    <details class="more ${scope === 'personal' ? 'hidden' : ''}" data-groupbox ${advOpen ? 'open' : ''}><summary><span class="ds-t">⚖️ ${L('অন্যভাবে ভাগ করুন', 'Split differently')}</span><small>${L('শতাংশ, নির্দিষ্ট টাকা বা অনুপাত', 'Percent, exact amounts or ratio')}</small></summary>
+    <details class="more simplehide" data-carrybox open><summary><span class="ds-t">👥 ${L('এই খরচের পর কার কত বাকি', 'After this expense')}</span><small>${L('আগের বাকিসহ', 'Including earlier dues')}</small></summary><div class="carry" data-carry></div></details>
+    <details class="more simplehide ${scope === 'personal' ? 'hidden' : ''}" data-groupbox ${advOpen ? 'open' : ''}><summary><span class="ds-t">⚖️ ${L('অন্যভাবে ভাগ করুন', 'Split differently')}</span><small>${L('শতাংশ, নির্দিষ্ট টাকা বা অনুপাত', 'Percent, exact amounts or ratio')}</small></summary>
       <div class="hg-methods">${['selected', 'exact', 'percent', 'ratio', 'custom'].map(m => `<label class="chip"><input type="radio" name="method" value="${m}" ${method === m ? 'checked' : ''}><span>${m === 'selected' ? L('সমান ভাগ', 'Equal') : HG_METHODS[m][isEN() ? 1 : 0]}</span></label>`).join('')}</div>
       ${mset('exact', 'ex_', '0', '৳')}${mset('percent', 'pc_', '0', '%')}${mset('ratio', 'rt_', '1', '×')}${mset('custom', 'cu_', L('বাকিটা অটো', 'rest auto'), '৳')}</details>
     <details class="more" ${(!isNew && (v.desc || e.receipt)) ? 'open' : ''}><summary><span class="ds-t">🗂️ ${L('আরও তথ্য', 'More details')}</span><small>${L('তারিখ, রসিদের ছবি, নোট', 'Date, receipt photo, note')}</small></summary>
+      <label class="field"><span>${L('উপ-খাত (ঐচ্ছিক)', 'Sub-category (optional)')}</span><input class="input" name="sub" maxlength="30" list="hg-subcats" value="${esc(v.sub || '')}" placeholder="${L('যেমন: সাবান, টিস্যু', 'e.g. soap, tissue')}"><datalist id="hg-subcats">${[...new Set(ev.expenses.filter(x => !x.del && x.sub).map(x => x.sub))].map(s => `<option value="${esc(s)}">`).join('')}</datalist></label>
       <label class="field"><span>${L('তারিখ', 'Date')}</span><input class="input" type="date" name="date" value="${esc(v.date)}"></label>
       <div class="hg-room ${v.category === 'room' ? '' : 'hidden'}" data-room><div class="row2" style="grid-template-columns:1fr 1fr 1fr">
         <label class="field"><span>${L('রুম', 'Rooms')}</span><input class="input" name="rooms" inputmode="numeric" value="${esc(meta.rooms || '')}"></label>
@@ -338,6 +356,12 @@ LIVE['hg-expense'] = (f, t) => {
     ev.participants.forEach(p => { const i = f.elements['inc_' + p.id]; if (i) i.checked = p.active && (!p.joinedOn || p.joinedOn <= day); });
   }
   $$('[data-catpick] .cchip[data-k]', f).forEach(b => b.classList.toggle('on', b.dataset.k === f.elements.cat.value));
+  if (f.elements.onCredit) {
+    const on = f.elements.onCredit.checked; $('[data-credit]', f).classList.toggle('hidden', !on);
+    const tot = toMinor(f.elements.total.value), paidNow = toMinor(f.elements.creditPaid.value), cs = $('[data-creditsum]', f);
+    cs.className = 'preview' + (on && paidNow >= tot && tot > 0 ? ' warn' : '');
+    cs.innerHTML = on && tot > 0 ? (paidNow >= tot ? L('পুরোটা দিয়ে দিলে বাকি থাকে না, টিক তুলে দিন।', 'If you paid everything nothing is due; untick it.') : L(`বাকি থাকবে <b>${hgM(tot - paidNow)}</b>`, `<b>${hgM(tot - paidNow)}</b> will be due`)) : '';
+  }
   const room = f.elements.cat.value === 'room';
   $('[data-room]', f).classList.toggle('hidden', !room);
   if (room && t && ['rooms', 'nights', 'rate'].includes(t.name)) {
@@ -422,10 +446,16 @@ Object.assign(FORMS, {
     const alloc = Object.fromEntries(ev.participants.map(p => [p.id, r.split.alloc[p.id] || 0]));
     const x = existing || { id: uid(), createdAt: Date.now(), mode: 'split' };
     const before = existing ? `${x.title} ${hgM(x.total)}` : '';
-    Object.assign(x, { title, category: f.elements.cat.value, date: f.elements.date.value || today(), desc: f.elements.desc.value.trim(), total: r.total, payers: r.payers,
+    Object.assign(x, { sub: f.elements.sub ? f.elements.sub.value.trim() : '', title, category: f.elements.cat.value, date: f.elements.date.value || today(), desc: f.elements.desc.value.trim(), total: r.total, payers: r.payers,
       method: r.method, spec: r.spec, alloc, personal: r.personal || null, mode: 'split', updatedAt: Date.now(),
       meta: { rooms: f.elements.rooms.value.trim(), nights: f.elements.nights.value.trim(), rate: f.elements.rate.value.trim() } });
     if (!existing) ev.expenses.push(x);
+    if (!existing && f.elements.onCredit && f.elements.onCredit.checked) {
+      const who = f.elements.creditWho.value.trim(), paidNow = toMinor(f.elements.creditPaid.value), due = r.total - paidNow;
+      if (!who) { ev.expenses.pop(); return fail(f, L('কার কাছে বাকি তা লিখুন', 'Enter who it is owed to'), 'creditWho'); }
+      if (due <= 0) { ev.expenses.pop(); return fail(f, L('বাকি থাকছে না। পুরো টাকা দিলে "বাকিতে কিনেছি" টিক তুলে দিন।', 'Nothing is left due. Untick "Bought on credit" if you paid everything.'), 'creditPaid'); }
+      (ev.dues = ev.dues || []).push({ id: uid(), dir: 'owe', who, title: title, amt: due, date: x.date, payments: [], expenseId: x.id, createdAt: Date.now() });
+    }
     const okImg = await hgSaveReceipt(x, f);
     closeSheet();
     hgLog(ev, existing ? `খরচ বদলানো হয়েছে: ${before} → ${x.title} ${hgM(x.total)}` : `খরচ যোগ: ${x.title} ${hgM(x.total)}`, existing ? `Expense edited: ${before} → ${x.title} ${hgM(x.total)}` : `Expense added: ${x.title} ${hgM(x.total)}`);
@@ -453,6 +483,7 @@ Object.assign(FORMS, {
     const seen = new Set();
     names2.forEach(n => { if (seen.has(n.toLowerCase())) return; seen.add(n.toLowerCase()); const fr = hgEnsureFriend(n); ev.participants.push(hgNewParticipant(fr.name, { friendId: fr.id })); });
     hg().friends.forEach(fr => { const el = f.elements['fr_' + fr.id]; if (el && el.checked && !seen.has(fr.name.toLowerCase())) { seen.add(fr.name.toLowerCase()); ev.participants.push(hgNewParticipant(fr.name, { friendId: fr.id, phone: fr.phone || '' })); } });
+    hgEnsureMe(ev);
     if (ev.participants[0]) ev.participants[0].org = true;
     hgLog(ev, 'ইভেন্ট তৈরি হয়েছে', 'Event created');
     hg().events.push(ev);
@@ -465,16 +496,13 @@ Object.assign(FORMS, {
     if (!name) return fail(f, L('নাম লিখুন', 'Enter a name'), 'name');
     const id = f.dataset.id, p = id && ev.participants.find(x => x.id === id);
     if (ev.participants.some(x => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) return fail(f, L('এই নামে আরেকজন আছে। আলাদা করে লিখুন।', 'Someone with this name already exists. Make it distinct.'), 'name');
-    const wantHost = f.elements.host.checked;
     if (p) {
       Object.assign(p, { name, phone: f.elements.phone.value.trim(), note: f.elements.note.value.trim(), joinedOn: f.elements.joined.value || '' });
-      if (wantHost) ev.participants.forEach(x => { x.org = x.id === p.id; }); else if (p.org) delete p.org;
       closeSheet(); return hgCommit(ev, `বন্ধু বদলানো: ${name}`, `Person edited: ${name}`);
     }
     const fid = f.elements.friendId.value;
     const fr = fid ? hg().friends.find(x => x.id === fid) : hgEnsureFriend(name, f.elements.phone.value.trim());
-    if (wantHost) ev.participants.forEach(x => { delete x.org; });
-    ev.participants.push(hgNewParticipant(name, { friendId: fr ? fr.id : null, phone: f.elements.phone.value.trim(), note: f.elements.note.value.trim(), joinedOn: f.elements.joined.value || '', org: wantHost || !ev.participants.length }));
+    ev.participants.push(hgNewParticipant(name, { friendId: fr ? fr.id : null, phone: f.elements.phone.value.trim(), note: f.elements.note.value.trim(), joinedOn: f.elements.joined.value || '', org: !ev.participants.length }));
     closeSheet(); hgCommit(ev, `বন্ধু যোগ: ${name}`, `Person added: ${name}`);
   },
   'hg-friend': f => {

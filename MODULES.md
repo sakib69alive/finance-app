@@ -98,3 +98,37 @@ Files: `js/hangout-calc.js` (pure integer-paisa calculation layer, unit tested),
 
 Data lives only in `state.hangout` (`schema`, `friends`, `events`). Balances are never stored: they are recomputed from expenses,
 transfers, refunds and finalized decisions by `hgEventCalc`. Run the calculation tests with `node tests/hangout-calc.test.js`.
+
+## Module: bazar (Bazar Sadai: grocery shopping)
+
+Files: `js/bazar-calc.js` (pure integer calculation layer: paisa for money, thousandths for quantity; unit tested), `js/bazar.js` (screens, forms, actions, `registerModule`).
+Run the tests with `node tests/bazar-calc.test.js`.
+
+Data lives only in `state.bazar` (`markets`, `cats`, `stock`, `templates`, `activeId`, `autoStock`). Totals, budget remaining, dues and price history are never stored, they are recomputed from items and payments.
+Receipt photos use the existing image store under `bzr:<id>` and travel with the normal backup. Linking a market to main expenses adds exactly one expense (`ref: 'bz:<marketId>'`) to a daily/household Hangout event and keeps it in sync; Hangout refuses to edit such an expense directly.
+
+### Hangout: monthly household (`type: 'household'`)
+
+Files: `js/hangout-house.js` (central monthly budget, payments, record page, month list, month report) and `js/hangout-house-cats.js` (pages for electricity, gas, water, internet, house help, education, medical, groceries).
+Pure logic lives in `js/hangout-calc.js` (`hgCentralMonth`, `hgOblRem`, `hgOblStatus`, `hgExpYm`) and is covered by `tests/hangout-calc.test.js`.
+
+- A bill, fee, visit or medicine is one normal expense (`e.pays = [{amt, date, method}]` holds its payments, `e.info` its details, `e.photos` extra photos stored as `hgp:<id>`). Paying later only adds a payment, never a new expense.
+- Bills belong to the month in `info.ym`; everything else to the month of `e.date`.
+- Monthly money lives in `ev.hh.months['YYYY-MM'] = { budget, opening, carry, inc: [...], cats }`; family profiles and teacher/connection profiles in `ev.hh.people` and `ev.hh.profiles`.
+
+## Module: teacher (Teacher Manager: jobs, private tuition, coaching, classes, costs, exams)
+
+Files: `js/teacher-calc.js` (pure integer-paisa calculation layer, unit tested), `js/teacher.js` (data helpers, home, classes, work tab), `js/teacher-money.js` (dues, expenses, exams, supplies, reports, More),
+`js/teacher-sheets.js` (detail sheets and photo strip), `js/teacher-forms.js` (forms, actions, guide, `registerModule`). Run the tests with `node tests/teacher-calc.test.js`.
+
+Data lives only in `state.teacher` (`jobs`, `students` with `subjects`, `centers`, `batches`, `enrolls`, `sessions`, `charges`, `expenses`, `pays`, `recurs`, `exams`, `cats`, `budget`).
+Money is stored as integer paisa and **always as the actual amount**. The module shows every amount through `tcM()` (= actual + ৳1, display only); never add the ৳1 anywhere else and never save it.
+
+- A fee, salary or recurring cost is created once per month with a deterministic id (`j:<job>:<ym>`, `s:<subject>:<ym>`, `b:<enrollment>:<ym>`, `r:<recur>:<ym>`) after the user reviews the month (More > New month), so it can never be created twice. Pay and fee changes are effective-dated histories (`[{from:'YYYY-MM', amt}]`), so earlier months never change.
+- Income = `charges`, bills = `expenses`, both settled by `pays` (`side: in|out`). Payments are never deleted, only voided. Paid / partial / unpaid / overdue is always derived.
+- Profit (earned − cost) and cash (opening + received − paid) are separate numbers. Exams and supplies are single expenses (exam: `ref: 'ex:<id>'`), so nothing is counted twice.
+- Receipt and document photos use the existing image store as `tcp:<id>` and travel with the normal backup.
+
+## Demo data (js/demo.js)
+
+One-time button (bottom of screen) that replaces all data with demo data for every module (records tagged `demo: true`). It disappears after use or after the close button. To remove the feature: delete `js/demo.js` and its entries in `index.html` and `sw.js`; to remove the data: filter out records with `demo: true`.

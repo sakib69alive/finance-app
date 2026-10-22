@@ -398,4 +398,49 @@ t('statement: every person running balance ends exactly at the final balance, al
   assert.ok(hgPersonStatement(ev, c, 'c').lines.some(l => l.kind === 'sent' && l.onBehalf === 'b'));
 });
 
+
+/* ---------- মাসিক সংসার: দেনা-পাওনা ও কেন্দ্রীয় হিসাব ---------- */
+const house = (extra = {}) => mkEv(['me'], Object.assign({ type: 'household', dues: [], hh: { months: {}, income: {} } }, extra));
+const ob = (id, total, date, pays = [], info = {}, cat = 'electricity') => ({ id, title: id, category: cat, total, date, payers: [{ pid: 'me', amt: total }], method: 'equal', spec: { incl: ['me'], values: {} }, mode: 'split', pays, info });
+t('obligation: partial payments, remaining and status, never negative', () => {
+  const ev = house(); const e = ob('b', T(1000), '2026-05-03', [{ amt: T(400) }], { dueDate: '2026-05-10' });
+  assert.strictEqual(C.hgOblRem(ev, e), T(600)); assert.strictEqual(C.hgOblStatus(ev, e, '2026-05-05'), 'partial'); assert.strictEqual(C.hgOblStatus(ev, e, '2026-05-11'), 'overdue');
+  e.pays.push({ amt: T(700) }); assert.strictEqual(C.hgOblRem(ev, e), 0); assert.strictEqual(C.hgOblStatus(ev, e, '2026-06-01'), 'paid');
+  assert.strictEqual(C.hgOblStatus(ev, ob('u', T(10), '2026-05-01', []), '2026-05-02'), 'unpaid');
+});
+t('obligation: a normal expense has no remaining; legacy dues still count', () => {
+  const ev = house({ dues: [{ id: 'd', expenseId: 'x', amt: T(500), payments: [{ amt: T(200) }] }] });
+  assert.strictEqual(C.hgOblRem(ev, { id: 'plain', total: T(100) }), 0); assert.strictEqual(C.hgOblRem(ev, { id: 'x', total: T(900) }), T(300));
+});
+t('central month: opening + carry + extra + borrowed, spent, remaining (30000 example)', () => {
+  const ev = house({ expenses: [ob('g', T(8000), '2026-05-02', [], {}, 'groceries'), ob('m', T(2000), '2026-05-03', [], {}, 'medical'), ob('e', T(3000), '2026-05-04', [], {}, 'education'), ob('p', T(1000), '2026-05-05', [{ amt: T(1000) }], {}, 'electricity'), ob('old', T(999), '2026-04-30', [], {}, 'other')] });
+  ev.hh.months['2026-05'] = { opening: T(30000) };
+  const c = C.hgCentralMonth(ev, '2026-05', '2026-05-20');
+  assert.strictEqual(c.spent, T(14000)); assert.strictEqual(c.remaining, T(16000)); assert.strictEqual(c.top.k, 'groceries');
+});
+t('central month: extra income and borrowed money raise what is available; carry is explicit', () => {
+  const ev = house({ expenses: [ob('a', T(1000), '2026-06-02', [], {}, 'other')] });
+  ev.hh.months['2026-06'] = { opening: T(5000), carry: T(700), inc: [{ kind: 'extra', amt: T(300) }, { kind: 'borrow', amt: T(1000) }, { kind: 'extra', amt: T(50), del: 1 }] };
+  const c = C.hgCentralMonth(ev, '2026-06', '2026-07-01');
+  assert.strictEqual(c.start, T(5700)); assert.strictEqual(c.extra, T(300)); assert.strictEqual(c.borrowed, T(1000)); assert.strictEqual(c.available, T(7000)); assert.strictEqual(c.remaining, T(6000));
+});
+t('central month: legacy income counts as opening; budget alone also gives a remaining; nothing set gives none', () => {
+  const ev = house({ expenses: [ob('a', T(1000), '2026-06-02', [], {}, 'other')] }); ev.hh.income['2026-06'] = T(4000);
+  assert.strictEqual(C.hgCentralMonth(ev, '2026-06').remaining, T(3000));
+  ev.hh.income = {}; ev.hh.months['2026-06'] = { budget: T(2500) }; assert.strictEqual(C.hgCentralMonth(ev, '2026-06').remaining, T(1500));
+  ev.hh.months = {}; assert.strictEqual(C.hgCentralMonth(ev, '2026-06').remaining, null);
+});
+t('central month: category budgets flag overspending; projection only for the running month with data', () => {
+  const ev = house({ expenses: [ob('a', T(600), '2026-06-02', [], {}, 'groceries'), ob('b', T(300), '2026-06-09', [], {}, 'internet')] });
+  ev.hh.months['2026-06'] = { opening: T(5000), cats: { groceries: T(500), internet: T(400) } };
+  const c = C.hgCentralMonth(ev, '2026-06', '2026-06-10');
+  assert.deepStrictEqual(c.over.map(r => r.k), ['groceries']); assert.strictEqual(c.proj, T(900) + Math.round(T(900) / 10 * 20));
+  assert.strictEqual(C.hgCentralMonth(ev, '2026-06', '2026-07-02').proj, null); assert.strictEqual(C.hgCentralMonth(ev, '2026-06', '2026-06-02').proj, null);
+});
+t('central month: unpaid list spans months, oldest due first, month figure counts only that month', () => {
+  const ev = house({ expenses: [ob('new', T(500), '2026-06-03', [{ amt: T(100) }], { dueDate: '2026-06-20' }), ob('old', T(300), '2026-05-03', [], { dueDate: '2026-05-15' })] });
+  const c = C.hgCentralMonth(ev, '2026-06', '2026-06-10');
+  assert.deepStrictEqual(c.unpaid.map(u => [u.e.id, u.rem, u.status]), [['old', T(300), 'overdue'], ['new', T(400), 'partial']]); assert.strictEqual(c.unpaidMonth, T(400));
+});
+
 console.log(`\n${passed} tests passed`);

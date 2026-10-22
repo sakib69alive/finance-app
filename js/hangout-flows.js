@@ -426,7 +426,7 @@ function hgDecisionForm(pid, d) {
     <div class="field" data-grp="others"><span class="flabel">${L('কারা জড়িত (দায় নেবে / ভাগ করবে / মাফ করবে)', 'Who is involved (covers / shares / waives)')}</span>
       ${hgPickable(ev, v.others || []).filter(p => p.id !== pid).map(p => hgCheckRow('ot_' + p.id, esc(p.name), (v.others || []).includes(p.id))).join('')}</div>
     <label class="field"><span>${L('কারণ / মন্তব্য', 'Reason / comment')}</span><input class="input" name="reason" maxlength="200" value="${esc(v.reason || '')}"></label>
-    <label class="field"><span>${L('হোস্টের নোট', 'Host note')}</span><input class="input" name="orgNote" maxlength="200" value="${esc(v.orgNote || '')}"></label>
+    <label class="field"><span>${L('নোট', 'Note')}</span><input class="input" name="orgNote" maxlength="200" value="${esc(v.orgNote || '')}"></label>
     <div class="row2"><label class="field"><span>${L('অবস্থা', 'Status')}</span>${hgSelect('status', Object.keys(HG_DSTATUS).map(k => [k, HG_DSTATUS[k][isEN() ? 1 : 0]]), v.status)}</label>
       <label class="field"><span>${L('তারিখ', 'Date')}</span><input class="input" type="date" name="date" value="${esc(v.date || today())}"></label></div>
     <div class="preview" data-decnote></div>
@@ -496,7 +496,7 @@ function hgSoftDelete(ev, list, id, bn, en) {
   const x = hgIdEl(list, id); if (!x) return;
   if (!confirm(L(`"${bn}" মুছবেন? এটা "সম্প্রতি মোছা"-তে যাবে, ফেরত আনা যাবে।`, `Delete "${en}"? It goes to "Recently deleted" and can be restored.`))) return;
   if (sheetOpen) closeSheet();
-  undoable(DELETED(), () => { x.del = Date.now(); hgLog(ev, `মোছা হয়েছে: ${bn}`, `Deleted: ${en}`); });
+  undoable(DELETED(), () => { x.del = Date.now(); if (list === ev.expenses) (ev.dues || []).forEach(d => { if (d.expenseId === x.id && !d.payments.length) d.del = Date.now(); }); hgLog(ev, `মোছা হয়েছে: ${bn}`, `Deleted: ${en}`); });
 }
 Object.assign(ACTIONS, {
   'hg-home': () => { if (sheetOpen) closeSheet(); setTab('home'); window.scrollTo(0, 0); },
@@ -538,7 +538,7 @@ Object.assign(ACTIONS, {
     undoable(DELETED(), () => { ev.participants = ev.participants.filter(x => x.id !== p.id); hgLog(ev, `বন্ধু সরানো: ${p.name}`, `Person removed: ${p.name}`); });
   },
   'hg-add-expense': () => { const ev = hgGuard(); if (!ev) return; if (!hgActive(ev).length) { toast(L('আগে বন্ধুদের যোগ করুন', 'Add the people first')); if (sheetOpen) closeSheet(); return hgGo('people'); } openSheet(hgExpenseForm(null)); },
-  'hg-edit-expense': el => { const ev = hgCur(); if (!ev) return; const e = hgIdEl(ev.expenses, el.dataset.id); if (!e) return; if (hgLocked(ev)) return hgLockMsg(ev); if (e.mode === 'bill') hgBillOpen(e); else openSheet(hgExpenseForm(e)); },
+  'hg-edit-expense': el => { const ev = hgCur(); if (!ev) return; const e = hgIdEl(ev.expenses, el.dataset.id); if (!e) return; if (hgLocked(ev)) return hgLockMsg(ev); if (e.ref) return toast(L('এটা "বাজার সদাই" থেকে এসেছে। ওখানে বাজার খুলে বদলান, এখানে নিজে মিলে যাবে।', 'This came from Bazar Sadai. Edit the market there and it updates here.')); if (e.mode === 'bill') hgBillOpen(e); else openSheet(hgExpenseForm(e)); },
   'hg-del-expense': el => { const ev = hgGuard(); if (!ev) return; const e = hgIdEl(ev.expenses, el.dataset.id); if (e) hgSoftDelete(ev, ev.expenses, e.id, e.title, e.title); },
   'hg-add-bill': () => { const ev = hgGuard(); if (!ev) return; if (!hgActive(ev).length) { toast(L('আগে বন্ধুদের যোগ করুন', 'Add the people first')); if (sheetOpen) closeSheet(); return hgGo('people'); } hgBillOpen(null); },
   'hg-item-add': () => { hgBillSync(); openSheet(hgItemForm(null)); },
@@ -618,6 +618,7 @@ Object.assign(ACTIONS, {
     if (!confirm(L('চিরতরে মুছে যাবে, আর ফেরানো যাবে না। রিফান্ড/রসিদও এর সাথে মুছবে। নিশ্চিত?', 'This deletes it forever, including its receipt photo. This cannot be undone. Sure?'))) return;
     if (key === 'expenses') {
       if (x.receipt) deleteImage('hgr:' + x.receipt).catch(() => {});
+      (x.photos || []).forEach(p => deleteImage('hgp:' + p.id).catch(() => {}));
       ev.refunds = ev.refunds.filter(r => r.expenseId !== x.id);
     }
     ev[key] = ev[key].filter(y => y.id !== x.id);
@@ -628,7 +629,7 @@ Object.assign(ACTIONS, {
   'hg-del-friend': el => { if (!confirm(L('সেভ করা তালিকা থেকে সরাবেন? পুরোনো ইভেন্টে নাম থাকবে।', 'Remove from saved friends? Past events keep the name.'))) return; if (sheetOpen) closeSheet(); undoable(DELETED(), () => { hg().friends = hg().friends.filter(x => x.id !== el.dataset.id); }); },
 });
 
-/* ---------- খাত বাছাই, % যোগ-বিয়োগ, হোস্ট, কপি, "বাকিটা" এর দুই বিকল্প ---------- */
+/* ---------- খাত বাছাই, % যোগ-বিয়োগ, কপি, "বাকিটা" এর দুই বিকল্প ---------- */
 const hgIsEmptyTitle = f => !f.elements.title || !f.elements.title.value.trim() || f.elements.title.dataset.chip === '1';
 function hgCatSelect(f, k, label) {
   f.elements.cat.value = k;
@@ -704,16 +705,76 @@ Object.assign(ACTIONS, {
     f.dataset.ppAuto = '1';
     runLive(f, f.elements.total);
   },
-  'hg-set-host': el => {
-    const ev = hgGuard(); if (!ev) return; const p = hgIdEl(ev.participants, el.dataset.id); if (!p) return;
-    ev.participants.forEach(x => { x.org = x.id === p.id; });
-    hgCommit(ev, `হোস্ট: ${p.name}`, `Host: ${p.name}`, L(`${p.name} এখন হোস্ট 👑`, `${p.name} is now the host 👑`));
-  },
   'hg-dup-expense': el => {
     const ev = hgGuard(); if (!ev) return; const e = hgIdEl(ev.expenses, el.dataset.id); if (!e) return;
     const c = JSON.parse(JSON.stringify(e));
-    Object.assign(c, { id: uid(), createdAt: Date.now(), updatedAt: Date.now(), date: today(), title: e.title + L(' (কপি)', ' (copy)'), receipt: null });
+    Object.assign(c, { id: uid(), createdAt: Date.now(), updatedAt: Date.now(), date: today(), title: e.title + L(' (কপি)', ' (copy)'), receipt: null }); delete c.ref;
     ev.expenses.push(c); if (sheetOpen) closeSheet();
     hgCommit(ev, `খরচ কপি: ${c.title}`, `Expense duplicated: ${c.title}`, L('কপি হয়েছে, খরচের তালিকা থেকে এডিট করুন', 'Duplicated; edit it from the list'));
+  },
+});
+
+/* ---------- বাকির খাতা: যোগ, পরিশোধ, মোছা ---------- */
+function hgDueForm(dir) {
+  const ev = hgCur(), who = [...new Set((ev.dues || []).filter(d => !d.del).map(d => d.who))];
+  return `${sheetHead(L('বাকি লিখুন', 'Add credit'), esc(ev.name))}
+  <form data-form="hg-due" autocomplete="off">
+    <div class="field"><span class="flabel">${L('কী ধরনের বাকি?', 'What kind?')}</span>${seg('dir', [['owe', '📤 ' + L('আমি দেব', 'I owe')], ['get', '📥 ' + L('আমি পাব', 'I am owed')]], dir || 'owe')}
+      <div class="hint">${L('"আমি দেব": দোকানে বাকি বা ধার নিয়েছি। "আমি পাব": কেউ আমার কাছে ধার নিয়েছে।', '"I owe": credit at a shop or money I borrowed. "I am owed": someone borrowed from me.')}</div></div>
+    <label class="field"><span>${L('কার সাথে? (দোকান বা নাম)', 'With whom? (shop or name)')}</span><input class="input" name="who" maxlength="40" list="hg-whos"><datalist id="hg-whos">${who.map(w => `<option value="${esc(w)}">`).join('')}</datalist></label>
+    <label class="field"><span>${L('কত টাকা', 'Amount')}</span>${moneyInput('amt', '', '0')}</label>
+    <label class="field"><span>${L('কীসের জন্য', 'What for')}</span><input class="input" name="title" maxlength="60" placeholder="${L('যেমন: চাল, ডাল', 'e.g. rice, lentils')}"></label>
+    <label class="field"><span>${L('তারিখ', 'Date')}</span><input class="input" type="date" name="date" value="${today()}"></label>
+    <p class="hint">${L('এটা খরচ নয়, শুধু বাকির হিসাব। বাকিতে কিছু কিনলে খরচ লেখার সময় "বাকিতে কিনেছি" টিক দিন, তাহলে খরচ আর বাকি দুটোই একসাথে উঠবে।', 'This is not an expense, only a credit record. When buying on credit, tick "Bought on credit" in the expense form to record both at once.')}</p>
+    <button class="btn primary block" type="submit">${L('সেভ করুন', 'Save')}</button></form>`;
+}
+function hgDueSheet(key) {
+  const ev = hgCur(), g = hgDueGroups(ev).find(x => x.key === key);
+  if (!g) return `${sheetHead(L('বাকির খাতা', 'Credit book'))}<p class="hint">${L('পাওয়া যায়নি।', 'Not found.')}</p>`;
+  const owe = g.dir === 'owe', act = ev.status === 'active';
+  return `${sheetHead(esc(g.who), owe ? L('আমি দেব', 'I owe') : L('আমি পাব', 'I am owed'))}
+    <div class="minis"><div class="mini"><small>${L('মোট বাকি ছিল', 'Total credit')}</small><b>${hgM(g.total)}</b></div><div class="mini"><small>${owe ? L('দিয়েছি', 'Paid') : L('পেয়েছি', 'Received')}</small><b>${hgM(g.total - g.rem)}</b></div><div class="mini"><small>${L('এখনও বাকি', 'Still due')}</small><b class="${g.rem ? (owe ? 'neg' : 'pos') : ''}">${hgM(g.rem)}</b></div></div>
+    ${g.rem > 0 && act ? `<form data-form="hg-due-pay" data-k="${esc(key)}" autocomplete="off" class="mt12"><div class="row2"><label class="field"><span>${owe ? L('কত দিলেন', 'How much paid') : L('কত পেলেন', 'How much received')}</span>${moneyInput('amt', String(g.rem / 100), '0')}</label>
+      <label class="field"><span>${L('তারিখ', 'Date')}</span><input class="input" type="date" name="date" value="${today()}"></label></div>
+      <button class="btn primary block" type="submit">${owe ? L('পরিশোধ করলাম', 'Record payment') : L('ফেরত পেলাম', 'Record received')}</button>
+      <div class="hint">${L('পুরোনো বাকি আগে মেটে। আংশিক দিলে বাকিটা থেকে যাবে।', 'The oldest credit is cleared first. A part payment leaves the rest due.')}</div></form>` : ''}
+    <div class="section-title">${L('হিসাবের বিবরণ', 'Details')}</div>
+    ${g.dues.map(d => `<div class="card" style="margin-bottom:8px"><div class="card-head"><h2>${esc(d.title || L('বাকি', 'Credit'))}</h2><b>${hgM(d.amt)}</b></div><small class="muted">${fmtDate(d.date)}${d.expenseId ? ' · ' + L('খরচের সাথে যুক্ত', 'linked to an expense') : ''}</small>
+      ${d.payments.map(p => `<div class="hg-day"><span><b>${owe ? L('দিয়েছি', 'Paid') : L('পেয়েছি', 'Received')}</b><small>${fmtDate(p.date)}</small></span><b>${hgM(p.amt)}</b></div>`).join('')}
+      <div class="hg-day"><span><b>${L('বাকি', 'Due')}</b></span><b class="${hgDueRem(d) ? (owe ? 'neg' : 'pos') : ''}">${hgDueRem(d) ? hgM(hgDueRem(d)) : L('মিটেছে ✓', 'Settled ✓')}</b></div>
+      ${act ? `<button type="button" class="btn sm danger mt8" data-action="hg-due-del" data-id="${d.id}">${icon('trash', 16)} ${L('মুছুন', 'Delete')}</button>` : ''}</div>`).join('')}`;
+}
+Object.assign(FORMS, {
+  'hg-due': f => {
+    const ev = hgGuard(); if (!ev) return;
+    const who = f.elements.who.value.trim(), amt = toMinor(f.elements.amt.value);
+    if (!who) return fail(f, L('কার সাথে বাকি তা লিখুন', 'Enter who it is with'), 'who');
+    if (amt <= 0) return fail(f, L('টাকার পরিমাণ লিখুন', 'Enter the amount'), 'amt');
+    // একই মুহূর্তে দুবার চাপলে ডুপ্লিকেট হয় না
+    const dir = f.elements.dir.value, title = f.elements.title.value.trim();
+    if ((ev.dues || []).some(d => !d.del && Date.now() - d.createdAt < 4000 && d.who === who && d.amt === amt && d.dir === dir && d.title === title)) { closeSheet(); return; }
+    (ev.dues = ev.dues || []).push({ id: uid(), dir, who, title, amt, date: f.elements.date.value || today(), payments: [], expenseId: null, createdAt: Date.now() });
+    closeSheet(); hgCommit(ev, `বাকি: ${who} ${hgM(amt)}`, `Credit: ${who} ${hgM(amt)}`);
+  },
+  'hg-due-pay': f => {
+    const ev = hgGuard(); if (!ev) return;
+    const g = hgDueGroups(ev).find(x => x.key === f.dataset.k); if (!g) return;
+    const amt = toMinor(f.elements.amt.value);
+    if (amt <= 0) return fail(f, L('টাকার পরিমাণ লিখুন', 'Enter the amount'), 'amt');
+    if (amt > g.rem) return fail(f, L(`বাকি আছে মাত্র ${hgM(g.rem)}`, `Only ${hgM(g.rem)} is due`), 'amt');
+    let left = amt; const date = f.elements.date.value || today();
+    g.dues.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.createdAt - b.createdAt).forEach(d => {
+      const take = Math.min(left, hgDueRem(d)); if (take > 0) { d.payments.push({ id: uid(), amt: take, date, createdAt: Date.now() }); left -= take; }
+    });
+    closeSheet(); hgCommit(ev, `বাকি শোধ: ${g.who} ${hgM(amt)}`, `Credit payment: ${g.who} ${hgM(amt)}`);
+  },
+});
+Object.assign(ACTIONS, {
+  'hg-due-add': () => { const ev = hgGuard(); if (ev) openSheet(hgDueForm('owe')); },
+  'hg-due-open': el => { const ev = hgCur(); if (ev) openSheet(hgDueSheet(el.dataset.k)); },
+  'hg-due-del': el => {
+    const ev = hgGuard(); if (!ev) return; const d = (ev.dues || []).find(x => x.id === el.dataset.id); if (!d) return;
+    if (!confirm(L('এই বাকির হিসাব মুছবেন? (জড়িত খরচ থাকলে সেটা থেকে যাবে)', 'Delete this credit record? (A linked expense stays.)'))) return;
+    if (sheetOpen) closeSheet(); undoable(DELETED(), () => { d.del = Date.now(); hgLog(ev, 'বাকি মোছা হয়েছে', 'Credit deleted'); });
   },
 });

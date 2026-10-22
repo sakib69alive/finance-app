@@ -31,6 +31,7 @@ const HG_CAT = {
   staples: ['চাল-ডাল-তেল', 'Rice, lentils, oil'], rent: ['বাসা ভাড়া', 'House rent'], electricity: ['বিদ্যুৎ বিল', 'Electricity'], gaswater: ['গ্যাস / পানি', 'Gas & water'],
   internet: ['ইন্টারনেট / মোবাইল', 'Internet & mobile'], medical: ['চিকিৎসা / ওষুধ', 'Medical'], education: ['পড়াশোনা', 'Education'], househelp: ['কাজের সহায়তা', 'House help'],
   savings: ['সঞ্চয়', 'Savings'], charity: ['দান / যাকাত', 'Charity'], family: ['পরিবার / আত্মীয়', 'Family & relatives'], eidi: ['ঈদি / বখশিশ', 'Eidi / tips'],
+  gas: ['গ্যাস বিল', 'Gas bill'], water: ['পানির বিল', 'Water bill'], personalcare: ['ব্যক্তিগত পরিচর্যা', 'Personal care'], smallexp: ['দৈনন্দিন ছোটখাটো খরচ', 'Small daily costs'], emergency: ['জরুরি খরচ', 'Emergency'],
   repair: ['মেরামত', 'Repairs'], eatout: ['বাইরে খাওয়া', 'Eating out'], souvenir: ['স্মারক / কেনাকাটা', 'Souvenirs'], entry: ['এন্ট্রি ফি / গাইড', 'Entry fee & guide'],
 };
 // বাজেট ফর্মে প্রতিটা খাতের নিচে ছোট ইঙ্গিত: এই খাতে সাধারণত কী কী পড়ে
@@ -52,22 +53,68 @@ const HG_TYPES = {
   restaurant: { g: 'friends', bn: 'রেস্টুরেন্ট', en: 'Restaurant', icon: '🍽️', cats: ['food', 'drinks', 'vat', 'service', 'discount', 'other_charges'] },
   picnic: { g: 'friends', bn: 'পিকনিক', en: 'Picnic', icon: '🧺', cats: ['groceries', 'transport', 'location', 'equipment', 'games', 'other'] },
   dayout: { g: 'friends', bn: 'ডে আউট', en: 'Day out', icon: '🌤️', cats: ['food', 'transport', 'tickets', 'shopping', 'misc'] },
-  tour: { g: 'friends', bn: 'ভ্রমণ / রোড ট্রিপ', en: 'Tour / road trip', icon: '🚐', cats: ['transport', 'fuel', 'toll', 'hotel', 'food', 'tickets', 'other'] },
+  tour: { g: 'friends', bn: 'ভ্রমণ / ট্রিপ', en: 'Tour / road trip', icon: '🚐', cats: ['transport', 'fuel', 'toll', 'hotel', 'food', 'tickets', 'other'] },
   hotel: { g: 'friends', bn: 'হোটেল থাকা', en: 'Hotel stay', icon: '🏨', cats: ['room', 'food', 'other_charges'] },
-  family: { g: 'friends', bn: 'পরিবার নিয়ে বেড়ানো', en: 'Family outing', icon: '👨‍👩‍👧', cats: ['food', 'transport', 'tickets', 'shopping', 'other'] },
-  office: { g: 'friends', bn: 'অফিস / ক্লাসের খরচ', en: 'Office / class', icon: '💼', cats: ['food', 'snacks', 'drinks', 'transport', 'other'] },
+  family: { g: 'friends', bn: 'পরিবারসহ বেড়ানো', en: 'Family outing', icon: '👨‍👩‍👧', cats: ['food', 'transport', 'tickets', 'shopping', 'other'] },
+  office: { g: 'friends', bn: 'অফিস / ক্লাস', en: 'Office / class', icon: '💼', cats: ['food', 'snacks', 'drinks', 'transport', 'other'] },
   birthday_home: { g: 'event', bn: 'জন্মদিন (বাসায়)', en: 'Birthday at home', icon: '🎈', cats: ['cake', 'food', 'decoration', 'entertainment', 'favors', 'gifts', 'other'] },
-  birthday_party: { g: 'event', bn: 'জন্মদিন (পার্টি হল / রেস্টুরেন্টে)', en: 'Birthday at a venue', icon: '🎉', cats: ['venue', 'cake', 'food', 'decoration', 'entertainment', 'photo', 'favors', 'other'] },
+  birthday_party: { g: 'event', bn: 'জন্মদিন (হলে)', en: 'Birthday at a venue', icon: '🎉', cats: ['venue', 'cake', 'food', 'decoration', 'entertainment', 'photo', 'favors', 'other'] },
   birthday: { g: 'event', bn: 'জন্মদিন / অনুষ্ঠান', en: 'Birthday / event', icon: '🎂', cats: ['cake', 'food', 'decoration', 'venue', 'gifts', 'equipment', 'other'] },
   party: { g: 'event', bn: 'পার্টি / ঘরোয়া আয়োজন', en: 'Party / gathering', icon: '🥳', cats: ['food', 'snacks', 'drinks', 'decoration', 'entertainment', 'cleaning', 'other'] },
-  wedding: { g: 'event', bn: 'বিয়ে / হলুদ / বড় অনুষ্ঠান', en: 'Wedding / big event', icon: '💍', cats: ['venue', 'cook', 'decoration', 'flowers', 'photo', 'clothes', 'beauty', 'invites', 'gifts', 'transport', 'other'] },
+  wedding: { g: 'event', bn: 'বিয়ে / বড় অনুষ্ঠান', en: 'Wedding / big event', icon: '💍', cats: ['venue', 'cook', 'decoration', 'flowers', 'photo', 'clothes', 'beauty', 'invites', 'gifts', 'transport', 'other'] },
   eid: { g: 'event', bn: 'ঈদ / উৎসব', en: 'Eid / festival', icon: '🌙', cats: ['clothes', 'groceries', 'food', 'eidi', 'gifts', 'transport', 'decoration', 'other'] },
   daily: { g: 'daily', bn: 'দৈনিক বাজার খরচ', en: 'Daily market', icon: '🛒', cats: ['staples', 'vegetables', 'meat', 'snacks', 'transport', 'other'] },
-  household: { g: 'daily', bn: 'মাসিক সংসার খরচ', en: 'Monthly household', icon: '🏡', cats: ['rent', 'groceries', 'electricity', 'gaswater', 'internet', 'transport', 'medical', 'education', 'househelp', 'savings', 'family', 'other'] },
+  household: { g: 'daily', bn: 'মাসিক সংসার খরচ', en: 'Monthly household', icon: '🏡', cats: ['groceries', 'electricity', 'gas', 'water', 'internet', 'medical', 'education', 'househelp', 'savings', 'cleaning', 'personalcare', 'smallexp', 'emergency', 'family', 'other'] },
   transport: { g: 'daily', bn: 'যাতায়াত', en: 'Transportation', icon: '🚌', cats: ['transport', 'fuel', 'toll', 'other'] },
   shopping: { g: 'daily', bn: 'শপিং ও অন্যান্য', en: 'Shopping & other', icon: '🛍️', cats: ['shopping', 'other'] },
   custom: { g: 'daily', bn: 'কাস্টম (নিজের মতো)', en: 'Custom', icon: '✨', cats: ['other'] },
 };
+const HG_TYPE_DESC = {
+  hangout: ['আড্ডা, চা-নাস্তা, ঘোরাঘুরির খরচ ভাগ', 'Chats, snacks and outings, costs shared'],
+  restaurant: ['একসাথে খেয়ে বিল ভাগ, ভ্যাট-সার্ভিসসহ', 'Eat together, split the bill with VAT and service'],
+  picnic: ['বাজার, গাড়ি আর জায়গা ভাড়া সবাই মিলে', 'Groceries, transport and place rent together'],
+  dayout: ['এক দিনের ঘোরা: খাবার, যাতায়াত, টিকেট', 'One-day trip: food, transport, tickets'],
+  tour: ['কয়েক দিনের ট্রিপ: হোটেল, গাড়ি, জ্বালানি', 'Multi-day trip: hotel, car, fuel'],
+  hotel: ['একসাথে হোটেলে থাকা, রুম ভাড়া ভাগ', 'Staying together, room cost shared'],
+  family: ['পরিবার নিয়ে বেড়ানোর খরচ', 'Costs of a family outing'],
+  office: ['অফিস বা ক্লাসের লাঞ্চ, চা, ছোট খরচ', 'Office or class lunch, tea, small costs'],
+  birthday_home: ['ঘরে সাজিয়ে জন্মদিন: কেক, সাজসজ্জা, খাবার', 'Birthday at home: cake, decor, food'],
+  birthday_party: ['হল বা রেস্টুরেন্টে জন্মদিন: ভেন্যু, কেক, বিনোদন', 'Birthday at a venue: venue, cake, fun'],
+  birthday: ['জন্মদিন বা ছোট অনুষ্ঠানের সাধারণ খরচ', 'General costs of a birthday or small event'],
+  party: ['ঘরোয়া পার্টি: খাবার, পানীয়, গান', 'Home party: food, drinks, music'],
+  wedding: ['বিয়ে, হলুদ বা বড় আয়োজন: ভেন্যু, বাবুর্চি, ছবি', 'Wedding or big event: venue, cook, photos'],
+  eid: ['ঈদ: পোশাক, বাজার, ঈদি, উপহার', 'Eid: clothes, groceries, eidi, gifts'],
+  daily: ['রোজকার বাজার: চাল-ডাল, সবজি, মাছ-মাংস', 'Everyday market: staples, vegetables, meat'],
+  household: ['মাসের সংসার: বিল, পড়াশোনা, চিকিৎসা, বাজার, সঞ্চয়', 'Monthly home: bills, education, medical, groceries, savings'],
+  transport: ['যাতায়াত ও জ্বালানির খরচ', 'Travel and fuel costs'],
+  shopping: ['কেনাকাটা ও ছোটখাটো খরচ', 'Shopping and small costs'],
+  custom: ['নিজের মতো খাত বানিয়ে নিন', 'Build your own categories'],
+};
+const hgTypeDesc = k => (HG_TYPE_DESC[k] || HG_TYPE_DESC.custom)[isEN() ? 1 : 0];
+// দৈনন্দিন ও সংসারের ইভেন্টে "বন্ধু" নয়, "সদস্য"
+const hgSolo = ev => !!ev && (HG_TYPES[ev.type] || {}).g === 'daily';
+const hgTerm = ev => (hgSolo(ev)
+  ? { tab: L('সদস্যরা', 'Members'), one: L('সদস্য', 'Member'), add: L('সদস্য যোগ করুন', 'Add member'), step: L('সদস্যদের নাম যোগ করুন', 'Add the members'), each: L('সদস্যদের হিসাব', 'Each member'), none: L('সদস্যদের নাম যোগ করুন।', 'Add the household members.'), min: 1 }
+  : { tab: L('বন্ধুরা', 'Friends'), one: L('বন্ধু', 'Friend'), add: L('বন্ধু যোগ করুন', 'Add friend'), step: L('বন্ধুদের নাম যোগ করুন', 'Add your friends'), each: L('বন্ধুদের হিসাব', 'Each friend'), none: L('বন্ধুদের নাম যোগ করুন।', 'Add the friends who joined.'), min: 2 });
+// একা বা সংসারের ইভেন্টে অন্তত একজন সদস্য ("আমি") থাকে, যাতে কাউকে জিজ্ঞেস না করেই খরচ লেখা যায়
+function hgEnsureMe(ev) {
+  if (!hgSolo(ev) || ev.participants.length) return;
+  ev.participants.push({ id: uid(), friendId: null, name: L('আমি', 'Me'), phone: '', note: '', joinedOn: '', active: true, org: true });
+}
+// একজনের হিসাবে ভাগাভাগি নেই: কে দিল, কাদের মধ্যে ভাগ ইত্যাদি লুকানো থাকে
+const hgSimple = ev => hgSolo(ev) && hgActive(ev).length <= 1;
+/* ---------- বাকির খাতা (দৈনন্দিন ইভেন্টে): কার কাছে কত বাকি, কীসের জন্য ---------- */
+// dir: 'owe' = আমি দেব (বাকিতে কিনেছি / ধার নিয়েছি), 'get' = আমি পাব (কেউ আমার কাছে ধার নিয়েছে)
+const hgDuePaid = d => d.payments.reduce((q, p) => q + p.amt, 0);
+const hgDueRem = d => Math.max(0, d.amt - hgDuePaid(d));
+function hgDueGroups(ev) {
+  const g = {};
+  (ev.dues || []).filter(d => !d.del).forEach(d => {
+    const k = d.dir + '|' + d.who.trim().toLowerCase(), o = g[k] || (g[k] = { key: k, dir: d.dir, who: d.who.trim(), dues: [], rem: 0, total: 0 });
+    o.dues.push(d); o.rem += hgDueRem(d); o.total += d.amt;
+  });
+  return Object.values(g).sort((a, b) => (b.rem > 0) - (a.rem > 0) || b.rem - a.rem);
+}
 const HG_TYPE_GROUPS = { friends: ['বন্ধু ও পরিবারের সাথে', 'With friends & family'], event: ['অনুষ্ঠান ও আয়োজন', 'Events & celebrations'], daily: ['দৈনন্দিন ও সংসার', 'Everyday & household'] };
 const hgTypeLabel = k => { const t = HG_TYPES[k] || HG_TYPES.custom; return isEN() ? t.en : t.bn; };
 const hgCatsFor = type => (HG_TYPES[type] || HG_TYPES.custom).cats.map(k => ({ k, bn: HG_CAT[k][0], en: HG_CAT[k][1] }));
@@ -104,8 +151,12 @@ function hangoutMigrate(s) {
   if (!Array.isArray(h.friends)) h.friends = [];
   if (!Array.isArray(h.events)) h.events = [];
   h.events.forEach(ev => {
+    if (!Array.isArray(ev.participants)) ev.participants = [];
+    if (!Array.isArray(ev.dues)) ev.dues = [];
+    ev.dues.forEach(d => { if (!Array.isArray(d.payments)) d.payments = []; });
     ['participants', 'expenses', 'transfers', 'refunds', 'decisions', 'history'].forEach(k => { if (!Array.isArray(ev[k])) ev[k] = []; });
     if (!ev.cats || !ev.cats.length) ev.cats = hgCatsFor(ev.type);
+    if ((HG_TYPES[ev.type] || {}).g === 'daily' && !ev.participants.length) ev.participants.push({ id: 'me-' + ev.id, friendId: null, name: 'আমি', phone: '', note: '', joinedOn: '', active: true, org: true });
   });
 }
 const hg = () => state.hangout;
@@ -151,11 +202,9 @@ const hgErr = e => {
   return m ? m[isEN() ? 1 : 0] : e.code;
 };
 
-/* ---------- হোস্ট (যে এই অ্যাপ চালায়): সবখানে আলাদা চিহ্ন ---------- */
-const hgHost = ev => ev.participants.find(p => p.org) || null;
-const hgAv = p => `<span class="hgp-av ${p && p.org ? 'host' : ''}">${esc(((p && p.name) || '?').trim().charAt(0).toUpperCase())}</span>`;
-// নাম + হোস্ট হলে মুকুট
-const hgNm = (ev, id) => { const p = ev.participants.find(x => x.id === id); return esc(p ? p.name : '—') + (p && p.org ? ' 👑' : ''); };
+/* ---------- ব্যক্তির ছোট উপাদান ---------- */
+const hgAv = p => `<span class="hgp-av">${esc(((p && p.name) || '?').trim().charAt(0).toUpperCase())}</span>`;
+const hgNm = (ev, id) => { const p = ev.participants.find(x => x.id === id); return esc(p ? p.name : '—'); };
 
 /* ---------- ছোট উপাদান ---------- */
 const hgBadge = (cls, text) => `<span class="hgb ${cls}">${text}</span>`;
@@ -208,7 +257,7 @@ function hgIssuesHtml(ev, c) {
 function hgPersonCard(ev, c, p) {
   const f = c.final[p.id], st = hgPersonStatus(ev, c, p.id);
   return `<div class="hgp ${p.active ? '' : 'off'}">
-    <div class="hgp-top">${hgAv(p)}<div class="hgp-n"><b>${esc(p.name)}${p.org ? ` <small class="hostb">👑 ${L('হোস্ট', 'Host')}</small>` : ''}${p.active ? '' : ` <small class="muted">(${L('নিষ্ক্রিয়', 'inactive')})</small>`}</b>
+    <div class="hgp-top">${hgAv(p)}<div class="hgp-n"><b>${esc(p.name)}${p.active ? '' : ` <small class="muted">(${L('নিষ্ক্রিয়', 'inactive')})</small>`}</b>
       <small class="hgs ${HG_PSTATUS[st][2]}">${hgPStatusLabel(st)}</small></div>
       <div class="hgp-bal ${f > 0 ? 'pos' : f < 0 ? 'neg' : ''}"><small>${f > 0 ? L('পাবে', 'Gets') : f < 0 ? L('দেবে', 'Owes') : L('বাকি নেই', 'Even')}</small><b>${hgM(Math.abs(f))}</b></div></div>
     <div class="hgp-g"><div><small>${L('তার অংশ', 'Share')}</small><b>${hgM(c.share[p.id])}</b></div><div><small>${L('দিয়েছে', 'Paid')}</small><b>${hgM(c.paid[p.id])}</b></div>
@@ -223,14 +272,14 @@ function hgSecExpenses(ev, c) {
   const per = Object.fromEntries(c.per.map(x => [x.id, x]));
   return `${hgIssuesHtml(ev, c)}
     ${ev.status === 'active' ? `<div class="hg-actions"><button type="button" class="btn primary" data-action="hg-add-expense">${icon('plus', 18)} ${L('খরচ যোগ', 'Add expense')}</button>
-      <button type="button" class="btn" data-action="hg-add-bill">${icon('receipt', 18)} ${L('রেস্টুরেন্ট বিল', 'Restaurant bill')}</button></div>` : ''}
+      ${hgSolo(ev) ? '' : `<button type="button" class="btn" data-action="hg-add-bill">${icon('receipt', 18)} ${L('রেস্টুরেন্ট বিল', 'Restaurant bill')}</button>`}</div>` : ''}
     <div class="hg-filters"><input class="input" type="search" data-hg-exp="q" value="${esc(hgExpQ)}" placeholder="${L('খরচ খুঁজুন', 'Search expenses')}">
       <div class="chiprow wrap"><button type="button" class="fchip ${hgExpCat === 'all' ? 'active' : ''}" data-action="hg-exp-cat" data-v="all">${L('সব', 'All')}</button>${ev.cats.map(k => `<button type="button" class="fchip ${hgExpCat === k.k ? 'active' : ''}" data-action="hg-exp-cat" data-v="${k.k}">${esc(isEN() ? k.en : k.bn)}</button>`).join('')}</div></div>
     ${rows.length ? `<div class="list">${rows.map(e => {
       const x = per[e.id] || { refund: 0, ok: true };
       return `<div class="lwrap"><button type="button" class="lrow" data-action="hg-edit-expense" data-id="${e.id}">
         <span class="lic">${e.mode === 'bill' ? '🧾' : '💸'}</span>
-        <span class="lmain"><b>${e.personal ? '👤 ' : ''}${esc(e.title)}${x.ok ? '' : ' ⚠️'}</b><small>${esc(hgCatLabel(ev, e.category))}${e.personal ? ` · ${esc(pName(ev, e.personal))}${L('-এর নিজের', "'s own")}` : ''} · ${fmtDate(e.date)} · ${L('দিয়েছে', 'paid by')} ${e.payers.map(p => esc(pName(ev, p.pid))).join(', ')}${e.receipt ? ' 📎' : ''}</small></span>
+        <span class="lmain"><b>${e.personal ? '👤 ' : ''}${esc(e.title)}${x.ok ? '' : ' ⚠️'}</b><small>${esc(hgCatLabel(ev, e.category))}${e.personal ? ` · ${esc(pName(ev, e.personal))}${L('-এর নিজের', "'s own")}` : ''} · ${fmtDate(e.date)}${hgSimple(ev) ? '' : ` · ${L('দিয়েছে', 'paid by')} ${e.payers.map(p => esc(pName(ev, p.pid))).join(', ')}`}${e.desc ? ' · ' + esc(e.desc) : ''}${e.receipt ? ' 📎' : ''}</small></span>
         <span class="lend"><b>${hgM(e.total)}</b><small>${x.refund ? `${L('রিফান্ড', 'refund')} ${hgM(x.refund)}` : (e.mode === 'bill' ? L('আইটেম বিল', 'itemised') : hgMethodLabel(e.method))}</small></span></button>
         ${ev.status === 'active' ? delBtn('hg-del-expense', e.id) : ''}</div>`;
     }).join('')}</div>` : empty('🧾', L('কোনো খরচ নেই', 'No expenses'), L('খরচ যোগ করলে এখানে দেখা যাবে।', 'Added expenses show up here.'))}`;
@@ -249,16 +298,15 @@ const hgMethodLabel = m => (HG_METHODS[m] || ['', ''])[isEN() ? 1 : 0];
 
 /* ---------- বন্ধুরা (ইভেন্টের ভেতর) ---------- */
 function hgSecPeople(ev, c) {
-  return `${ev.status === 'active' ? `<button type="button" class="btn primary block" data-action="hg-add-person">${icon('plus', 18)} ${L('বন্ধু যোগ করুন', 'Add person')}</button>` : ''}
+  return `${ev.status === 'active' ? `<button type="button" class="btn primary block" data-action="hg-add-person">${icon('plus', 18)} ${hgTerm(ev).add}</button>` : ''}
     ${ev.participants.map(p => `<section class="card hg-pcard">${hgPersonCard(ev, c, p)}
       ${p.phone ? `<p class="hint">📞 ${esc(p.phone)}</p>` : ''}${p.note ? `<p class="hint">${esc(p.note)}</p>` : ''}
       ${p.joinedOn ? `<p class="hint">🗓️ ${L('যোগ দিয়েছে', 'Joined')}: ${fmtDate(p.joinedOn)}${ev.start ? ' (' + hgDayLabel(ev, p.joinedOn) + ')' : ''}</p>` : ''}
       <button type="button" class="btn sm block mt8" data-action="hg-person-stmt" data-p="${p.id}">📒 ${L('পুরো হিসাব দেখুন', 'Full statement')}</button>
       ${ev.status === 'active' && !p.org ? `<button type="button" class="btn sm block mt8" data-action="hg-money" data-p="${p.id}">💰 ${L('টাকা জমা / শোধ / ফেরত', 'Money in / paid / returned')}</button>` : ''}
-      ${ev.status === 'active' ? `<div class="btn-row mt8">${p.org ? '' : `<button type="button" class="btn sm" data-action="hg-set-host" data-id="${p.id}">👑 ${L('হোস্ট বানান', 'Make host')}</button>`}<button type="button" class="btn sm" data-action="hg-edit-person" data-id="${p.id}">${icon('edit', 16)} ${L('এডিট', 'Edit')}</button>
+      ${ev.status === 'active' ? `<div class="btn-row mt8"><button type="button" class="btn sm" data-action="hg-edit-person" data-id="${p.id}">${icon('edit', 16)} ${L('এডিট', 'Edit')}</button>
         <button type="button" class="btn sm" data-action="hg-toggle-person" data-id="${p.id}">${p.active ? L('নিষ্ক্রিয় করুন', 'Deactivate') : L('সক্রিয় করুন', 'Activate')}</button>
-        ${hgPidUsed(ev, p.id) ? '' : `<button type="button" class="btn sm danger" data-action="hg-del-person" data-id="${p.id}">${icon('trash', 16)}</button>`}</div>` : ''}</section>`).join('') || empty('🧑‍🤝‍🧑', L('কেউ নেই', 'No one yet'), L('বন্ধুদের নাম যোগ করুন।', 'Add the friends who joined.'))}
-    <p class="hint">👑 ${L('<b>হোস্ট</b> = যে এই অ্যাপে হিসাব রাখছে (সাধারণত আপনি)। হোস্ট সব জায়গায় মুকুট চিহ্নে আলাদা দেখায়, আর বন্ধুদের জমা দেওয়া টাকা হোস্টের কাছে থাকে ধরা হয়। যে কাউকে "হোস্ট বানান" দিয়ে বদলানো যায়।', '<b>Host</b> = whoever keeps the books in this app (usually you). The host shows with a crown everywhere, and money friends hand over is counted as held by the host. Use "Make host" to change it.')}</p>
+        ${hgPidUsed(ev, p.id) ? '' : `<button type="button" class="btn sm danger" data-action="hg-del-person" data-id="${p.id}">${icon('trash', 16)}</button>`}</div>` : ''}</section>`).join('') || empty(hgSolo(ev) ? '🏡' : '🧑‍🤝‍🧑', L('কেউ নেই', 'No one yet'), hgTerm(ev).none)}
     <p class="hint">${L('যার সাথে খরচ, লেনদেন বা সিদ্ধান্ত জড়িত তাকে মোছা যায় না, শুধু নিষ্ক্রিয় করা যায়। এতে পুরোনো হিসাব ঠিক থাকে।','Anyone tied to an expense, payment or decision cannot be deleted, only deactivated, so old numbers stay correct.')}</p>`;
 }
 

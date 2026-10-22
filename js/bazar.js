@@ -1,0 +1,780 @@
+'use strict';
+
+/* =========================================================
+   মডিউল: বাজার সদাই (বাজারের তালিকা, বাজেট, আসল দাম, পেমেন্ট, মজুত, দামের ইতিহাস, রিপোর্ট)
+   ডেটা: state.bazar (অন্য মডিউল থেকে আলাদা)। হিসাব: js/bazar-calc.js
+   ছবি: IndexedDB-তে 'bzr:<id>' নামে (বিদ্যমান ছবির ব্যবস্থা), ব্যাকআপে নিজে থেকে যায়
+   ========================================================= */
+
+Object.assign(ICONS, {
+  cart: '<circle cx="9" cy="20" r="1.6"/><circle cx="18" cy="20" r="1.6"/><path d="M3 4h2.5l2.2 11h10.6l2-8H6.4"/>',
+  box: '<path d="M4 8l8-4 8 4v9l-8 4-8-4Z"/><path d="M4 8l8 4 8-4M12 12v9"/>',
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>',
+});
+
+const BZ_CATS = [
+  { k: 'grain', bn: 'চাল, ডাল ও শস্য', en: 'Rice, lentils & grains', e: '🌾' }, { k: 'fish', bn: 'মাছ, মাংস ও ডিম', en: 'Fish, meat & eggs', e: '🐟' }, { k: 'veg', bn: 'শাকসবজি', en: 'Vegetables', e: '🥬' },
+  { k: 'fruit', bn: 'ফলমূল', en: 'Fruits', e: '🍎' }, { k: 'dairy', bn: 'দুধ ও দুগ্ধজাত খাবার', en: 'Milk & dairy', e: '🥛' }, { k: 'oil', bn: 'তেল, মসলা ও রান্নার উপকরণ', en: 'Oil, spices & cooking items', e: '🫒' },
+  { k: 'snack', bn: 'নাশতা ও পানীয়', en: 'Snacks & drinks', e: '☕' }, { k: 'clean', bn: 'সাবান, ডিটারজেন্ট ও পরিষ্কার-পরিচ্ছন্নতার পণ্য', en: 'Soap, detergent & cleaning', e: '🧼' },
+  { k: 'tissue', bn: 'টিস্যু ও দৈনন্দিন ব্যবহার্য জিনিস', en: 'Tissue & daily-use items', e: '🧻' }, { k: 'other', bn: 'অন্যান্য', en: 'Other', e: '🛒' },
+];
+// আগের সংস্করণের খাত: নতুন তালিকায় দেখানো হয় না, কিন্তু পুরোনো পণ্যের নাম ঠিক থাকে
+const BZ_CATS_OLD = [{ k: 'pulses', bn: 'ডাল ও ডালজাতীয়', en: 'Pulses & lentils', e: '🫘' }, { k: 'meat', bn: 'মাংস ও মুরগি', en: 'Meat & chicken', e: '🍗' }, { k: 'eggmilk', bn: 'ডিম ও দুধ', en: 'Eggs & milk', e: '🥚' },
+  { k: 'spice', bn: 'মসলা', en: 'Spices', e: '🌶️' }, { k: 'tea', bn: 'চা, কফি ও অন্যান্য খাবার', en: 'Tea, coffee & other food', e: '☕' }, { k: 'care', bn: 'ব্যক্তিগত পরিচর্যা', en: 'Personal care', e: '🧴' }];
+const BZ_UNITS = () => (isEN() ? ['kg', 'g', 'litre', 'ml', 'pcs', 'dozen', 'packet', 'bottle', 'bag'] : ['কেজি', 'গ্রাম', 'লিটার', 'মিলি', 'পিস', 'ডজন', 'প্যাকেট', 'বোতল', 'বস্তা']);
+const BZ_PAY = { cash: ['নগদ', 'Cash'], digital: ['কার্ড / ডিজিটাল', 'Card / digital'], advance: ['অগ্রিম', 'Advance'], later: ['পরে বাকি শোধ', 'Paid later'] };
+const BZ_ST = { todo: ['কেনা হয়নি', 'Not bought'], partial: ['আংশিক কেনা', 'Partly bought'], done: ['কেনা হয়েছে', 'Bought'], na: ['পাওয়া যায়নি', 'Not found'] };
+const BZ_MST = { active: ['চলমান', 'Active'], done: ['সম্পন্ন', 'Done'], cancelled: ['বাতিল', 'Cancelled'] };
+const bzSt = k => BZ_ST[k][isEN() ? 1 : 0], bzMst = k => BZ_MST[k][isEN() ? 1 : 0];
+
+/* ---------- ডেটা ---------- */
+function bazarMigrate(s) {
+  const b = s.bazar = Object.assign({ schema: BZ_SCHEMA, markets: [], cats: [], stock: [], templates: [], activeId: null, autoStock: false }, s.bazar || {});
+  ['markets', 'cats', 'stock', 'templates'].forEach(k => { if (!Array.isArray(b[k])) b[k] = []; });
+  b.markets.forEach(m => {
+    ['items', 'payments', 'receipts'].forEach(k => { if (!Array.isArray(m[k])) m[k] = []; });
+    if (!m.catBudgets || typeof m.catBudgets !== 'object') m.catBudgets = {};
+  });
+}
+const bz = () => state.bazar;
+const bzMarkets = () => bz().markets.filter(m => !m.del);
+const bzMkt = id => bz().markets.find(m => m.id === id && !m.del) || null;
+const bzByDate = (a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0);
+function bzCur() {
+  let m = bzMkt(bz().activeId);
+  if (!m) { const all = bzMarkets().sort(bzByDate); m = all.find(x => x.status === 'active') || all[0] || null; bz().activeId = m ? m.id : null; }
+  return m;
+}
+const bzCats = () => BZ_CATS.concat(bz().cats.filter(c => !c.del).map(c => ({ k: c.k, bn: c.name, en: c.name, e: '🏷️', custom: true })));
+const bzCatsAll = () => BZ_CATS.concat(BZ_CATS_OLD, bz().cats.filter(c => !c.del).map(c => ({ k: c.k, bn: c.name, en: c.name, e: '🏷️', custom: true })));
+const bzCat = k => bzCatsAll().find(c => c.k === k) || BZ_CATS[BZ_CATS.length - 1];
+const bzCatName = k => { const c = bzCat(k); return isEN() ? c.en : c.bn; };
+const bzM = bzMoney;
+const bzShopNames = () => [...new Set(bz().markets.flatMap(m => [m.shop].concat(m.items.map(i => i.shop))).map(s => (s || '').trim()).filter(Boolean))];
+const bzUnitOpts = () => `<datalist id="bz-units">${BZ_UNITS().map(u => `<option value="${u}">`).join('')}</datalist>`;
+const bzItem = (m, id) => m.items.find(i => i.id === id && !i.del) || null;
+const bzSelect = (name, opts, val) => `<select class="input" name="${name}">${opts.map(([v, l]) => `<option value="${v}" ${v === val ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+const bzCatSelect = (name, val) => bzSelect(name, bzCats().map(c => [c.k, `${c.e} ${esc(isEN() ? c.en : c.bn)}`]), val || 'other');
+const bzBar = (p, cls = '', col = 'var(--good)') => `<div class="bbar"><span class="${cls}" style="--c:${col};width:${clamp(p, 0, 100).toFixed(1)}%"></span></div>`;
+const bzDateOk = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
+
+// সব বদলের পর: সময় বসানো, মূল খরচে যুক্ত থাকলে সেটাও মিলিয়ে দেওয়া, তারপর সেভ
+function bzSave(m, msg) { if (m) { m.updatedAt = Date.now(); bzAutoLink(m); bzSyncMain(m); } commit(msg); }
+// "সংসারের হিসাবে নিজে যোগ" চালু থাকলে প্রতিটা বাজারের আসল খরচ নিজে ওই ইভেন্টে একটাই খরচ হিসেবে যায়
+function bzAutoLink(m) { const id = bz().linkEv; if (id && !m.sync && m.status !== 'cancelled' && !m.del && bzTargets().some(e => e.id === id) && bzMarketCalc(m).actualTotal > 0) m.sync = { evId: id }; }
+// যে পণ্যগুলো আগে মজুতে গেছে (বা অটো-মজুত চালু) সেগুলোর মজুত পরিবর্তনের সাথে মিলে যায়
+const bzRestock = m => { if (bz().autoStock) bzApplyStock(bz(), m); else if (m.items.some(i => i.stockedQty > 0)) bzApplyStock(bz(), m, true); };
+function bzNewItem(o) { return Object.assign({ id: uid(), name: '', cat: 'other', qty: 1000, unit: '', est: 0, status: 'todo', aQty: 0, aPrice: null, note: '', createdAt: Date.now() }, o); }
+
+/* ---------- মূল খরচের সাথে সংযোগ (Hangout-এর দৈনন্দিন ইভেন্টে একটাই খরচ, ref = bz:<বাজারের id>) ---------- */
+function bzTargets() {
+  if (typeof HG_TYPES === 'undefined' || !state.hangout || !Array.isArray(state.hangout.events)) return [];
+  return state.hangout.events.filter(e => !e.del && e.status === 'active' && (HG_TYPES[e.type] || {}).g === 'daily');
+}
+function bzSyncMain(m) {
+  const s = m.sync; if (!s) return;
+  const ev = bzTargets().find(e => e.id === s.evId);
+  if (!ev) { m.sync = null; return; }
+  const ref = 'bz:' + m.id, ex = ev.expenses.find(e => e.ref === ref);
+  const total = bzMarketCalc(m).actualTotal;
+  const drop = () => { ev.expenses = ev.expenses.filter(e => e.ref !== ref); };
+  if (m.del || m.status === 'cancelled') { drop(); m.sync = null; return; }
+  if (ex && ex.del) { m.sync = null; return; } // মূল দিকে নিজে মুছে ফেলেছেন
+  if (!(total > 0)) { drop(); return; }
+  const ids = ev.participants.map(p => p.id), act = ev.participants.filter(p => p.active).map(p => p.id);
+  const payer = (ev.participants.find(p => p.org && p.active) || ev.participants.find(p => p.active) || {}).id;
+  if (!payer) return;
+  const split = typeof hgSplit === 'function' ? hgSplit(total, 'equal', ids, { incl: act }) : null;
+  const alloc = split && split.ok ? split.alloc : Object.fromEntries(ids.map(id => [id, id === payer ? total : 0]));
+  const cat = (ev.cats.find(c => c.k === 'groceries') || ev.cats.find(c => c.k === 'staples') || ev.cats.find(c => c.k === 'other') || ev.cats[0] || { k: 'other' }).k;
+  const rec = { title: L('বাজার: ', 'Market: ') + m.name, category: cat, date: m.date, info: { kind: 'market', shop: m.shop || '', ym: (m.date || '').slice(0, 7), fromBazar: true }, desc: L('বাজার সদাই থেকে', 'From Bazar Sadai'), total, payers: [{ pid: payer, amt: total }], method: 'equal', spec: { incl: act, values: {} }, alloc, personal: null, mode: 'split', ref, updatedAt: Date.now(), meta: {} };
+  if (ex) Object.assign(ex, rec); else ev.expenses.push(Object.assign({ id: uid(), createdAt: Date.now() }, rec));
+  ev.updatedAt = Date.now();
+}
+
+/* ---------- টপবার ---------- */
+function bzTopbar() {
+  const m = bzCur();
+  return `<div class="batch-btn">
+      <button type="button" class="home-btn" data-action="go-home" aria-label="${L('হোমে ফিরুন', 'Back to Home')}"><span class="logo-sm">${LOGO}</span></button>
+      <span class="bb-text"><button type="button" class="home-link" data-action="go-home">${L('হিসাবী', 'Hisabi')}</button>
+        <button type="button" class="batch-name" data-action="bz-markets" aria-label="${L('বাজার বদলান', 'Switch market')}"><b>${esc(m ? m.name : L('বাজার সদাই', 'Bazar Sadai'))}</b>${icon('chev', 16)}</button></span>
+    </div>
+    <div class="top-actions">${moduleSwitcher()}${helpBtn()}${langBtn()}</div>`;
+}
+
+/* ---------- হোম ---------- */
+function bzFlagMsg(f) {
+  const c = f.k ? bzCatName(f.k) : '';
+  return {
+    budget_over: L(`বাজেটের ${bzM(f.amt)} বেশি খরচ হয়ে গেছে।`, `You are ${bzM(f.amt)} over budget.`), budget_near: L(`বাজেটের প্রায় সবটা শেষ, বাকি ${bzM(f.amt)}।`, `Budget almost used, ${bzM(f.amt)} left.`),
+    plan_over: L(`তালিকার আনুমানিক দামই বাজেটের ${bzM(f.amt)} বেশি। কিছু পণ্য কমাতে পারেন।`, `The estimated list already exceeds the budget by ${bzM(f.amt)}. Consider trimming items.`), cat_over: L(`${c} খাতে বরাদ্দের ${bzM(f.amt)} বেশি গেছে।`, `${c} is ${bzM(f.amt)} over its share.`),
+  }[f.code];
+}
+function bzEmptyHome() {
+  const low = bzLowStock(bz()).length;
+  return `<section class="card">${empty('🛒', L('এখনও কোনো বাজার নেই', 'No market yet'), `<p class="hint">${L('নতুন বাজার খুলে তালিকা বানান, বাজেট ঠিক করুন, কেনার সাথে সাথে আসল দাম লিখুন।', 'Open a market, build the list, set a budget and enter real prices as you buy.')}</p>`,
+    `<button type="button" class="btn primary block mt8" data-action="bz-new">${icon('plus', 18)} ${L('নতুন বাজার', 'New market')}</button>${bz().templates.length ? `<button type="button" class="btn block mt8" data-action="bz-tpls">📋 ${L('টেমপ্লেট থেকে শুরু করুন', 'Start from a template')}</button>` : ''}`)}</section>
+    ${low ? bzLowCard() : ''}`;
+}
+function bzLowCard(m) {
+  const low = bzLowStock(bz());
+  if (!low.length) return '';
+  return `<section class="card attn"><div class="card-head"><h2>📦 ${L('মজুত কমে গেছে', 'Running low at home')}</h2><span class="achips">${low.length}</span></div>
+    <p class="hint" style="margin:0 0 8px">${low.slice(0, 4).map(s => `<b>${esc(s.name)}</b> ${bzQtyStr(s.qty)} ${esc(s.unit)}`).join(' · ')}${low.length > 4 ? ' …' : ''}</p>
+    ${m && m.status !== 'cancelled' ? `<button type="button" class="btn sm primary" data-action="bz-low-add">${L('এই বাজারের তালিকায় যোগ করুন', 'Add to this list')}</button>` : `<button type="button" class="btn sm" data-action="tab" data-tab="stock">${L('মজুত দেখুন', 'See stock')}</button>`}</section>`;
+}
+function bzHome() {
+  const m = bzCur();
+  if (!m) return bzEmptyHome();
+  const c = bzMarketCalc(m), act = m.status === 'active';
+  const msgs = c.flags.map(bzFlagMsg).filter(Boolean);
+  const last = bzMarkets().filter(x => x.id !== m.id && x.status === 'done').sort(bzByDate)[0];
+  const lc = last && bzMarketCalc(last);
+  return `${m.status === 'cancelled' ? `<div class="hg-lock cancelled"><span>${L('এই বাজার বাতিল করা আছে। হিসাবে ধরা হচ্ছে না।', 'This market is cancelled and not counted.')}</span><button type="button" class="btn sm" data-action="bz-reopen">${L('আবার চালু', 'Reopen')}</button></div>` : ''}
+  <section class="hero"><div class="hero-top"><div>
+      <div class="hero-label">${esc(m.name)} · ${fmtDate(m.date)}${m.shopper ? ' · ' + esc(m.shopper) : ''}${c.discount ? ' · ' + L('ছাড়', 'off') + ' ' + bzM(c.discount) : ''} <span class="hgb ${m.status === 'done' ? 'pos' : ''}">${bzMst(m.status)}</span></div>
+      <div class="hero-target">${bzM(c.actualTotal)}</div>
+      <div class="hero-sub">${c.budget != null ? `${L('বাজেট', 'Budget')} ${bzM(c.budget)} · ${c.remaining >= 0 ? `${L('বাকি', 'left')} ${bzM(c.remaining)}` : `${bzM(-c.remaining)} ${L('বেশি', 'over')}`}` : L('বাজেট নির্ধারণ করা হয়নি', 'No budget set')}</div></div>
+      <div class="ringcap">${ring(c.progress)}<small>${L('কেনা', 'bought')}</small></div></div>
+    <div class="hero-chips"><div><small>${L('আনুমানিক', 'Estimated')}</small><b>${bzM(c.estTotal)}</b></div><div><small>${L('কেনা পণ্য', 'Bought')}</small><b>${c.done}/${c.total}</b></div><div><small>${L('বাকি পণ্য', 'To buy')}</small><b>${c.todo + c.partial}</b></div></div></section>
+  ${msgs.length ? `<div class="bsum ${c.flags.some(f => f.code === 'budget_over' || f.code === 'cat_over') ? 'bad' : 'warn'}"><b>${c.flags.some(f => f.code === 'budget_over') ? L('বাজেট পার হয়েছে', 'Over budget') : L('খেয়াল রাখুন', 'Keep an eye')}</b><span>${msgs.map(esc).join(' ')}</span></div>` : ''}
+  <section class="card"><div class="card-head"><h2>${L('বাজেট ও খরচ', 'Budget & spending')}</h2>${act ? `<button type="button" class="link" data-action="bz-budget">${c.budget != null ? L('বদলান', 'Edit') : L('ঠিক করুন', 'Set')}</button>` : ''}</div>
+    ${c.budget != null ? `${bzBar(c.usedPct, c.usedPct > 100 ? 'over' : c.usedPct >= 85 ? 'near' : '')}<div class="brow-meta"><span>${pct(c.usedPct)} ${L('ব্যবহার', 'used')}</span><span>${L('আসল', 'Actual')} ${bzM(c.actualTotal)} / ${bzM(c.budget)}</span></div>` : `<p class="hint" style="margin:0">${L('বাজেট নির্ধারণ করা হয়নি। ঠিক করলে কতটা খরচ হলো আর কতটা বাকি তা দেখা যাবে।', 'No budget set. Set one to see what is spent and what is left.')}</p>`}
+    <div class="minis mt8"><div class="mini"><small>${L('আনুমানিক', 'Estimated')}</small><b>${bzM(c.estTotal)}</b></div><div class="mini"><small>${c.discount ? L('আসল (ছাড়ের পর)', 'Actual (after discount)') : L('আসল', 'Actual')}</small><b>${bzM(c.actualTotal)}</b></div><div class="mini"><small>${L('দামের পার্থক্য', 'Price gap')}</small><b class="${c.diffTotal > 0 ? 'neg' : c.diffTotal < 0 ? 'pos' : ''}">${c.diffTotal === 0 ? '—' : (c.diffTotal > 0 ? '+' : '−') + bzM(Math.abs(c.diffTotal))}</b></div></div></section>
+  ${m.status !== 'cancelled' ? `<section class="card"><div class="card-head"><h2>${L('দ্রুত পণ্য যোগ', 'Quick add')}</h2></div>
+    <form data-form="bz-quick" autocomplete="off"><div class="qa"><input class="input qa-n" name="name" maxlength="50" placeholder="${L('পণ্যের নাম', 'Item name')}"></div>
+      <div class="qa"><input class="input" name="qty" inputmode="decimal" placeholder="${L('পরিমাণ', 'Qty')}"><input class="input" name="unit" list="bz-units" placeholder="${L('একক', 'Unit')}"><div class="qa-p">${moneyInput('est', '', L('দাম/একক', 'Price'))}</div></div>
+      <div class="qa"><div class="qa-c">${bzCatSelect('cat', 'other')}</div><button class="btn primary" type="submit">${icon('plus', 18)} ${L('যোগ', 'Add')}</button></div>${bzUnitOpts()}</form></section>` : ''}
+  <div class="quick four">
+    <button type="button" class="qbtn" data-action="tab" data-tab="list"><span class="qi">${icon('receipt')}</span>${L('তালিকা খুলুন', 'Open list')}</button>
+    <button type="button" class="qbtn" data-action="bz-pay-add"><span class="qi">${icon('wallet')}</span>${L('পেমেন্ট', 'Payment')}</button>
+    ${m.status === 'active' ? `<button type="button" class="qbtn" data-action="bz-complete"><span class="qi">${icon('check')}</span>${L('সম্পন্ন করুন', 'Complete')}</button>` : `<button type="button" class="qbtn" data-action="bz-reopen"><span class="qi">${icon('undo')}</span>${L('আবার খুলুন', 'Reopen')}</button>`}
+    <button type="button" class="qbtn" data-action="bz-new"><span class="qi">${icon('plus')}</span>${L('নতুন বাজার', 'New market')}</button></div>
+  ${c.payable > 0 || c.overpaid > 0 ? `<section class="card"><div class="card-head"><h2>${L('পেমেন্ট ও বাকি', 'Payment & dues')}</h2><button type="button" class="link" data-action="bz-pay-add">+ ${L('পেমেন্ট', 'Payment')}</button></div>
+    <div class="minis"><div class="mini"><small>${L('মোট বিল', 'Total bill')}</small><b>${bzM(c.actualTotal)}</b></div><div class="mini"><small>${L('পরিশোধ', 'Paid')}</small><b>${bzM(c.paid)}</b></div><div class="mini"><small>${c.overpaid > 0 ? L('অতিরিক্ত/অগ্রিম', 'Extra / advance') : L('বাকি', 'Due')}</small><b class="${c.payable > 0 ? 'neg' : 'pos'}">${bzM(c.payable || c.overpaid)}</b></div></div></section>` : ''}
+  ${bzLowCard(m)}
+  <section class="card"><div class="card-head"><h2>${L('আগের বাজার', 'Previous market')}</h2><button type="button" class="link" data-action="bz-history">${L('সব দেখুন', 'See all')}</button></div>
+    ${last ? `<button type="button" class="lrow" data-action="bz-open" data-id="${last.id}"><span class="lic">🧺</span><span class="lmain"><b>${esc(last.name)}</b><small>${fmtDate(last.date)} · ${lc.total} ${L('পণ্য', 'items')}</small></span><span class="lend"><b>${bzM(lc.actualTotal)}</b><small>${lc.budget != null ? `${L('বাজেট', 'Budget')} ${bzM(lc.budget)}` : bzMst(last.status)}</small></span></button>` : `<p class="hint" style="margin:0">${L('সম্পন্ন করা কোনো বাজার এখনও নেই।', 'No completed market yet.')}</p>`}</section>`;
+}
+
+/* ---------- তালিকা ---------- */
+function bzPriceLine(m, it, ents) {
+  const p = bzItemPrices(ents, m, it), u = esc(it.unit || '');
+  if (p.cur != null && p.prev) return `<span class="${p.diff > 0 ? 'neg' : p.diff < 0 ? 'pos' : ''}">${L('গতবার', 'Last')} ${bzM(p.prev.price)} → ${bzM(p.cur)}${p.diff ? ` (${p.diff > 0 ? '+' : '−'}${bzM(Math.abs(p.diff))})` : ''}</span>`;
+  if (p.cur == null && p.last) return `<span>${L('গতবার', 'Last time')} ${bzM(p.last.price)}/${u} · ${fmtDate(p.last.date)}</span>`;
+  return '';
+}
+function bzItemRow(m, r, ents) {
+  const it = r.item, st = it.status;
+  const pl = bzPriceLine(m, it, ents);
+  return `<div class="bzi ${st}"><button type="button" class="bzchk" data-action="bz-buy" data-id="${it.id}" aria-label="${L('কেনার হিসাব', 'Purchase')}">${st === 'done' ? icon('check', 16) : st === 'partial' ? '½' : st === 'na' ? '✕' : ''}</button>
+    <button type="button" class="bzmain" data-action="bz-edit-item" data-id="${it.id}"><b>${esc(it.name)}</b>
+      <small>${bzQtyStr(it.qty)} ${esc(it.unit)}${it.est ? ` · ${L('আনু.', 'est.')} ${bzM(r.planned)}` : ''}${it.shop ? ' · 🏪 ' + esc(it.shop) : ''}${it.note ? ' · 📝' : ''}</small>
+      ${r.bought ? `<small class="bzact">${L('কেনা', 'Bought')} ${bzQtyStr(it.aQty)} ${esc(it.unit)} × ${bzM(it.aPrice || 0)}${r.diff ? ` <i class="${r.diff > 0 ? 'neg' : 'pos'}">${r.diff > 0 ? '+' : '−'}${bzM(Math.abs(r.diff))}</i>` : ''}</small>` : ''}
+      ${pl ? `<small class="bzpl">${pl}</small>` : ''}</button>
+    <span class="bzend"><b>${r.bought ? bzM(r.net) : st === 'na' ? '—' : bzM(r.planned)}</b><small class="bzs ${st}">${bzSt(st)}</small></span></div>`;
+}
+function bzListBody(m) {
+  const c = bzMarketCalc(m), ents = bzPriceEntries(bz());
+  const q = bzUi.q.trim().toLowerCase();
+  const rows = c.rows.filter(r => (bzUi.f === 'all' || r.item.status === bzUi.f) && (!q || r.item.name.toLowerCase().includes(q)));
+  if (!c.rows.length) return empty('📝', L('তালিকা খালি', 'The list is empty'), `<p class="hint">${L('উপরের "＋ পণ্য" চেপে প্রথম পণ্য যোগ করুন। প্রতিদিনের জিনিস টেমপ্লেট থেকেও আনা যায়।', 'Tap "＋ Item" to add the first one. You can also start from a template.')}</p>`);
+  if (!rows.length) return empty('🔍', L('কিছু পাওয়া যায়নি', 'Nothing found'), `<p class="hint">${L('খোঁজা বা ফিল্টার বদলে দেখুন।', 'Try a different search or filter.')}</p>`);
+  const known = r => (bzCatsAll().some(x => x.k === r.item.cat) ? r.item.cat : 'other');
+  const keys = bzCatsAll().map(x => x.k).filter(k => rows.some(r => known(r) === k));
+  return keys.map(k => { const g = rows.filter(r => known(r) === k); if (!g.length) return '';
+    return `<div class="section-title">${bzCat(k).e} ${esc(bzCatName(k))} · ${g.length}<span class="stot">${bzM(bzSum(g.map(r => r.bought ? r.net : r.est)))}</span></div><div class="bzlist">${g.map(r => bzItemRow(m, r, ents)).join('')}</div>`; }).join('');
+}
+function bzListTab() {
+  const m = bzCur();
+  if (!m) return `<div class="page-head"><h1>${L('তালিকা', 'List')}</h1></div>${bzEmptyHome()}`;
+  const c = bzMarketCalc(m);
+  const filters = [['all', L('সব', 'All')], ['todo', bzSt('todo')], ['partial', bzSt('partial')], ['done', bzSt('done')], ['na', bzSt('na')]];
+  return `<div class="page-head"><h1>${L('তালিকা', 'List')}</h1><button type="button" class="btn primary sm" data-action="bz-add-item">${icon('plus', 18)} ${L('পণ্য', 'Item')}</button></div>
+    <div class="minis"><div class="mini"><small>${L('আনুমানিক', 'Estimated')}</small><b>${bzM(c.estTotal)}</b></div><div class="mini"><small>${L('আসল', 'Actual')}</small><b>${bzM(c.actualTotal)}</b></div><div class="mini"><small>${L('কেনা', 'Bought')}</small><b>${c.done}/${c.total}</b></div></div>
+    <div class="hg-filters"><input class="input" type="search" data-bz-q value="${esc(bzUi.q)}" placeholder="${L('পণ্য খুঁজুন', 'Search items')}">
+      <div class="chiprow wrap">${filters.map(([k, l]) => `<button type="button" class="fchip ${bzUi.f === k ? 'active' : ''}" data-action="bz-f" data-v="${k}">${l}${k !== 'all' ? ` <small>${c[k]}</small>` : ''}</button>`).join('')}</div></div>
+    <div data-bz-list>${bzListBody(m)}</div>
+    ${bzUnitOpts()}
+    <section class="card mt12"><div class="card-head"><h2>${L('পেমেন্ট', 'Payments')}</h2><button type="button" class="link" data-action="bz-pay-add">+ ${L('যোগ', 'Add')}</button></div>
+      <div class="minis"><div class="mini"><small>${L('মোট বিল', 'Bill')}</small><b>${bzM(c.actualTotal)}</b></div><div class="mini"><small>${L('পরিশোধ', 'Paid')}</small><b>${bzM(c.paid)}</b></div><div class="mini"><small>${c.overpaid > 0 ? L('অতিরিক্ত', 'Extra') : L('বাকি', 'Due')}</small><b class="${c.payable > 0 ? 'neg' : ''}">${bzM(c.payable || c.overpaid)}</b></div></div>
+      ${m.payments.filter(p => !p.del).length ? `<div class="list mt8">${m.payments.filter(p => !p.del).map(p => `<div class="lwrap"><div class="lrow"><span class="lic">💳</span><span class="lmain"><b>${bzM(p.amt)} · ${BZ_PAY[p.method] ? BZ_PAY[p.method][isEN() ? 1 : 0] : esc(p.method)}</b><small>${fmtDate(p.date)}${p.shop ? ' · ' + esc(p.shop) : ''}${p.note ? ' · ' + esc(p.note) : ''}</small></span></div>${delBtn('bz-pay-del', p.id)}</div>`).join('')}</div>` : `<p class="hint">${L('এখনও কোনো পেমেন্ট নেই। পরিশোধ না হওয়া অংশ "বাকি" হিসেবে দেখাবে।', 'No payments yet. Whatever is unpaid shows as "Due".')}</p>`}</section>
+    <section class="card"><div class="card-head"><h2>🧾 ${L('রসিদের ছবি', 'Receipt photos')}</h2></div>
+      <div class="bzrc">${m.receipts.map(id => `<span class="bzrcw"><button type="button" class="bzth" data-action="bz-rcpt-view" data-id="${id}">${imgURL.get('bzr:' + id) ? `<img src="${imgURL.get('bzr:' + id)}" alt="">` : '🧾'}</button><button type="button" class="bzrx" data-action="bz-rcpt-del" data-id="${id}" aria-label="${L('ছবি মুছুন', 'Remove photo')}">✕</button></span>`).join('')}
+        <button type="button" class="bzth add" data-action="bz-rcpt-add">＋<small>${L('ছবি', 'Photo')}</small></button></div>
+      <input type="file" accept="image/*" multiple hidden data-bz-rcpt>
+      ${m.receipts.length ? '' : `<p class="hint">${L('ঐচ্ছিক। রসিদ ফোন থেকে তুলে বা বেছে যোগ করুন।', 'Optional. Take or pick a receipt photo.')}</p>`}</section>
+    <section class="card"><div class="card-head"><h2>${L('এই বাজার', 'This market')}</h2></div>
+      <div class="menu">${menuItem('bz-edit-market', 'edit', L('নাম, তারিখ, দোকান, নোট', 'Name, date, shop, note'), L('বাজারের তথ্য বদলান', 'Edit market details'))}
+        ${menuItem('bz-save-tpl', 'doc', L('তালিকাটা টেমপ্লেট করে রাখুন', 'Save list as template'), L('পরেরবার এক ট্যাপে একই তালিকা', 'Reuse this list next time'))}
+        ${menuItem('bz-copy', 'share', L('সারাংশ কপি / শেয়ার', 'Copy / share summary'), L('টেক্সট হিসেবে', 'As text'))}
+        ${menuItem('bz-csv', 'download', L('CSV ফাইল নামান', 'Download CSV'), L('Excel বা Sheets-এ খোলার জন্য', 'Open in Excel or Sheets'))}
+        ${menuItem('bz-sync', 'layers', L('মূল খরচে যোগ করুন', 'Add to main expenses'), m.sync ? L('যোগ করা আছে, বদলালে নিজে মিলে যায়', 'Linked, stays in sync') : L('আড্ডা ও যৌথ খরচের দৈনন্দিন ইভেন্টে একটাই খরচ', 'One expense in a daily event'))}
+        ${m.status === 'cancelled' ? '' : menuItem('bz-cancel', 'x', L('বাজার বাতিল করুন', 'Cancel this market'), L('হিসাবে ধরা হবে না', 'Not counted anywhere'))}
+        <button type="button" class="mitem danger" data-action="bz-del-market" data-id="${m.id}"><span class="mi">${icon('trash', 20)}</span><span class="mt"><b>${L('বাজার ডিলিট', 'Delete market')}</b><small>${L('ফিরিয়ে আনার সুযোগ থাকবে', 'You can undo right after')}</small></span></button></div></section>`;
+}
+document.addEventListener('input', e => {
+  const el = e.target.closest && e.target.closest('[data-bz-q]');
+  if (!el) return;
+  bzUi.q = el.value;
+  const m = bzCur(), box = $('[data-bz-list]'); if (m && box) box.innerHTML = bzListBody(m);
+});
+
+/* ---------- মজুত ---------- */
+function bzStockTab() {
+  const rows = bz().stock.filter(s => !s.del && (!bzUi.sq || s.name.toLowerCase().includes(bzUi.sq.toLowerCase()))).sort((a, b) => ((b.min > 0 && b.qty <= b.min) - (a.min > 0 && a.qty <= a.min)) || a.name.localeCompare(b.name));
+  const m = bzCur();
+  return `<div class="page-head"><h1>${L('বাসার মজুত', 'Home stock')}</h1><button type="button" class="btn primary sm" data-action="bz-stock-add">${icon('plus', 18)} ${L('মজুত', 'Stock')}</button></div>
+    ${bzLowCard(m)}
+    ${bz().stock.some(s => !s.del) ? `<input class="input" type="search" data-bz-sq value="${esc(bzUi.sq)}" placeholder="${L('মজুত খুঁজুন', 'Search stock')}"><div class="list mt12" data-bz-stocklist>${bzStockRows(rows)}</div>` : empty('📦', L('মজুত খালি', 'No stock yet'), `<p class="hint">${L('বাসায় যা আছে তা নিজে লিখুন, অথবা বাজারের কেনা পণ্য মজুতে যোগ করুন। কম হলে অ্যাপ মনে করাবে।', 'Add what you have at home, or add bought items from a market. The app warns when it runs low.')}</p>`)}
+    <p class="hint">${L('মজুতের পরিমাণ অনুমান করা হয় না: আপনি যা লেখেন বা যা কেনা হয়েছে বলে লেখেন, ঠিক সেটাই।', 'Stock is never guessed: it is exactly what you enter or what you mark as bought.')}</p>
+    <label class="check mt8"><input type="checkbox" data-action="bz-auto" ${bz().autoStock ? 'checked' : ''}><span>${L('কেনা হিসেবে চিহ্নিত করলেই নিজে মজুতে যোগ হোক', 'Add to stock automatically when marked bought')}</span></label>`;
+}
+function bzStockRows(rows) {
+  if (!rows.length) return `<p class="hint" style="padding:12px">${L('কিছু পাওয়া যায়নি।', 'Nothing found.')}</p>`;
+  return rows.map(s => { const low = s.min > 0 && s.qty <= s.min;
+    return `<div class="lwrap"><button type="button" class="lrow" data-action="bz-stock-edit" data-id="${s.id}"><span class="lic">${low ? '⚠️' : '📦'}</span>
+      <span class="lmain"><b>${esc(s.name)}</b><small>${s.min > 0 ? `${L('ন্যূনতম', 'Min')} ${bzQtyStr(s.min)} ${esc(s.unit)}` : L('ন্যূনতম সীমা নেই', 'No minimum')}${s.lastDate ? ` · ${L('শেষ কেনা', 'Last bought')} ${fmtDate(s.lastDate)}${s.lastPrice ? ' ' + bzM(s.lastPrice) : ''}` : ''}</small></span>
+      <span class="lend"><b class="${low ? 'neg' : ''}">${bzQtyStr(s.qty)} ${esc(s.unit)}</b>${low ? `<small class="neg">${L('কম', 'Low')}</small>` : ''}</span></button>
+      <button type="button" class="btn sm" data-action="bz-stock-use" data-id="${s.id}">${L('ব্যবহার', 'Use')}</button></div>`; }).join('');
+}
+document.addEventListener('input', e => {
+  const el = e.target.closest && e.target.closest('[data-bz-sq]');
+  if (!el) return;
+  bzUi.sq = el.value;
+  const box = $('[data-bz-stocklist]'); if (box) box.innerHTML = bzStockRows(bz().stock.filter(s => !s.del && s.name.toLowerCase().includes(bzUi.sq.toLowerCase())));
+});
+document.addEventListener('change', e => { if (e.target.matches && e.target.matches('[data-action="bz-auto"]')) { bz().autoStock = e.target.checked; save(); toast(bz().autoStock ? L('এখন থেকে কেনা পণ্য নিজে মজুতে যাবে', 'Bought items now go to stock automatically') : L('নিজে যোগ বন্ধ', 'Automatic stock off')); } });
+
+/* ---------- ইতিহাস, রিপোর্ট, দাম ---------- */
+let bzUi = { q: '', f: 'all', sq: '', sub: 'markets', hq: '', hs: 'all', hp: 'all', hd: '' };
+function bzInPeriod(date, p) {
+  if (p === 'all') return true;
+  const t = today();
+  if (p === 'week') return date >= bzWeekStart(t) && date <= t;
+  if (p === 'month') return date.slice(0, 7) === t.slice(0, 7);
+  if (p === 'year') return date.slice(0, 4) === t.slice(0, 4);
+  return true;
+}
+function bzMarketRows() {
+  const q = bzUi.hq.trim().toLowerCase();
+  return bzMarkets().filter(m => (bzUi.hs === 'all' || m.status === bzUi.hs) && bzInPeriod(m.date || '', bzUi.hp) && (!bzUi.hd || m.date === bzUi.hd)
+    && (!q || m.name.toLowerCase().includes(q) || m.items.some(i => !i.del && i.name.toLowerCase().includes(q)))).sort(bzByDate);
+}
+function bzMarketListHtml() {
+  const list = bzMarketRows();
+  if (!list.length) return empty('🧺', L('কোনো বাজার নেই', 'No markets'), `<p class="hint">${L('ফিল্টার বদলে দেখুন বা নতুন বাজার খুলুন।', 'Change the filters or open a new market.')}</p>`);
+  return `<div class="list">${list.map(m => { const c = bzMarketCalc(m);
+    return `<div class="lwrap"><button type="button" class="lrow" data-action="bz-open" data-id="${m.id}"><span class="lic">${m.status === 'done' ? '✅' : m.status === 'cancelled' ? '🚫' : '🧺'}</span>
+      <span class="lmain"><b>${esc(m.name)}</b><small>${fmtDate(m.date)} · ${c.total} ${L('পণ্য', 'items')} · ${bzMst(m.status)}${c.budget != null ? ` · ${L('বাজেট', 'budget')} ${bzM(c.budget)}` : ''}${c.payable > 0 ? ` · ${L('বাকি', 'due')} ${bzM(c.payable)}` : ''}</small></span>
+      <span class="lend"><b>${bzM(c.actualTotal)}</b>${c.budget != null ? `<small class="${c.actualTotal > c.budget ? 'neg' : 'pos'}">${c.actualTotal > c.budget ? bzM(c.actualTotal - c.budget) + ' ' + L('বেশি', 'over') : bzM(c.budget - c.actualTotal) + ' ' + L('বাকি', 'left')}</small>` : ''}</span></button></div>`; }).join('')}</div>`;
+}
+function bzHistoryTab() {
+  const subs = [['markets', L('বাজারগুলো', 'Markets')], ['report', L('রিপোর্ট', 'Reports')], ['prices', L('দাম', 'Prices')]];
+  let body = '';
+  if (bzUi.sub === 'markets') {
+    const ch = (key, opts) => `<div class="chiprow wrap">${opts.map(([k, l]) => `<button type="button" class="fchip ${bzUi[key] === k ? 'active' : ''}" data-action="bz-hf" data-key="${key}" data-v="${k}">${l}</button>`).join('')}</div>`;
+    body = `<div class="hg-filters"><input class="input" type="search" data-bz-hq value="${esc(bzUi.hq)}" placeholder="${L('বাজার বা পণ্যের নাম খুঁজুন', 'Search market or item')}">
+      ${ch('hs', [['all', L('সব', 'All')], ['active', bzMst('active')], ['done', bzMst('done')], ['cancelled', bzMst('cancelled')]])}
+      ${ch('hp', [['all', L('সব সময়', 'All time')], ['week', L('এই সপ্তাহ', 'This week')], ['month', L('এই মাস', 'This month')], ['year', L('এই বছর', 'This year')]])}
+      <label class="field" style="margin:0"><span>${L('নির্দিষ্ট তারিখ', 'Exact date')}</span><input class="input" type="date" name="hd" data-bz-hd value="${esc(bzUi.hd)}"></label></div>
+      <div data-bz-mlist>${bzMarketListHtml()}</div>`;
+  } else if (bzUi.sub === 'report') body = bzReportHtml();
+  else body = bzPricesHtml();
+  return `<div class="page-head"><h1>${L('ইতিহাস', 'History')}</h1><button type="button" class="btn primary sm" data-action="bz-new">${icon('plus', 18)} ${L('বাজার', 'Market')}</button></div>
+    <div class="seg mb12">${subs.map(([k, l]) => `<button type="button" class="${bzUi.sub === k ? 'active' : ''}" data-action="bz-sub" data-v="${k}">${l}</button>`).join('')}</div>${body}`;
+}
+document.addEventListener('input', e => { const el = e.target.closest && e.target.closest('[data-bz-hq]'); if (!el) return; bzUi.hq = el.value; const b = $('[data-bz-mlist]'); if (b) b.innerHTML = bzMarketListHtml(); });
+document.addEventListener('change', e => { const el = e.target.closest && e.target.closest('[data-bz-hd]'); if (!el) return; bzUi.hd = el.value; const b = $('[data-bz-mlist]'); if (b) b.innerHTML = bzMarketListHtml(); });
+
+function bzBars(entries, label) {
+  const max = Math.max(1, ...entries.map(e => e[1]));
+  return entries.map(([k, v]) => `<div class="rb"><span class="rb-l">${label(k)}</span><span class="rb-t"><i style="width:${(v / max * 100).toFixed(1)}%"></i></span><b>${v ? bzM(v) : '—'}</b></div>`).join('');
+}
+function bzReportHtml() {
+  const r = bzReport(bz(), today());
+  if (!r.hasData) return empty('📊', L('রিপোর্টের জন্য ডেটা নেই', 'No data for reports yet'), `<p class="hint">${L('বাজার করে পণ্যের আসল দাম লিখলেই রিপোর্ট তৈরি হবে। অনুমান করে কিছু দেখানো হয় না।', 'Reports appear once you enter real prices. Nothing is guessed.')}</p>`);
+  const mn = ym => { const [y, m] = ym.split('-'); return `${MONTHS[isEN() ? 'en' : 'bn'][+m - 1]} ${y.slice(2)}`; };
+  const msg = i => i.code === 'cat_up' ? L(`এই মাসে ${bzCatName(i.k)}-এ গত মাসের তুলনায় ${bzM(i.amt)} বেশি খরচ হয়েছে।`, `This month ${bzCatName(i.k)} cost ${bzM(i.amt)} more than last month.`) : L(`এই মাসে ${bzCatName(i.k)}-এ গত মাসের চেয়ে ${bzM(i.amt)} কম খরচ হয়েছে।`, `This month ${bzCatName(i.k)} cost ${bzM(i.amt)} less than last month.`);
+  const cats = Object.entries(r.catNow).sort((a, b) => b[1] - a[1]);
+  return `<section class="card"><div class="card-head"><h2>${L('এই মাস', 'This month')}</h2></div>
+      <div class="minis"><div class="mini"><small>${L('এই মাস', 'This month')}</small><b>${bzM(r.thisMonth)}</b></div><div class="mini"><small>${L('গত মাস', 'Last month')}</small><b>${r.hasPrev ? bzM(r.lastMonth) : '—'}</b></div>
+        <div class="mini"><small>${L('পার্থক্য', 'Change')}</small><b class="${r.hasPrev ? (r.thisMonth > r.lastMonth ? 'neg' : 'pos') : ''}">${r.hasPrev ? (r.thisMonth >= r.lastMonth ? '+' : '−') + bzM(Math.abs(r.thisMonth - r.lastMonth)) : '—'}</b></div></div>
+      ${r.insights.length ? r.insights.slice(0, 3).map(i => `<p class="hint planhint ${i.code === 'cat_up' ? 'warn' : ''}">${esc(msg(i))}</p>`).join('') : `<p class="hint">${r.hasPrev ? L('গত মাসের সাথে বড় কোনো পার্থক্য নেই।', 'No big difference from last month.') : L('গত মাসের ডেটা না থাকায় তুলনা দেখানো হচ্ছে না।', 'No last-month data, so no comparison is shown.')}</p>`}</section>
+    <section class="card"><div class="card-head"><h2>${L('দৈনিক (শেষ ৭ দিন)', 'Daily (last 7 days)')}</h2></div><div class="rbars">${bzBars(r.days, d => fmtDate(d).slice(0, 6))}</div></section>
+    <section class="card"><div class="card-head"><h2>${L('সাপ্তাহিক', 'Weekly')}</h2></div><div class="rbars">${bzBars(r.weeks, d => fmtDate(d).slice(0, 6))}</div></section>
+    <section class="card"><div class="card-head"><h2>${L('মাসিক', 'Monthly')}</h2></div><div class="rbars">${bzBars(r.months, mn)}</div></section>
+    ${cats.length ? `<section class="card"><div class="card-head"><h2>${L('খাত অনুযায়ী (এই মাস)', 'By category (this month)')}</h2></div>${cats.map(([k, v]) => `<div class="brow"><div class="brow-top"><span class="grow">${bzCat(k).e} ${esc(bzCatName(k))}</span><span class="amt">${bzM(v)} <small>${pct(v / (r.thisMonth || 1) * 100)}</small></span></div>${bzBar(v / (r.thisMonth || 1) * 100, '', 'var(--accent)')}${r.catPrev[k] ? `<div class="brow-meta"><span>${L('গত মাস', 'Last month')} ${bzM(r.catPrev[k])}</span><span class="${v > r.catPrev[k] ? 'bad' : 'ok'}">${v >= r.catPrev[k] ? '+' : '−'}${bzM(Math.abs(v - r.catPrev[k]))}</span></div>` : ''}</div>`).join('')}</section>` : ''}
+    ${r.shops.length > 1 || (r.shops.length === 1 && r.shops[0][0] !== '—') ? `<section class="card"><div class="card-head"><h2>${L('দোকান অনুযায়ী (এই মাস)', 'By shop (this month)')}</h2></div>${r.shops.map(([s, v]) => `<div class="hg-day"><span><b>${esc(s === '—' ? L('দোকান লেখা নেই', 'No shop') : s)}</b></span><b>${bzM(v)}</b></div>`).join('')}</section>` : ''}
+    ${r.top.length ? `<section class="card"><div class="card-head"><h2>${L('সবচেয়ে বেশি খরচের পণ্য (এই মাস)', 'Top items (this month)')}</h2></div>${r.top.map((t, i) => `<div class="hg-day"><span><b>${i + 1}. ${esc(t.name)}</b><small>${esc(t.unit || '')}</small></span><b>${bzM(t.total)}</b></div>`).join('')}</section>` : ''}
+    ${r.movers.length ? `<section class="card"><div class="card-head"><h2>${L('দাম বাড়া-কমা', 'Price changes')}</h2></div>${r.movers.slice(0, 8).map(x => `<div class="hg-day"><span><b>${esc(x.name)}</b><small>${bzM(x.prev)} → ${bzM(x.last)} / ${esc(x.unit || '')} · ${fmtDate(x.date)}</small></span><b class="${x.diff > 0 ? 'neg' : 'pos'}">${x.diff > 0 ? '+' : '−'}${bzM(Math.abs(x.diff))}</b></div>`).join('')}<p class="hint">${L('শুধু আপনার নিজের কেনা দামের তুলনা, বাজারের চলতি দর নয়।', 'Only a comparison of your own purchases, not live market rates.')}</p></section>` : ''}
+    ${r.budgetRows.length ? `<section class="card"><div class="card-head"><h2>${L('বাজেট বনাম আসল', 'Budget vs actual')}</h2></div>${r.budgetRows.map(x => `<div class="brow"><div class="brow-top"><span class="grow">${esc(x.name)}</span><span class="amt">${bzM(x.actual)} <small>/ ${bzM(x.budget)}</small></span></div>${bzBar(x.actual / x.budget * 100, x.actual > x.budget ? 'over' : x.actual >= x.budget * 0.85 ? 'near' : '')}</div>`).join('')}</section>` : ''}
+    ${r.dues.length ? `<section class="card"><div class="card-head"><h2>${L('বাকি আছে এমন বাজার', 'Markets with dues')}</h2></div>${r.dues.map(x => `<button type="button" class="lrow" data-action="bz-open" data-id="${x.id}"><span class="lic">⏳</span><span class="lmain"><b>${esc(x.name)}</b><small>${fmtDate(x.date)}</small></span><span class="lend"><b class="neg">${bzM(x.amt)}</b></span></button>`).join('')}</section>` : ''}`;
+}
+function bzPricesHtml() {
+  const ent = bzPriceEntries(bz()), by = {};
+  ent.forEach(e => { (by[e.nk + '|' + e.uk] = by[e.nk + '|' + e.uk] || []).push(e); });
+  const q = bzUi.hq.trim().toLowerCase();
+  const rows = Object.values(by).filter(a => !q || a[0].name.toLowerCase().includes(q)).sort((a, b) => b[b.length - 1].date.localeCompare(a[a.length - 1].date));
+  if (!ent.length) return empty('🏷️', L('দামের ইতিহাস নেই', 'No price history'), `<p class="hint">${L('পণ্য কিনে আসল দাম লিখলেই এখানে জমা হবে।', 'It builds up as you enter real prices.')}</p>`);
+  return `<input class="input" type="search" data-bz-hq-p value="${esc(bzUi.hq)}" placeholder="${L('পণ্য খুঁজুন', 'Search item')}">
+    <div class="list mt12">${rows.map(a => { const l = a[a.length - 1], p = a[a.length - 2], d = p ? l.price - p.price : null; const byShop = {}; a.forEach(e => { if (e.shop) byShop[e.shop] = e; }); const sh = Object.values(byShop), cheap = sh.length > 1 ? Math.min(...sh.map(e => e.price)) : null;
+      return `<div class="lrow"><span class="lic">🏷️</span><span class="lmain"><b>${esc(l.name)}</b><small>${L('শেষ কেনা', 'Last')} ${fmtDate(l.date)}${p ? ` · ${L('আগে', 'before')} ${bzM(p.price)} (${fmtDate(p.date)})` : ''} · ${a.length}x</small></span>
+        <span class="lend"><b>${bzM(l.price)}/${esc(l.unit || '')}</b>${d ? `<small class="${d > 0 ? 'neg' : 'pos'}">${d > 0 ? '+' : '−'}${bzM(Math.abs(d))}</small>` : ''}</span></div>${sh.length > 1 ? `<div class="shopcmp">${sh.sort((x, y) => x.price - y.price).map(e => `<span class="${e.price === cheap ? 'cheap' : ''}">🏪 ${esc(e.shop)} ${bzM(e.price)}${e.price === cheap ? ' ✓' : ''}</span>`).join('')}</div>` : ''}`; }).join('') || `<p class="hint" style="padding:12px">${L('কিছু পাওয়া যায়নি।', 'Nothing found.')}</p>`}</div>
+    <p class="hint">${L('একই নাম ও একই এককের কেনাকাটা মিলিয়ে দেখানো হয়, তাই ভিন্ন এককে ভুল তুলনা হয় না। এটা আপনার নিজের ইতিহাস, বাজারের চলতি দর নয়।', 'Only purchases with the same name and unit are compared. This is your own history, not live market rates.')}</p>`;
+}
+document.addEventListener('input', e => { const el = e.target.closest && e.target.closest('[data-bz-hq-p]'); if (!el) return; bzUi.hq = el.value; render(); const n = $('[data-bz-hq-p]'); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } });
+
+/* ---------- আরও ---------- */
+function bzMoreTab() {
+  const mi = menuItem, tpl = bz().templates.filter(t => !t.del).length;
+  return `<div class="page-head"><h1>${L('আরও', 'More')}</h1></div>
+    <div class="section-title">${L('বাজার', 'Markets')}</div>
+    <div class="menu">${mi('bz-new', 'plus', L('নতুন বাজার', 'New market'), L('খালি বা টেমপ্লেট থেকে', 'Blank or from a template'))}
+      ${mi('bz-history', 'clock', L('আগের সব বাজার', 'All previous markets'), L('খুঁজুন, ফিল্টার করুন, খুলুন', 'Search, filter, open'))}
+      ${mi('bz-tpls', 'doc', L('নিয়মিত তালিকা (টেমপ্লেট)', 'Recurring lists (templates)'), `${tpl} ${L('টা আছে', 'saved')}`)}
+      ${mi('bz-cats', 'grid', L('পণ্যের বিভাগ', 'Product categories'), L('নিজের বিভাগ যোগ, বদল, মোছা', 'Add, edit or remove your own'))}</div>
+    <div class="section-title">${L('মজুত ও সংযোগ', 'Stock & links')}</div>
+    <div class="menu">${mi('bz-sync', 'layers', L('মূল খরচে যোগ করুন', 'Add to main expenses'), L('এই বাজারের আসল খরচ, একবারই', 'This market\'s real total, only once'))}
+      ${mi('bz-link', 'layers', L('সংসারের মাসিক হিসাবে নিজে যোগ', 'Auto-add to household month'), bz().linkEv && bzTargets().some(e => e.id === bz().linkEv) ? L('চালু: ', 'On: ') + esc(bzTargets().find(e => e.id === bz().linkEv).name) : L('বন্ধ। চালু করলে বাজারের খরচ মাসের বাজেট থেকে নিজে কাটা যাবে', 'Off. Turn on to deduct market costs from the monthly budget automatically'))}
+      ${mi('bz-auto-toggle', 'check', L('কেনা পণ্য নিজে মজুতে যোগ', 'Auto-add bought items to stock'), bz().autoStock ? L('এখন চালু', 'Currently on') : L('এখন বন্ধ', 'Currently off'))}</div>
+    ${appSections()}`;
+}
+
+/* ---------- শিট ও ফর্ম ---------- */
+function bzMarketForm(m) {
+  const isNew = !m, tpls = bz().templates.filter(t => !t.del);
+  return `${sheetHead(isNew ? L('নতুন বাজার', 'New market') : L('বাজারের তথ্য', 'Market details'))}
+  <form data-form="bz-market" data-id="${m ? m.id : ''}" autocomplete="off">
+    <label class="field"><span>${L('বাজারের নাম', 'Market name')}</span><input class="input" name="name" maxlength="50" value="${esc(m ? m.name : L('বাজার ' + fmtDate(today()), 'Market ' + fmtDate(today())))}"></label>
+    <div class="row2"><label class="field"><span>${L('তারিখ', 'Date')}</span><input class="input" type="date" name="date" value="${esc(m ? m.date : today())}"></label>
+      <label class="field"><span>${L('বাজেট (ঐচ্ছিক)', 'Budget (optional)')}</span>${moneyInput('budget', m && m.budget ? String(m.budget / 100) : '', '0')}</label></div>
+    <label class="field"><span>${L('দোকান (ঐচ্ছিক)', 'Shop (optional)')}</span><input class="input" name="shop" maxlength="50" list="bz-shops" value="${esc(m ? m.shop || '' : '')}"><datalist id="bz-shops">${bzShopNames().map(s => `<option value="${esc(s)}">`).join('')}</datalist></label>
+    <div class="row2"><label class="field"><span>${L('কে বাজার করেছে', 'Who shopped')}</span><input class="input" name="shopper" maxlength="40" value="${esc(m ? m.shopper || '' : '')}"></label>
+      <label class="field"><span>${L('মোট ডিসকাউন্ট (ঐচ্ছিক)', 'Total discount (optional)')}</span>${moneyInput('discount', m && m.discount ? String(m.discount / 100) : '', '0')}</label></div>
+    ${isNew && tpls.length ? `<label class="field"><span>${L('তালিকা কোথা থেকে?', 'Start the list from')}</span>${bzSelect('tpl', [['', L('খালি তালিকা', 'Blank list')]].concat(tpls.map(t => [t.id, `📋 ${esc(t.name)} (${t.items.length})`])), '')}
+      <div class="hint">${L('শুধু নাম, পরিমাণ, একক আর আনুমানিক দাম আসবে। আগের আসল খরচ বা পেমেন্ট আসবে না।', 'Only names, quantities, units and estimates are copied. Past actuals and payments never are.')}</div></label>` : ''}
+    <label class="field"><span>${L('নোট', 'Note')}</span><input class="input" name="note" maxlength="160" value="${esc(m ? m.note || '' : '')}"></label>
+    <button class="btn primary block" type="submit">${isNew ? L('বাজার খুলুন', 'Create market') : L('সেভ করুন', 'Save')}</button></form>`;
+}
+function bzItemForm(m, it) {
+  const v = it || { name: '', cat: 'other', qty: 1000, unit: '', est: 0, note: '' };
+  return `${sheetHead(it ? L('পণ্য এডিট', 'Edit item') : L('পণ্য যোগ', 'Add item'), esc(m.name))}
+  <form data-form="bz-item" data-live="bz-item" data-id="${it ? it.id : ''}" autocomplete="off">
+    <label class="field"><span>${L('পণ্যের নাম', 'Item name')}</span><input class="input" name="name" maxlength="50" value="${esc(v.name)}" placeholder="${L('যেমন: মিনিকেট চাল', 'e.g. Rice')}"></label>
+    <label class="field"><span>${L('বিভাগ', 'Category')}</span>${bzCatSelect('cat', v.cat)}</label>
+    <div class="row2"><label class="field"><span>${L('প্রয়োজনীয় পরিমাণ', 'Quantity needed')}</span><input class="input" name="qty" inputmode="decimal" value="${esc(bzQtyStr(v.qty))}"></label>
+      <label class="field"><span>${L('একক', 'Unit')}</span><input class="input" name="unit" list="bz-units" value="${esc(v.unit)}" placeholder="${L('কেজি, লিটার, পিস…', 'kg, litre, pcs…')}"></label></div>
+    <label class="field"><span>${L('আনুমানিক দাম (প্রতি একক)', 'Estimated price (per unit)')}</span>${moneyInput('est', v.est ? String(v.est / 100) : '', '0')}</label>
+    <div class="preview" data-tot></div>
+    <label class="field"><span>${L('কোন দোকান থেকে (ঐচ্ছিক)', 'Which shop (optional)')}</span><input class="input" name="shop" maxlength="40" list="bz-shops" value="${esc(v.shop || '')}"><datalist id="bz-shops">${bzShopNames().map(s => `<option value="${esc(s)}">`).join('')}</datalist></label>
+    <label class="field"><span>${L('নোট (ঐচ্ছিক)', 'Note (optional)')}</span><input class="input" name="note" maxlength="120" value="${esc(v.note || '')}"></label>
+    ${bzUnitOpts()}
+    <button class="btn primary block" type="submit">${it ? L('সেভ করুন', 'Save') : L('যোগ করুন', 'Add')}</button>
+    ${it ? `<div class="btn-row mt8"><button type="button" class="btn" data-action="bz-buy" data-id="${it.id}">🛍️ ${L('কেনার হিসাব', 'Purchase')}</button><button type="button" class="btn" data-action="bz-item-dup" data-id="${it.id}">📑 ${L('কপি', 'Duplicate')}</button><button type="button" class="btn danger" data-action="bz-item-del" data-id="${it.id}">${icon('trash', 18)}</button></div>` : ''}</form>`;
+}
+LIVE['bz-item'] = f => { const t = bzLine(bzMilli(f.elements.qty.value), bzMinor(f.elements.est.value)); $('[data-tot]', f).innerHTML = t ? `${L('আনুমানিক মোট', 'Estimated total')}: <b>${bzM(t)}</b>` : ''; };
+function bzBuyForm(m, it) {
+  const bought = it.status === 'done' || it.status === 'partial';
+  return `${sheetHead(esc(it.name), `${L('পরিকল্পনা', 'Planned')}: ${bzQtyStr(it.qty)} ${esc(it.unit)}${it.est ? ` × ${bzM(it.est)}` : ''}`)}
+  <form data-form="bz-buy" data-live="bz-buy" data-id="${it.id}" autocomplete="off">
+    <div class="field"><span class="flabel">${L('কী হলো?', 'What happened?')}</span>${seg('status', [['done', '✅ ' + bzSt('done')], ['partial', '½ ' + bzSt('partial')], ['na', '✕ ' + bzSt('na')], ['todo', '○ ' + bzSt('todo')]], it.status)}</div>
+    <div data-grp="amt">
+      <div class="row2"><label class="field"><span>${L('কত কিনলেন', 'Quantity bought')} (${esc(it.unit || L('একক', 'unit'))})</span><input class="input" name="aQty" inputmode="decimal" value="${esc(bought && it.aQty ? bzQtyStr(it.aQty) : bzQtyStr(it.qty))}"></label>
+        <label class="field"><span>${L('আসল দাম (প্রতি একক)', 'Actual price (per unit)')}</span>${moneyInput('aPrice', bought && it.aPrice != null ? String(it.aPrice / 100) : '', it.est ? String(it.est / 100) : '0')}</label></div>
+      <div class="preview" data-buytot></div>
+      <div class="hint">${L('আনুমানিক দাম আসল দাম হিসেবে ধরা হয় না, আসল দামটা নিজে লিখতে হবে।', 'The estimate is never counted as the real price; type the real price.')}</div></div>
+    <button class="btn primary block" type="submit">${L('সেভ করুন', 'Save')}</button></form>`;
+}
+LIVE['bz-buy'] = (f) => {
+  const m = bzCur(), it = m && bzItem(m, f.dataset.id); if (!it) return;
+  const st = f.elements.status.value, show = st === 'done' || st === 'partial';
+  $('[data-grp="amt"]', f).classList.toggle('hidden', !show);
+  const q = bzMilli(f.elements.aQty.value), p = bzMinor(f.elements.aPrice.value), has = String(f.elements.aPrice.value).trim() !== '';
+  const tot = bzLine(q, p), est = bzLine(q, it.est), pv = $('[data-buytot]', f);
+  pv.innerHTML = show && has ? `${L('মোট', 'Total')} <b>${bzM(tot)}</b>${it.est ? ` · ${tot === est ? L('আনুমানিকের সমান', 'same as estimate') : `<b class="${tot > est ? 'neg' : 'pos'}">${tot > est ? '+' : '−'}${bzM(Math.abs(tot - est))}</b> ${L('আনুমানিকের চেয়ে', 'vs estimate')}`}` : ''}` : '';
+};
+function bzBudgetForm(m) {
+  const cats = bzCats();
+  return `${sheetHead(L('বাজেট', 'Budget'), esc(m.name))}
+  <form data-form="bz-budget" data-live="bz-budget" autocomplete="off">
+    <label class="field"><span>${L('এই বাজারের মোট বাজেট', 'Total budget for this market')}</span>${moneyInput('budget', m.budget ? String(m.budget / 100) : '', '0')}<div class="hint">${L('ফাঁকা রাখলে বাজেট নির্ধারণ করা হয়নি ধরা হবে। বাজেট বদলালে আগের কেনাকাটা বদলায় না।', 'Leave blank for no budget. Changing it never changes past purchases.')}</div></label>
+    <details class="more" ${Object.keys(m.catBudgets).length ? 'open' : ''}><summary><span class="ds-t">${L('খাতভিত্তিক বাজেট (ঐচ্ছিক)', 'Per-category budget (optional)')}</span></summary>
+      ${cats.map(c => `<label class="hg-vrow"><span>${c.e} ${esc(isEN() ? c.en : c.bn)}</span>${moneyInput('cb_' + c.k, m.catBudgets[c.k] ? String(m.catBudgets[c.k] / 100) : '', '0')}</label>`).join('')}</details>
+    <div class="preview" data-bsum></div>
+    <button class="btn primary block" type="submit">${L('সেভ করুন', 'Save')}</button></form>`;
+}
+LIVE['bz-budget'] = f => {
+  const m = bzCur(), tot = bzMinor(f.elements.budget.value), cs = bzSum(bzCats().map(c => bzMinor(f.elements['cb_' + c.k].value))), pv = $('[data-bsum]', f);
+  pv.className = 'preview' + (tot > 0 && cs > tot ? ' warn' : '');
+  pv.innerHTML = cs ? `${L('খাতগুলোর যোগফল', 'Categories add up to')} <b>${bzM(cs)}</b>${tot > 0 ? (cs > tot ? ` · ${L('মোট বাজেটের চেয়ে বেশি', 'more than the total')}` : ` · ${L('বাকি', 'left')} ${bzM(tot - cs)}`) : ''}` : '';
+};
+function bzPayForm(m) {
+  const c = bzMarketCalc(m);
+  return `${sheetHead(L('পেমেন্ট', 'Payment'), `${esc(m.name)} · ${L('বাকি', 'due')} ${bzM(c.payable)}`)}
+  <form data-form="bz-pay" autocomplete="off">
+    <label class="field"><span>${L('কত টাকা দিলেন', 'Amount paid')}</span>${moneyInput('amt', c.payable ? String(c.payable / 100) : '', '0')}</label>
+    <div class="field"><span class="flabel">${L('কীভাবে', 'How')}</span>${seg('method', Object.keys(BZ_PAY).map(k => [k, BZ_PAY[k][isEN() ? 1 : 0]]), 'cash')}</div>
+    <div class="row2"><label class="field"><span>${L('তারিখ', 'Date')}</span><input class="input" type="date" name="date" value="${today()}"></label>
+      <label class="field"><span>${L('দোকান', 'Shop')}</span><input class="input" name="shop" maxlength="50" value="${esc(m.shop || '')}"></label></div>
+    <label class="field"><span>${L('নোট', 'Note')}</span><input class="input" name="note" maxlength="120"></label>
+    <p class="hint">${L('আসল বিলের চেয়ে বেশি দিলে বাকি নেতিবাচক দেখাবে না, বাড়তিটা "অতিরিক্ত / অগ্রিম" হিসেবে আলাদা দেখাবে।', 'Paying more than the bill never shows a negative due; the extra shows separately as "Extra / advance".')}</p>
+    <button class="btn primary block" type="submit">${L('সেভ করুন', 'Save')}</button></form>`;
+}
+function bzCompleteSheet(m) {
+  const c = bzMarketCalc(m), tg = bzTargets();
+  return `${sheetHead(L('বাজার সম্পন্ন করুন', 'Complete the market'), esc(m.name))}
+  <form data-form="bz-complete" autocomplete="off">
+    <div class="minis"><div class="mini"><small>${L('আসল খরচ', 'Actual')}</small><b>${bzM(c.actualTotal)}</b></div><div class="mini"><small>${L('কেনা', 'Bought')}</small><b>${c.done + c.partial}/${c.total}</b></div><div class="mini"><small>${c.budget != null ? L('বাজেট', 'Budget') : L('বাজেট', 'Budget')}</small><b>${c.budget != null ? bzM(c.budget) : '—'}</b></div></div>
+    ${c.todo ? `<div class="bsum warn"><b>${L(`${c.todo}টা পণ্য কেনা হয়নি`, `${c.todo} item(s) not bought`)}</b><span>${L('সম্পন্ন করলেও হিসাব ঠিক থাকবে, কেনা হয়নি এমন পণ্য খরচে ধরা হয় না।', 'Totals stay correct; unbought items are not counted as spending.')}</span></div>` : ''}
+    ${c.payable > 0 ? `<div class="bsum warn"><b>${L(`${bzM(c.payable)} বাকি আছে`, `${bzM(c.payable)} still due`)}</b><span>${L('পরে পেমেন্ট যোগ করা যাবে।', 'You can add payments later.')}</span></div>` : ''}
+    ${hgCheckRow('stock', L('কেনা পণ্য বাসার মজুতে যোগ করুন (একবারই যোগ হবে)', 'Add bought items to home stock (applied once)'), bz().autoStock)}
+    ${tg.length ? `${hgCheckRow('sync', L('মূল খরচে যোগ করুন (একটাই খরচ, দুবার হবে না)', 'Add to main expenses (one expense, never twice)'), !!m.sync)}
+      <label class="field"><span>${L('কোন ইভেন্টে', 'Which event')}</span>${bzSelect('ev', tg.map(e => [e.id, esc(e.name)]), (m.sync && m.sync.evId) || tg[0].id)}</label>` : `<p class="hint">${L('মূল খরচে যোগ করতে "আড্ডা ও যৌথ খরচ"-এ একটা দৈনিক/মাসিক সংসারের ইভেন্ট খুলুন।', 'To add this to main expenses, open a daily or household event in Hangout first.')}</p>`}
+    <button class="btn primary block" type="submit">${icon('check', 18)} ${L('সম্পন্ন করুন', 'Complete')}</button></form>`;
+}
+function bzSyncSheet(m) {
+  const tg = bzTargets(), c = bzMarketCalc(m);
+  return `${sheetHead(L('মূল খরচে যোগ করুন', 'Add to main expenses'), esc(m.name))}
+  ${m.sync ? `<div class="bsum ok"><b>${L('যোগ করা আছে', 'Already linked')}</b><span>${L('এই বাজার বদলালে মূল খরচও নিজে মিলে যায়। দুবার যোগ হয় না।', 'Edits here keep the main expense in sync. It is never added twice.')}</span></div>
+    <button type="button" class="btn danger block mt8" data-action="bz-unsync">${L('মূল খরচ থেকে সরান', 'Remove from main expenses')}</button>`
+    : tg.length ? `<form data-form="bz-sync" autocomplete="off"><div class="bsum"><b>${bzM(c.actualTotal)}</b><span>${L('শুধু আসল কেনাকাটার খরচ যাবে। আনুমানিক দাম বা বাজেট কখনো খরচ হিসেবে যায় না।', 'Only real purchases go over. Estimates and budgets never count as spending.')}</span></div>
+      <label class="field mt8"><span>${L('কোন ইভেন্টে', 'Which event')}</span>${bzSelect('ev', tg.map(e => [e.id, esc(e.name)]), tg[0].id)}</label>
+      <button class="btn primary block" type="submit" ${c.actualTotal > 0 ? '' : 'disabled'}>${L('যোগ করুন', 'Add')}</button>${c.actualTotal > 0 ? '' : `<p class="hint">${L('আগে কিছু কেনা পণ্যের আসল দাম লিখুন।', 'Enter real prices for bought items first.')}</p>`}</form>`
+    : `<p class="hint">${L('"আড্ডা ও যৌথ খরচ"-এ একটা দৈনিক বাজার বা মাসিক সংসারের ইভেন্ট খুললে এখানে বাছা যাবে।', 'Open a daily-market or household event in Hangout and it will be selectable here.')}</p>`}`;
+}
+function bzMarketsSheet() {
+  const list = bzMarkets().sort(bzByDate), cur = bzCur();
+  return `${sheetHead(L('সব বাজার', 'All markets'), L('ট্যাপ করে বদলান', 'Tap to switch'))}
+    <button type="button" class="btn primary block" data-action="bz-new">${icon('plus', 18)} ${L('নতুন বাজার', 'New market')}</button>
+    <div class="list mt12">${list.map(m => { const c = bzMarketCalc(m); return `<button type="button" class="lrow ${cur && cur.id === m.id ? 'cur' : ''}" data-action="bz-open" data-id="${m.id}"><span class="lic">${m.status === 'done' ? '✅' : m.status === 'cancelled' ? '🚫' : '🧺'}</span><span class="lmain"><b>${esc(m.name)}</b><small>${fmtDate(m.date)} · ${bzMst(m.status)}</small></span><span class="lend"><b>${bzM(c.actualTotal)}</b></span></button>`; }).join('') || `<p class="hint">${L('এখনও কিছু নেই।', 'Nothing yet.')}</p>`}</div>`;
+}
+function bzStockForm(s) {
+  const v = s || { name: '', unit: '', qty: 0, min: 0, note: '' };
+  return `${sheetHead(s ? L('মজুত এডিট', 'Edit stock') : L('মজুত যোগ', 'Add stock'))}
+  <form data-form="bz-stock" data-id="${s ? s.id : ''}" autocomplete="off">
+    <label class="field"><span>${L('পণ্যের নাম', 'Item name')}</span><input class="input" name="name" maxlength="50" value="${esc(v.name)}"></label>
+    <div class="row2"><label class="field"><span>${L('বর্তমান মজুত', 'In stock now')}</span><input class="input" name="qty" inputmode="decimal" value="${esc(bzQtyStr(v.qty))}"></label>
+      <label class="field"><span>${L('একক', 'Unit')}</span><input class="input" name="unit" list="bz-units" value="${esc(v.unit)}"></label></div>
+    <label class="field"><span>${L('ন্যূনতম সীমা (এর নিচে নামলে সতর্ক)', 'Minimum (warn at or below)')}</span><input class="input" name="min" inputmode="decimal" value="${v.min ? esc(bzQtyStr(v.min)) : ''}" placeholder="0"></label>
+    <label class="field"><span>${L('নোট', 'Note')}</span><input class="input" name="note" maxlength="120" value="${esc(v.note || '')}"></label>
+    ${bzUnitOpts()}
+    <button class="btn primary block" type="submit">${s ? L('সেভ করুন', 'Save') : L('যোগ করুন', 'Add')}</button>
+    ${s ? `<button type="button" class="btn danger block mt8" data-action="bz-stock-del" data-id="${s.id}">${icon('trash', 18)} ${L('ডিলিট', 'Delete')}</button>` : ''}</form>`;
+}
+function bzTplsSheet() {
+  const list = bz().templates.filter(t => !t.del), m = bzCur();
+  return `${sheetHead(L('নিয়মিত তালিকা', 'Recurring lists'), L('দৈনিক, সাপ্তাহিক, মাসিক, রান্নাঘর…', 'Daily, weekly, monthly, kitchen…'))}
+    <button type="button" class="btn primary block" data-action="bz-tpl-new">${icon('plus', 18)} ${L('নতুন টেমপ্লেট', 'New template')}</button>
+    ${m && m.items.some(i => !i.del) ? `<button type="button" class="btn block mt8" data-action="bz-save-tpl">📋 ${L('এই বাজারের তালিকা টেমপ্লেট করুন', 'Save this market\'s list')}</button>` : ''}
+    <div class="list mt12">${list.map(t => `<div class="lwrap"><button type="button" class="lrow" data-action="bz-tpl-use" data-id="${t.id}"><span class="lic">📋</span><span class="lmain"><b>${esc(t.name)}</b><small>${t.items.length} ${L('পণ্য · ট্যাপ করে নতুন বাজার', 'items · tap to start a market')}</small></span></button>
+      <button type="button" class="btn sm" data-action="bz-tpl-edit" data-id="${t.id}">${icon('edit', 16)}</button><button type="button" class="btn sm" data-action="bz-tpl-copy" data-id="${t.id}">📑</button>${delBtn('bz-tpl-del', t.id)}</div>`).join('') || `<p class="hint">${L('এখনও কোনো টেমপ্লেট নেই।', 'No templates yet.')}</p>`}</div>`;
+}
+function bzTplForm(t) {
+  const lines = t ? t.items.map(i => [i.name, bzQtyStr(i.qty), i.unit || '', i.est ? bzQtyStr(i.est * 10) : ''].join(' | ')).join('\n') : '';
+  return `${sheetHead(t ? L('টেমপ্লেট এডিট', 'Edit template') : L('নতুন টেমপ্লেট', 'New template'))}
+  <form data-form="bz-tpl" data-id="${t ? t.id : ''}" autocomplete="off">
+    <label class="field"><span>${L('টেমপ্লেটের নাম', 'Template name')}</span><input class="input" name="name" maxlength="40" value="${esc(t ? t.name : '')}" placeholder="${L('যেমন: মাসিক বাজার', 'e.g. Monthly bazaar')}"></label>
+    <label class="field"><span>${L('পণ্যের তালিকা (প্রতি লাইনে একটা)', 'Items (one per line)')}</span><textarea class="input hg-ta" name="lines" rows="8" placeholder="${L('চাল | 5 | কেজি | 70\nতেল | 2 | লিটার | 180', 'Rice | 5 | kg | 70\nOil | 2 | litre | 180')}">${esc(lines)}</textarea>
+      <div class="hint">${L('ফরম্যাট: নাম | পরিমাণ | একক | আনুমানিক দাম (শেষ দুটো ঐচ্ছিক)', 'Format: name | quantity | unit | estimated price (last two optional)')}</div></label>
+    <button class="btn primary block" type="submit">${L('সেভ করুন', 'Save')}</button></form>`;
+}
+function bzCatsSheet() {
+  const cu = bz().cats.filter(c => !c.del);
+  return `${sheetHead(L('পণ্যের বিভাগ', 'Product categories'), L('নিজের বিভাগ বদলানো বা মোছা যায়', 'Your own can be edited or removed'))}
+    <form data-form="bz-cat" autocomplete="off"><div class="catnew"><input class="input" name="name" maxlength="30" placeholder="${L('নতুন বিভাগের নাম', 'New category name')}"><button class="btn sm primary" type="submit">${L('যোগ', 'Add')}</button></div></form>
+    ${cu.length ? `<div class="section-title">${L('আপনার বিভাগ', 'Your categories')}</div><div class="list">${cu.map(c => `<div class="lwrap"><button type="button" class="lrow" data-action="bz-cat-edit" data-id="${c.k}"><span class="lic">🏷️</span><span class="lmain"><b>${esc(c.name)}</b></span></button>${delBtn('bz-cat-del', c.k)}</div>`).join('')}</div>
+      <p class="hint">${L('বিভাগ মুছলেও আগের পণ্য ও ইতিহাস থাকে, সেগুলো "অন্যান্য" হিসেবে দেখায়।', 'Deleting a category keeps old items and history; they show under "Other".')}</p>` : ''}
+    <div class="section-title">${L('প্রাথমিক বিভাগ', 'Built-in')}</div><div class="chips">${BZ_CATS.map(c => `<span class="cchip">${c.e} ${esc(isEN() ? c.en : c.bn)}</span>`).join('')}</div>`;
+}
+
+/* ---------- ফর্ম সেভ ---------- */
+const bzDupKey = o => [o.amt, o.date, o.method, o.shop, o.note].join('|');
+Object.assign(FORMS, {
+  'bz-market': f => {
+    const name = f.elements.name.value.trim(), date = f.elements.date.value;
+    if (!name) return fail(f, L('বাজারের নাম লিখুন', 'Enter a market name'), 'name');
+    if (!bzDateOk(date)) return fail(f, L('তারিখ বাছুন', 'Pick a date'), 'date');
+    const budget = bzMinor(f.elements.budget.value), shop = f.elements.shop.value.trim(), note = f.elements.note.value.trim(), shopper = f.elements.shopper.value.trim(), discount = Math.max(0, bzMinor(f.elements.discount.value));
+    const id = f.dataset.id, m = id && bzMkt(id);
+    if (m) { Object.assign(m, { name, date, shop, note, shopper, discount, budget: budget > 0 ? budget : null }); closeSheet(); return bzSave(m, SAVED()); }
+    const o = { id: uid(), name, date, status: 'active', budget: budget > 0 ? budget : null, catBudgets: {}, shop, note, shopper, discount, items: [], payments: [], receipts: [], sync: null, createdAt: Date.now(), updatedAt: Date.now() };
+    const t = f.elements.tpl && bz().templates.find(x => x.id === f.elements.tpl.value);
+    if (t) o.items = t.items.map(i => bzNewItem({ name: i.name, cat: i.cat || 'other', qty: i.qty, unit: i.unit, est: i.est }));
+    bz().markets.push(o); bz().activeId = o.id; tab = t ? 'list' : 'home'; trail = [tab];
+    if (sheetOpen) closeSheet(); commit(L('বাজার তৈরি হয়েছে', 'Market created'));
+  },
+  'bz-quick': f => {
+    const m = bzCur(); if (!m) return;
+    const name = f.elements.name.value.trim();
+    if (!name) return fail(f, L('পণ্যের নাম লিখুন', 'Enter the item name'), 'name');
+    const qty = bzMilli(f.elements.qty.value || 1);
+    if (qty <= 0) return fail(f, L('পরিমাণ শূন্যের বেশি হতে হবে', 'Quantity must be more than zero'), 'qty');
+    m.items.push(bzNewItem({ name, cat: f.elements.cat.value, qty, unit: f.elements.unit.value.trim(), est: bzMinor(f.elements.est.value) }));
+    bzSave(m, L(`"${name}" যোগ হয়েছে`, `"${name}" added`));
+  },
+  'bz-item': f => {
+    const m = bzCur(); if (!m) return;
+    const name = f.elements.name.value.trim(), qty = bzMilli(f.elements.qty.value || 1), unit = f.elements.unit.value.trim();
+    if (!name) return fail(f, L('পণ্যের নাম লিখুন', 'Enter the item name'), 'name');
+    if (qty <= 0) return fail(f, L('পরিমাণ শূন্যের বেশি হতে হবে', 'Quantity must be more than zero'), 'qty');
+    const id = f.dataset.id, it = id && bzItem(m, id);
+    if (!it && f.dataset.dupok !== '1' && m.items.some(i => !i.del && bzNameKey(i.name) === bzNameKey(name) && bzUnitKey(i.unit) === bzUnitKey(unit))) {
+      f.dataset.dupok = '1';
+      return fail(f, L('এই পণ্য তালিকায় আগেই আছে। তবুও আবার যোগ করতে চাইলে আবার "যোগ করুন" চাপুন।', 'This item is already on the list. Tap Add again if you want it twice.'), 'name');
+    }
+    const o = { name, cat: f.elements.cat.value, qty, unit, est: bzMinor(f.elements.est.value), shop: f.elements.shop.value.trim(), note: f.elements.note.value.trim() };
+    if (it) { Object.assign(it, o); bzRestock(m); } else m.items.push(bzNewItem(o));
+    closeSheet(); bzSave(m, SAVED());
+  },
+  'bz-buy': f => {
+    const m = bzCur(), it = m && bzItem(m, f.dataset.id); if (!it) return;
+    const st = f.elements.status.value;
+    if (st === 'done' || st === 'partial') {
+      const q = bzMilli(f.elements.aQty.value);
+      if (q <= 0) return fail(f, L('কত কিনলেন তা লিখুন', 'Enter the quantity bought'), 'aQty');
+      if (String(f.elements.aPrice.value).trim() === '') return fail(f, L('আসল দাম লিখুন (আনুমানিক দাম আসল হিসেবে ধরা হয় না)', 'Enter the real price (the estimate is not used as the real one)'), 'aPrice');
+      it.aQty = q; it.aPrice = bzMinor(f.elements.aPrice.value);
+      it.status = st === 'partial' && q >= it.qty ? 'done' : st;
+    } else { it.status = st; it.aQty = 0; it.aPrice = null; }
+    bzRestock(m);
+    closeSheet(); bzSave(m, SAVED());
+  },
+  'bz-budget': f => {
+    const m = bzCur(); if (!m) return;
+    const b = bzMinor(f.elements.budget.value);
+    m.budget = b > 0 ? b : null; m.catBudgets = {};
+    bzCats().forEach(c => { const v = bzMinor(f.elements['cb_' + c.k].value); if (v > 0) m.catBudgets[c.k] = v; });
+    closeSheet(); bzSave(m, SAVED());
+  },
+  'bz-pay': f => {
+    const m = bzCur(); if (!m) return;
+    const o = { amt: bzMinor(f.elements.amt.value), date: f.elements.date.value, method: f.elements.method.value, shop: f.elements.shop.value.trim(), note: f.elements.note.value.trim() };
+    if (!(o.amt > 0)) return fail(f, L('টাকার পরিমাণ লিখুন', 'Enter the amount'), 'amt');
+    if (!bzDateOk(o.date)) o.date = today();
+    // একই পেমেন্ট দুবার চাপ পড়লে ডুপ্লিকেট হয় না
+    const dup = m.payments.some(p => !p.del && Date.now() - p.createdAt < 5000 && bzDupKey(p) === bzDupKey(o));
+    if (dup) { closeSheet(); return toast(L('এই পেমেন্ট এইমাত্র যোগ হয়েছে', 'This payment was just added')); }
+    m.payments.push(Object.assign({ id: uid(), createdAt: Date.now() }, o));
+    closeSheet(); bzSave(m, SAVED());
+  },
+  'bz-complete': f => {
+    const m = bzCur(); if (!m) return;
+    m.status = 'done';
+    if (f.elements.stock && f.elements.stock.checked) bzApplyStock(bz(), m);
+    if (f.elements.sync && f.elements.sync.checked && f.elements.ev) {
+      if (m.sync && m.sync.evId !== f.elements.ev.value) { const old = bzTargets().find(e => e.id === m.sync.evId); if (old) old.expenses = old.expenses.filter(e => e.ref !== 'bz:' + m.id); }
+      m.sync = { evId: f.elements.ev.value };
+    } else if (f.elements.sync && !f.elements.sync.checked && m.sync) bzUnsyncMain(m);
+    closeSheet(); bzSave(m, L('বাজার সম্পন্ন হয়েছে', 'Market completed'));
+  },
+  'bz-sync': f => {
+    const m = bzCur(); if (!m) return;
+    m.sync = { evId: f.elements.ev.value }; closeSheet(); bzSave(m, L('মূল খরচে যোগ হয়েছে', 'Added to main expenses'));
+  },
+  'bz-stock': f => {
+    const name = f.elements.name.value.trim(), unit = f.elements.unit.value.trim();
+    if (!name) return fail(f, L('পণ্যের নাম লিখুন', 'Enter the item name'), 'name');
+    const qty = bzMilli(f.elements.qty.value), min = bzMilli(f.elements.min.value);
+    if (qty < 0 || min < 0) return fail(f, L('ঋণাত্মক পরিমাণ দেওয়া যায় না', 'Negative amounts are not allowed'));
+    const id = f.dataset.id, s = id && bz().stock.find(x => x.id === id);
+    const other = bzStockFind(bz(), name, unit);
+    if (other && (!s || other.id !== s.id)) return fail(f, L('এই নাম ও এককে মজুত আগেই আছে। সেটা এডিট করুন।', 'This item and unit already exist in stock. Edit that one.'), 'name');
+    if (s) Object.assign(s, { name, unit, qty, min, note: f.elements.note.value.trim() });
+    else bz().stock.push({ id: uid(), name, unit, qty, min, lastDate: '', lastPrice: 0, note: f.elements.note.value.trim(), createdAt: Date.now() });
+    closeSheet(); commit(SAVED());
+  },
+  'bz-use': f => {
+    const s = bz().stock.find(x => x.id === f.dataset.id); if (!s) return;
+    const a = bzMilli(f.elements.amt.value);
+    if (a <= 0) return fail(f, L('কত ব্যবহার করলেন তা লিখুন', 'Enter how much was used'), 'amt');
+    if (a > s.qty) return fail(f, L(`মজুতে আছে মাত্র ${bzQtyStr(s.qty)} ${s.unit}`, `Only ${bzQtyStr(s.qty)} ${s.unit} in stock`), 'amt');
+    s.qty -= a; closeSheet(); commit(SAVED());
+  },
+  'bz-tpl': f => {
+    const name = f.elements.name.value.trim(); if (!name) return fail(f, L('টেমপ্লেটের নাম লিখুন', 'Enter a template name'), 'name');
+    const items = bzParseTemplate(f.elements.lines.value);
+    if (!items.length) return fail(f, L('অন্তত একটা পণ্য লিখুন', 'Add at least one item'), 'lines');
+    const id = f.dataset.id, t = id && bz().templates.find(x => x.id === id);
+    if (t) { const cats = Object.fromEntries(t.items.map(i => [bzNameKey(i.name), i.cat])); items.forEach(i => { i.cat = cats[bzNameKey(i.name)] || 'other'; }); Object.assign(t, { name, items }); }
+    else bz().templates.push({ id: uid(), name, items, createdAt: Date.now() });
+    closeSheet(); commit(SAVED());
+  },
+  'bz-cat': f => {
+    const name = f.elements.name.value.trim(); if (!name) return fail(f, L('নাম লিখুন', 'Enter a name'), 'name');
+    const id = f.dataset.id;
+    if (bzCats().some(c => c.k !== id && (c.bn.toLowerCase() === name.toLowerCase() || c.en.toLowerCase() === name.toLowerCase()))) return fail(f, L('এই নামে বিভাগ আছে', 'That category exists'), 'name');
+    if (id) { const c = bz().cats.find(x => x.k === id); if (c) c.name = name; } else bz().cats.push({ k: 'c_' + uid(), name });
+    save(); render(); openSheet(bzCatsSheet());
+  },
+});
+
+/* ---------- অ্যাকশন ---------- */
+function bzUnsyncMain(m) {
+  const ev = m.sync && bzTargets().find(e => e.id === m.sync.evId);
+  if (ev) ev.expenses = ev.expenses.filter(e => e.ref !== 'bz:' + m.id);
+  m.sync = null;
+}
+function bzSummaryText(m) {
+  const c = bzMarketCalc(m), lines = [`🛒 ${m.name} · ${fmtDate(m.date)}`, ''];
+  c.rows.forEach(r => lines.push(`${r.item.status === 'done' ? '✅' : r.item.status === 'partial' ? '½' : r.item.status === 'na' ? '✕' : '○'} ${r.item.name} ${bzQtyStr(r.item.qty)} ${r.item.unit}${r.bought ? ' = ' + bzM(r.net) : r.planned ? ' ~ ' + bzM(r.planned) : ''}`));
+  lines.push('', `${L('আনুমানিক', 'Estimated')}: ${bzM(c.estTotal)}`); if (c.discount) lines.push(`${L('ডিসকাউন্ট', 'Discount')}: −${bzM(c.discount)}`); lines.push(`${L('আসল খরচ', 'Actual')}: ${bzM(c.actualTotal)}`);
+  if (c.budget != null) lines.push(`${L('বাজেট', 'Budget')}: ${bzM(c.budget)} (${c.remaining >= 0 ? L('বাকি', 'left') + ' ' + bzM(c.remaining) : bzM(-c.remaining) + ' ' + L('বেশি', 'over')})`);
+  if (c.paid) lines.push(`${L('পরিশোধ', 'Paid')}: ${bzM(c.paid)}${c.payable ? ` · ${L('বাকি', 'due')} ${bzM(c.payable)}` : ''}`);
+  return lines.join('\n');
+}
+async function bzShare(txt, title) {
+  try { if (navigator.share) { await navigator.share({ title, text: txt }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(txt); toast(L('কপি হয়েছে', 'Copied')); } catch (e) { toast(L('কপি করা যায়নি', 'Could not copy'), 'danger'); }
+}
+const bzOpenMarket = id => { bz().activeId = id; tab = 'list'; trail = ['home', 'list']; if (sheetOpen) closeSheet(); save(); render(); window.scrollTo(0, 0); };
+Object.assign(ACTIONS, {
+  'bz-new': () => openSheet(bzMarketForm(null)),
+  'bz-edit-market': () => { const m = bzCur(); if (m) openSheet(bzMarketForm(m)); },
+  'bz-markets': () => openSheet(bzMarketsSheet()),
+  'bz-open': el => bzOpenMarket(el.dataset.id),
+  'bz-history': () => { if (sheetOpen) closeSheet(); bzUi.sub = 'markets'; tab = 'history'; trail = ['home', 'history']; render(); window.scrollTo(0, 0); },
+  'bz-sub': el => { bzUi.sub = el.dataset.v; bzUi.hq = ''; render(); },
+  'bz-hf': el => { bzUi[el.dataset.key] = el.dataset.v; render(); },
+  'bz-f': el => { bzUi.f = el.dataset.v; render(); },
+  'bz-add-item': () => { const m = bzCur(); if (m) openSheet(bzItemForm(m, null)); },
+  'bz-edit-item': el => { const m = bzCur(), it = m && bzItem(m, el.dataset.id); if (it) openSheet(bzItemForm(m, it)); },
+  'bz-buy': el => { const m = bzCur(), it = m && bzItem(m, el.dataset.id); if (it) openSheet(bzBuyForm(m, it)); },
+  'bz-item-dup': el => { const m = bzCur(), it = m && bzItem(m, el.dataset.id); if (!it) return; m.items.push(bzNewItem({ name: it.name, cat: it.cat, qty: it.qty, unit: it.unit, est: it.est, note: it.note })); if (sheetOpen) closeSheet(); bzSave(m, L('কপি হয়েছে', 'Duplicated')); },
+  'bz-item-del': el => {
+    const m = bzCur(), it = m && bzItem(m, el.dataset.id); if (!it) return;
+    if (!confirm(L(`"${it.name}" মুছবেন?`, `Delete "${it.name}"?`))) return;
+    if (sheetOpen) closeSheet();
+    undoable(DELETED(), () => { it.del = Date.now(); if (it.stockedQty > 0) { const r = bzStockFind(bz(), it.name, it.unit); if (r) r.qty = Math.max(0, r.qty - it.stockedQty); it.stockedQty = 0; } m.updatedAt = Date.now(); bzSyncMain(m); });
+  },
+  'bz-budget': () => { const m = bzCur(); if (m) openSheet(bzBudgetForm(m)); },
+  'bz-pay-add': () => { const m = bzCur(); if (m) openSheet(bzPayForm(m)); },
+  'bz-pay-del': el => { const m = bzCur(); if (!m) return; const p = m.payments.find(x => x.id === el.dataset.id); if (!p || !confirm(L('এই পেমেন্ট মুছবেন?', 'Delete this payment?'))) return; undoable(DELETED(), () => { p.del = Date.now(); m.updatedAt = Date.now(); }); },
+  'bz-complete': () => { const m = bzCur(); if (m) openSheet(bzCompleteSheet(m)); },
+  'bz-reopen': () => { const m = bzCur(); if (!m) return; m.status = 'active'; bzSave(m, L('আবার চালু হয়েছে', 'Reopened')); },
+  'bz-cancel': () => { const m = bzCur(); if (!m || !confirm(L('বাজার বাতিল করবেন? এর খরচ কোথাও ধরা হবে না।', 'Cancel this market? Its spending is not counted anywhere.'))) return; m.status = 'cancelled'; bzSave(m, L('বাতিল হয়েছে', 'Cancelled')); },
+  'bz-del-market': el => {
+    const m = bzMkt(el.dataset.id); if (!m || !confirm(L(`"${m.name}" ডিলিট করবেন? এর খরচ ও মজুতে যোগ হওয়া অংশ ফিরে যাবে, ফিরিয়ে আনার সুযোগ থাকবে।`, `Delete "${m.name}"? Its linked expense and stock additions are reversed; you can undo right away.`))) return;
+    if (sheetOpen) closeSheet();
+    undoable(DELETED(), () => { bzReverseStock(bz(), m); m.del = Date.now(); bzSyncMain(m); if (bz().activeId === m.id) bz().activeId = null; });
+  },
+  'bz-sync': () => { const m = bzCur(); if (m) openSheet(bzSyncSheet(m)); },
+  'bz-unsync': () => { const m = bzCur(); if (!m) return; bzUnsyncMain(m); closeSheet(); bzSave(m, L('মূল খরচ থেকে সরানো হয়েছে', 'Removed from main expenses')); },
+  'bz-copy': () => { const m = bzCur(); if (m) bzShare(bzSummaryText(m), m.name); },
+  'bz-csv': () => {
+    const m = bzCur(); if (!m) return;
+    const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"', c = bzMarketCalc(m);
+    const rows = [['Item', 'Category', 'Unit', 'Planned qty', 'Est. unit price', 'Est. total', 'Status', 'Bought qty', 'Actual unit price', 'Actual total', 'Note']]
+      .concat(c.rows.map(r => [r.item.name, bzCatName(r.item.cat), r.item.unit, bzQtyStr(r.item.qty), r.item.est / 100, r.planned / 100, bzSt(r.item.status), r.item.aQty ? bzQtyStr(r.item.aQty) : '', r.item.aPrice != null ? r.item.aPrice / 100 : '', r.net / 100, r.item.note || '']));
+    const url = URL.createObjectURL(new Blob(['﻿' + rows.map(r => r.map(q).join(',')).join('\n')], { type: 'text/csv' }));
+    const a = document.createElement('a'); a.href = url; a.download = `bazar-${m.date}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+  },
+  'bz-save-tpl': () => {
+    const m = bzCur(); if (!m) return;
+    const items = m.items.filter(i => !i.del).map(i => ({ name: i.name, cat: i.cat, qty: i.qty, unit: i.unit, est: i.est }));
+    if (!items.length) return toast(L('তালিকা খালি', 'The list is empty'), 'danger');
+    bz().templates.push({ id: uid(), name: m.name, items, createdAt: Date.now() });
+    if (sheetOpen) closeSheet(); commit(L('টেমপ্লেট হয়েছে। "আরও → নিয়মিত তালিকা" দেখুন', 'Template saved. See More → Recurring lists'));
+  },
+  'bz-tpls': () => openSheet(bzTplsSheet()),
+  'bz-tpl-new': () => openSheet(bzTplForm(null)),
+  'bz-tpl-edit': el => { const t = bz().templates.find(x => x.id === el.dataset.id); if (t) openSheet(bzTplForm(t)); },
+  'bz-tpl-copy': el => { const t = bz().templates.find(x => x.id === el.dataset.id); if (!t) return; bz().templates.push({ id: uid(), name: t.name + L(' (কপি)', ' (copy)'), items: JSON.parse(JSON.stringify(t.items)), createdAt: Date.now() }); save(); openSheet(bzTplsSheet()); },
+  'bz-tpl-del': el => { const t = bz().templates.find(x => x.id === el.dataset.id); if (!t || !confirm(L(`"${t.name}" টেমপ্লেট মুছবেন?`, `Delete template "${t.name}"?`))) return; if (sheetOpen) closeSheet(); undoable(DELETED(), () => { t.del = Date.now(); }); },
+  'bz-tpl-use': el => {
+    const t = bz().templates.find(x => x.id === el.dataset.id); if (!t) return;
+    const o = { id: uid(), name: t.name, date: today(), status: 'active', budget: null, catBudgets: {}, shop: '', note: '', items: t.items.map(i => bzNewItem({ name: i.name, cat: i.cat || 'other', qty: i.qty, unit: i.unit, est: i.est })), payments: [], receipts: [], sync: null, createdAt: Date.now(), updatedAt: Date.now() };
+    bz().markets.push(o); bz().activeId = o.id; tab = 'list'; trail = ['home', 'list']; if (sheetOpen) closeSheet(); commit(L('টেমপ্লেট থেকে নতুন বাজার হয়েছে', 'New market from template'));
+  },
+  'bz-cats': () => openSheet(bzCatsSheet()),
+  'bz-cat-edit': el => { const c = bz().cats.find(x => x.k === el.dataset.id); if (!c) return; openSheet(`${sheetHead(L('বিভাগ এডিট', 'Edit category'))}<form data-form="bz-cat" data-id="${c.k}" autocomplete="off"><label class="field"><span>${L('নাম', 'Name')}</span><input class="input" name="name" maxlength="30" value="${esc(c.name)}"></label><button class="btn primary block" type="submit">${L('সেভ করুন', 'Save')}</button></form>`); },
+  'bz-cat-del': el => { const c = bz().cats.find(x => x.k === el.dataset.id); if (!c || !confirm(L(`"${c.name}" বিভাগ মুছবেন? পণ্য ও ইতিহাস থাকবে, "অন্যান্য" হিসেবে দেখাবে।`, `Delete "${c.name}"? Items and history stay under "Other".`))) return; c.del = Date.now(); save(); openSheet(bzCatsSheet()); render(); },
+  'bz-stock-add': () => openSheet(bzStockForm(null)),
+  'bz-stock-edit': el => { const s = bz().stock.find(x => x.id === el.dataset.id); if (s) openSheet(bzStockForm(s)); },
+  'bz-stock-del': el => { const s = bz().stock.find(x => x.id === el.dataset.id); if (!s || !confirm(L(`"${s.name}" মজুত থেকে মুছবেন?`, `Remove "${s.name}" from stock?`))) return; if (sheetOpen) closeSheet(); undoable(DELETED(), () => { s.del = Date.now(); }); },
+  'bz-stock-use': el => {
+    const s = bz().stock.find(x => x.id === el.dataset.id); if (!s) return;
+    openSheet(`${sheetHead(L('ব্যবহার', 'Use'), `${esc(s.name)} · ${bzQtyStr(s.qty)} ${esc(s.unit)}`)}<form data-form="bz-use" data-id="${s.id}" autocomplete="off"><label class="field"><span>${L('কত ব্যবহার করলেন', 'How much did you use')} (${esc(s.unit)})</span><input class="input" name="amt" inputmode="decimal" placeholder="0"></label><button class="btn primary block" type="submit">${L('মজুত কমান', 'Reduce stock')}</button></form>`);
+  },
+  'bz-low-add': () => {
+    const m = bzCur(); if (!m) return; let n = 0;
+    bzLowStock(bz()).forEach(s => {
+      if (m.items.some(i => !i.del && bzNameKey(i.name) === bzNameKey(s.name) && bzUnitKey(i.unit) === bzUnitKey(s.unit) && i.status !== 'done')) return;
+      m.items.push(bzNewItem({ name: s.name, unit: s.unit, qty: Math.max(s.min - s.qty, s.min > s.qty ? 1 : s.min) || 1000, est: s.lastPrice || 0 })); n++;
+    });
+    bzSave(m, n ? L(`${n}টা পণ্য তালিকায় যোগ হয়েছে`, `${n} item(s) added to the list`) : L('সবই তালিকায় আছে', 'Already on the list'));
+  },
+  'bz-link': () => {
+    const tg = bzTargets(), cur = bz().linkEv;
+    openSheet(`${sheetHead(L('সংসারের হিসাবে নিজে যোগ', 'Auto-add to household'), L('বাজারের খরচ মাসের বাজেট থেকে নিজে কাটা যায়', 'Market costs come off the monthly budget'))}
+      ${tg.length ? `<div class="list">${tg.map(e => `<button type="button" class="lrow ${cur === e.id ? 'cur' : ''}" data-action="bz-link-set" data-id="${e.id}"><span class="lic">${(HG_TYPES[e.type] || {}).icon || '🏡'}</span><span class="lmain"><b>${esc(e.name)}</b><small>${cur === e.id ? L('এখন চালু', 'On now') : L('এটাকে বাছুন', 'Pick this one')}</small></span></button>`).join('')}</div>
+        ${cur ? `<button type="button" class="btn danger block mt12" data-action="bz-link-set" data-id="">${L('বন্ধ করুন', 'Turn off')}</button>` : ''}
+        <p class="hint">${L('বাছলে এখনকার ও পরের সব বাজারের আসল খরচ (আনুমানিক নয়) ওই ইভেন্টে একটাই খরচ হিসেবে যায়, দুবার নয়। বাজার বদলালে খরচও মিলে যায়। বন্ধ করলে আগে যোগ হওয়া খরচ থাকে।', 'Once picked, the real cost of every market (never the estimate) goes to that event as one expense, never twice, and follows later edits. Turning it off keeps what was already added.')}</p>` : `<p class="hint">${L('"আড্ডা ও যৌথ খরচ"-এ একটা "মাসিক সংসার খরচ" বা "দৈনিক বাজার" ইভেন্ট খুললে এখানে বাছা যাবে।', 'Open a "Monthly household" or "Daily market" event in Hangout and it will be selectable here.')}</p>`}`);
+  },
+  'bz-link-set': el => {
+    const id = el.dataset.id; bz().linkEv = id || null; let n = 0;
+    if (id) bzMarkets().forEach(m => { if (!m.sync) { bzAutoLink(m); if (m.sync) { bzSyncMain(m); n++; } } });
+    if (sheetOpen) closeSheet(); commit(id ? L(`চালু হয়েছে${n ? `, ${n}টা বাজার যোগ হয়েছে` : ''}`, `Turned on${n ? `, ${n} market(s) added` : ''}`) : L('বন্ধ হয়েছে', 'Turned off'));
+  },
+  'bz-auto-toggle': () => { bz().autoStock = !bz().autoStock; commit(bz().autoStock ? L('অটো-মজুত চালু', 'Auto stock on') : L('অটো-মজুত বন্ধ', 'Auto stock off')); },
+  'bz-rcpt-add': el => { const i = el.closest('section').querySelector('[data-bz-rcpt]'); if (i) i.click(); },
+  'bz-rcpt-view': el => { const u = imgURL.get('bzr:' + el.dataset.id); openSheet(`${sheetHead(L('রসিদ', 'Receipt'))}${u ? `<img class="bzbig" src="${u}" alt="">` : `<p class="hint">${L('ছবি পাওয়া যায়নি', 'Photo not found')}</p>`}`); },
+  'bz-rcpt-del': el => {
+    const m = bzCur(); if (!m || !confirm(L('এই রসিদের ছবি মুছবেন?', 'Remove this receipt photo?'))) return;
+    const id = el.dataset.id; m.receipts = m.receipts.filter(x => x !== id); deleteImage('bzr:' + id).catch(() => {}); bzSave(m, DELETED());
+  },
+});
+document.addEventListener('change', async e => {
+  const inp = e.target.matches && e.target.matches('[data-bz-rcpt]') ? e.target : null; if (!inp) return;
+  const m = bzCur(), files = [...(inp.files || [])]; inp.value = ''; if (!m || !files.length) return;
+  let bad = 0;
+  for (const file of files) {
+    try { const blob = await compressImage(file), id = uid(); await putImage('bzr:' + id, blob); m.receipts.push(id); } catch (err) { bad++; }
+  }
+  bzSave(m, bad ? L(`${bad}টা ছবি সেভ হয়নি`, `${bad} photo(s) could not be saved`) : SAVED());
+});
+
+/* ---------- গাইড ---------- */
+function bzGuide() {
+  const ul = a => `<ul>${a.map(x => `<li>${x}</li>`).join('')}</ul>`;
+  const S = [
+    [L('শুরু: ৩ ধাপে', 'Start in 3 steps'), ul([L('<b>নতুন বাজার</b> খুলুন, দরকারে বাজেট দিন।', '<b>New market</b>, set a budget if you want.'), L('<b>তালিকা</b>: পণ্য, পরিমাণ, একক আর আনুমানিক দাম লিখুন (বা টেমপ্লেট থেকে আনুন)।', '<b>List</b>: items, quantity, unit and estimated price (or start from a template).'), L('বাজারে গিয়ে প্রতিটা পণ্যের পাশের গোল বাটনে চাপুন, কত কিনলেন আর আসল দাম লিখুন।', 'In the shop tap the circle next to each item and enter the quantity and real price.')])],
+    [L('আনুমানিক আর আসল দাম', 'Estimated vs actual'), `<p>${L('<b>আনুমানিক মোট</b> = পরিমাণ × আনুমানিক দাম। <b>আসল মোট</b> = কেনা পরিমাণ × আসল দাম। তফাত পণ্যের পাশে দেখায়। আনুমানিক দাম কখনো খরচ হিসেবে ধরা হয় না।', '<b>Estimated total</b> = quantity × estimated price. <b>Actual total</b> = bought quantity × real price. The gap shows beside each item. Estimates are never counted as spending.')}</p>`],
+    [L('কেনার অবস্থা', 'Item status'), ul([L('<b>কেনা হয়েছে:</b> আসল পরিমাণ ও দাম খরচে যোগ।', '<b>Bought:</b> real quantity and price count.'), L('<b>আংশিক:</b> শুধু যত কিনেছেন তত পরিমাণের দাম যোগ।', '<b>Partly:</b> only what you actually bought counts.'), L('<b>পাওয়া যায়নি / কেনা হয়নি:</b> খরচে ধরা হয় না।', '<b>Not found / not bought:</b> not counted.')])],
+    [L('বাজেট', 'Budget'), `<p>${L('মোট বাজেট দিলে বাকি টাকা, ব্যবহারের % আর ৮৫%-এ পৌঁছালে সতর্কবার্তা আসে। খাতভিত্তিক বাজেটও দেওয়া যায়। বাজেট না দিলে কোনো বাকি টাকা দেখায় না।', 'With a budget you see what is left, % used and a warning at 85%. Per-category budgets are optional. With no budget no remaining amount is shown.')}</p>`],
+    [L('পেমেন্ট, অগ্রিম ও বাকি', 'Payments, advance and dues'), `<p>${L('<b>বাকি</b> = আসল বিল − মোট পেমেন্ট। বেশি দিলে বাড়তিটা "অতিরিক্ত / অগ্রিম" হিসেবে আলাদা দেখায়। একই পেমেন্টে দুবার চাপ পড়লে ডুপ্লিকেট হয় না।', '<b>Due</b> = actual bill − total payments. Paying more shows the extra as "Extra / advance". A double tap never adds the same payment twice.')}</p>`],
+    [L('মজুত', 'Home stock'), `<p>${L('বাসায় কী আছে লিখে রাখুন, ন্যূনতম সীমা দিন। কম হলে হোমে মনে করায় আর এক ট্যাপে তালিকায় যোগ হয়। কেনা পণ্য মজুতে যোগ করা যায়, প্রতিবার ঠিক একবারই যোগ হয়। মজুতের পরিমাণ অনুমান করা হয় না।', 'Record what you have and set a minimum. Low items are flagged on Home and added to the list in one tap. Bought items can be added to stock, exactly once each time. Stock is never guessed.')}</p>`],
+    [L('দামের ইতিহাস', 'Price history'), `<p>${L('আপনার আসল কেনাকাটা থেকে "গতবার ৳১৭০ → এবার ৳১৮০" দেখায়। শুধু একই নাম ও একই এককের কেনা তুলনা হয়। এটা আপনার নিজের ইতিহাস, বাজারের চলতি দর নয়।', 'From your real purchases: "last ৳170 → now ৳180". Only the same name and unit are compared. It is your own history, not live market rates.')}</p>`],
+    [L('টেমপ্লেট', 'Templates'), `<p>${L('"আরও → নিয়মিত তালিকা"। টেমপ্লেট থেকে নতুন বাজার করলে শুধু নাম, পরিমাণ, একক আর আনুমানিক দাম আসে। আগের আসল খরচ বা পেমেন্ট আসে না।', 'More → Recurring lists. A market from a template copies only names, quantities, units and estimates, never past actuals or payments.')}</p>`],
+    [L('মূল খরচের সাথে যোগ', 'Linking to main expenses'), `<p>${L('বাজার সম্পন্ন করার সময় বা "আরও"-তে "মূল খরচে যোগ করুন"। "আড্ডা ও যৌথ খরচ"-এর একটা দৈনিক/সংসারের ইভেন্টে বাজারের আসল মোট একটাই খরচ হিসেবে যায়। পরে বাজার বদলালে ওই খরচও মিলে যায়, দুবার যোগ হয় না। বাজার বাতিল বা ডিলিট করলে খরচটাও সরে যায়।', 'When completing a market, or More → "Add to main expenses". The real total goes into a daily or household event in Hangout as one expense. Later edits keep it in sync; it is never added twice. Cancelling or deleting the market removes it.')}</p>`],
+    [L('ব্যাকআপ ও অফলাইন', 'Backup & offline'), `<p>${L('সব ডেটা ফোনেই থাকে, ইন্টারনেট লাগে না। "আরও → ব্যাকআপ নিন"-এ বাজারের তালিকা, দাম, মজুত, টেমপ্লেট ও রসিদের ছবিসহ সব যায়।', 'Everything stays on the phone and works offline. More → Back up includes lists, prices, stock, templates and receipt photos.')}</p>`],
+  ];
+  return `${sheetHead(L('বাজার সদাই: গাইড', 'Bazar Sadai: guide'), L('প্রতিটা হিসাব উদাহরণসহ', 'How each number is worked out'))}
+    <div class="guide">${S.map(([t, b], i) => `<details class="gd" ${i === 0 ? 'open' : ''}><summary><span class="sn">${i + 1}</span><b>${t}</b>${icon('chev', 18)}</summary><div class="gbody">${b}</div></details>`).join('')}</div>`;
+}
+
+registerModule({
+  id: 'bazar',
+  icon: 'cart',
+  emoji: '🛒',
+  short: () => L('বাজার', 'Bazar'),
+  name: () => L('বাজার সদাই', 'Bazar Sadai'),
+  tagline: () => L('বাজারের তালিকা, বাজেট, আসল দাম, মজুত ও রিপোর্ট', 'Shopping list, budget, real prices, stock and reports'),
+  migrate: bazarMigrate,
+  hasData: s => !!(s.bazar && Array.isArray(s.bazar.markets) && s.bazar.markets.some(m => !m.del)),
+  imageIds: () => bz().markets.flatMap(m => m.receipts.map(id => 'bzr:' + id)),
+  backupSummary: s => (s.bazar && Array.isArray(s.bazar.markets) && s.bazar.markets.length ? L(`${cnt(s.bazar.markets.length)} বাজার`, `${s.bazar.markets.length} market(s)`) : ''),
+  ready: () => true,
+  welcome: () => '',
+  context: () => ({}),
+  topbar: bzTopbar,
+  guide: bzGuide,
+  tabs: [
+    { id: 'home', icon: 'home', label: () => L('হোম', 'Home'), view: () => bzHome() },
+    { id: 'list', icon: 'receipt', label: () => L('তালিকা', 'List'), view: () => bzListTab() },
+    { id: 'stock', icon: 'box', label: () => L('মজুত', 'Stock'), view: () => bzStockTab() },
+    { id: 'history', icon: 'chart', label: () => L('ইতিহাস', 'History'), view: () => bzHistoryTab() },
+    { id: 'more', icon: 'grid', label: () => L('আরও', 'More'), view: () => bzMoreTab() },
+  ],
+});
