@@ -106,7 +106,7 @@ function hgMapCats(names, existing) {
     return hit || { k: 'c_' + uid(), bn: n, en: n };
   }).filter((c, i, a) => a.findIndex(x => x.k === c.k) === i);
 }
-function hgNewParticipant(name, extra) { return Object.assign({ id: uid(), friendId: null, name, phone: '', note: '', active: true }, extra || {}); }
+function hgNewParticipant(name, extra) { return Object.assign({ id: uid(), friendId: null, name, phone: '', note: '', joinedOn: '', active: true }, extra || {}); }
 function hgEnsureFriend(name, phone) {
   let f = hg().friends.find(x => x.name.toLowerCase() === name.toLowerCase());
   if (!f) { f = { id: uid(), name, phone: phone || '', note: '', createdAt: Date.now() }; hg().friends.push(f); }
@@ -123,6 +123,8 @@ function hgPersonForm(ev, p) {
     <label class="field"><span>${L('নাম', 'Name')}</span><input class="input" name="name" maxlength="40" value="${esc(p ? p.name : '')}"></label>
     <label class="field"><span>${L('ফোন (ঐচ্ছিক)', 'Phone (optional)')}</span><input class="input" name="phone" inputmode="tel" maxlength="20" value="${esc(p ? p.phone : '')}"></label>
     <label class="field"><span>${L('নোট', 'Notes')}</span><input class="input" name="note" maxlength="120" value="${esc(p ? p.note : '')}"></label>
+    <label class="field"><span>${L('কবে থেকে ছিল? (ফাঁকা = শুরু থেকে)', 'Since when? (blank = from the start)')}</span><input class="input" type="date" name="joined" value="${esc(p ? (p.joinedOn || '') : (ev.expenses.some(e => !e.del) ? today() : ''))}">
+      <div class="hint">${L('মাঝপথে যোগ দিলে তারিখ দিন। এর আগের খরচে তাকে ধরা হবে না, তাই পুরোনো হিসাব বদলাবে না।', 'If someone joins midway, set the date. Earlier expenses will not include them, so old numbers stay the same.')}</div></label>
     ${p ? '' : `<input type="hidden" name="friendId" value="">`}
     <button class="btn primary block" type="submit">${p ? L('সেভ করুন', 'Save') : L('যোগ করুন', 'Add')}</button></form>`;
 }
@@ -186,7 +188,7 @@ function hgExpenseForm(e, preset) {
   const isNew = !e;
   const usedIds = e ? e.payers.map(p => p.pid).concat((e.spec && e.spec.incl) || [], Object.keys((e.spec && e.spec.values) || {})) : [];
   const people = hgPickable(ev, usedIds);
-  const v = e || { title: '', category: preset || ev.cats[0].k, date: today(), desc: '', total: 0, payers: [], method: 'selected', spec: { incl: people.filter(p => p.active).map(p => p.id), values: {} }, note: '', meta: {} };
+  const v = e || { title: '', category: preset || ev.cats[0].k, date: today(), desc: '', total: 0, payers: [], method: 'selected', spec: { incl: people.filter(p => p.active && (!p.joinedOn || p.joinedOn <= today())).map(p => p.id), values: {} }, note: '', meta: {} };
   hgPendingReceipt = undefined;
   const method = v.method === 'equal' ? 'selected' : v.method;
   const inclNow = v.method === 'equal' ? people.filter(p => p.active || ((v.spec && v.spec.incl) || []).includes(p.id)).map(p => p.id) : (v.spec.incl || []);
@@ -212,7 +214,7 @@ function hgExpenseForm(e, preset) {
         ${people.map(p => `<label class="hg-vrow"><span>${esc(p.name)}</span>${moneyInput('pay_' + p.id, hgTaka(payOf(p.id)), '0')}</label>`).join('')}
         <div class="preview" data-paysum></div></div></div>
     <div class="field"><span class="flabel">4. ${L('কাদের মধ্যে ভাগ হবে? (সমান ভাগ)', 'Who shares it? (split equally)')}</span>
-      <div class="hg-incl ${advOpen ? 'hidden' : ''}" data-incl><div class="chips">${people.map(p => `<label class="chip"><input type="checkbox" name="inc_${p.id}" ${inclNow.includes(p.id) ? 'checked' : ''}><span>${esc(p.name)}</span></label>`).join('')}</div>
+      <div class="hg-incl ${advOpen ? 'hidden' : ''}" data-incl><div class="chips">${people.map(p => `<label class="chip"><input type="checkbox" name="inc_${p.id}" ${inclNow.includes(p.id) ? 'checked' : ''}><span>${esc(p.name)}${p.joinedOn ? ` <small>(${L('থেকে', 'from')} ${fmtDate(p.joinedOn)})</small>` : ''}</span></label>`).join('')}</div>
         <div class="hint">${L('যারা এই খরচে ছিল না তাদের টিক তুলে দিন।', 'Untick anyone who was not part of this.')}</div></div>
       <div class="preview" data-split></div>
       <div class="preview" data-budget></div></div>
@@ -263,6 +265,10 @@ LIVE['hg-expense'] = (f, t) => {
   $('[data-incl]', f).classList.toggle('hidden', method !== 'selected');
   $('[data-multi]', f).classList.toggle('hidden', !f.elements.multi.checked);
   $('[data-one]', f).classList.toggle('hidden', f.elements.multi.checked);
+  if (t && t.name === 'date' && f.elements.date.value) {
+    const day = f.elements.date.value;
+    ev.participants.forEach(p => { const i = f.elements['inc_' + p.id]; if (i) i.checked = p.active && (!p.joinedOn || p.joinedOn <= day); });
+  }
   const room = f.elements.cat.value === 'room';
   $('[data-room]', f).classList.toggle('hidden', !room);
   if (room && t && ['rooms', 'nights', 'rate'].includes(t.name)) {
@@ -354,10 +360,10 @@ Object.assign(FORMS, {
     if (!name) return fail(f, L('নাম লিখুন', 'Enter a name'), 'name');
     const id = f.dataset.id, p = id && ev.participants.find(x => x.id === id);
     if (ev.participants.some(x => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) return fail(f, L('এই নামে আরেকজন আছে। আলাদা করে লিখুন।', 'Someone with this name already exists. Make it distinct.'), 'name');
-    if (p) { Object.assign(p, { name, phone: f.elements.phone.value.trim(), note: f.elements.note.value.trim() }); closeSheet(); return hgCommit(ev, `বন্ধু বদলানো: ${name}`, `Person edited: ${name}`); }
+    if (p) { Object.assign(p, { name, phone: f.elements.phone.value.trim(), note: f.elements.note.value.trim(), joinedOn: f.elements.joined.value || '' }); closeSheet(); return hgCommit(ev, `বন্ধু বদলানো: ${name}`, `Person edited: ${name}`); }
     const fid = f.elements.friendId.value;
     const fr = fid ? hg().friends.find(x => x.id === fid) : hgEnsureFriend(name, f.elements.phone.value.trim());
-    ev.participants.push(hgNewParticipant(name, { friendId: fr ? fr.id : null, phone: f.elements.phone.value.trim(), note: f.elements.note.value.trim(), org: !ev.participants.length }));
+    ev.participants.push(hgNewParticipant(name, { friendId: fr ? fr.id : null, phone: f.elements.phone.value.trim(), note: f.elements.note.value.trim(), joinedOn: f.elements.joined.value || '', org: !ev.participants.length }));
     closeSheet(); hgCommit(ev, `বন্ধু যোগ: ${name}`, `Person added: ${name}`);
   },
   'hg-friend': f => {

@@ -215,6 +215,7 @@ function hgSecPeople(ev, c) {
   return `${ev.status === 'active' ? `<button type="button" class="btn primary block" data-action="hg-add-person">${icon('plus', 18)} ${L('বন্ধু যোগ করুন', 'Add person')}</button>` : ''}
     ${ev.participants.map(p => `<section class="card hg-pcard">${hgPersonCard(ev, c, p)}
       ${p.phone ? `<p class="hint">📞 ${esc(p.phone)}</p>` : ''}${p.note ? `<p class="hint">${esc(p.note)}</p>` : ''}
+      ${p.joinedOn ? `<p class="hint">🗓️ ${L('যোগ দিয়েছে', 'Joined')}: ${fmtDate(p.joinedOn)}${ev.start ? ' (' + hgDayLabel(ev, p.joinedOn) + ')' : ''}</p>` : ''}
       ${ev.status === 'active' ? `<div class="btn-row mt8"><button type="button" class="btn sm" data-action="hg-edit-person" data-id="${p.id}">${icon('edit', 16)} ${L('এডিট', 'Edit')}</button>
         <button type="button" class="btn sm" data-action="hg-toggle-person" data-id="${p.id}">${p.active ? L('নিষ্ক্রিয় করুন', 'Deactivate') : L('সক্রিয় করুন', 'Activate')}</button>
         ${hgPidUsed(ev, p.id) ? '' : `<button type="button" class="btn sm danger" data-action="hg-del-person" data-id="${p.id}">${icon('trash', 16)}</button>`}</div>` : ''}</section>`).join('') || empty('🧑‍🤝‍🧑', L('কেউ নেই', 'No one yet'), L('বন্ধুদের নাম যোগ করুন।', 'Add the friends who joined.'))}
@@ -238,4 +239,11 @@ function hgSecPayments(ev, c) {
       <span class="lic">↩️</span><span class="lmain"><b>${esc(ex ? ex.title : '—')}</b><small>${L('পেয়েছে', 'received by')} ${esc(pName(ev, r.by))} · ${fmtDate(r.date)}${r.note ? ' · ' + esc(r.note) : ''}</small></span><span class="lend"><b>${hgM(r.amt)}</b></span></button>${act ? delBtn('hg-del-refund', r.id) : ''}</div>`; }).join('')}</div>` : `<p class="hint">${L('কোনো রিফান্ড নেই। রিফান্ড মানে দোকান বা হোটেল থেকে টাকা ফেরত আসা, এটা নতুন আয় নয়, খরচ কমায়।', 'No refunds. A refund is money coming back from a shop or hotel; it reduces the expense and is not income.')}</p>`}
     <section class="card"><div class="card-head"><h2>${L('কে কত পরিশোধ করেছে', 'Payments by person')}</h2></div>
       ${ev.participants.map(p => `<div class="prows"><div><span>${esc(p.name)}</span><b>${L('দিয়েছে', 'sent')} ${hgM(c.out[p.id])} · ${L('পেয়েছে', 'got')} ${hgM(c.inn[p.id])}</b></div></div>`).join('')}</section>`;
+}
+
+// "দিন ১", "দিন ২": ইভেন্ট শুরুর তারিখ থেকে গোনা
+function hgDayLabel(ev, date) {
+  if (!ev.start || !date) return fmtDate(date);
+  const n = daysBetween(ev.start, date) + 1;
+  return n >= 1 ? L(`দিন ${n}`, `Day ${n}`) : fmtDate(date);
 }

@@ -7,7 +7,7 @@
    - মুছতে চাইলে এই ফাইল আর boot.js-এর একটা লাইন সরালেই হয়।
    ========================================================= */
 
-const HG_DEMO_NAMES = ['সাকিব', 'রাফি', 'মিম', 'তানভীর'];
+const HG_DEMO_NAMES = ['সাকিব', 'রাফি', 'মিম', 'তানভীর', 'নাফিস'];
 function hgDemoBuild() {
   const T = n => Math.round(n * 100);
   const dAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return dateOf(d.getTime()); };
@@ -25,25 +25,27 @@ function hgDemoBuild() {
   /* ---- ইভেন্ট ১: ভ্রমণ (চলমান, সব ফিচারের নমুনা) ---- */
   const trip = { id: 'demo-ev1', demo: true, name: "[Demo] Cox's Bazar Trip", type: 'tour', start: dAgo(4), end: dAgo(2), location: "Cox's Bazar", notes: 'ডেমো ডেটা: শুধু দেখার জন্য / Demo data for inspection',
     status: 'active', createdAt: now, updatedAt: now, cats: hgCatsFor('tour'), participants: mkPeople(HG_DEMO_NAMES), expenses: [], transfers: [], refunds: [], decisions: [], history: [] };
-  const [S, R, M, N] = trip.participants.map(p => p.id);
-  const all = [S, R, M, N];
+  const [S, R, M, N, X] = trip.participants.map(p => p.id);
+  X && (trip.participants[4].joinedOn = dAgo(3)); // নাফিস দ্বিতীয় দিনে যোগ দিয়েছে, প্রথম দিনের খরচে নেই
+  const all = [S, R, M, N], all5 = [S, R, M, N, X];
   exp(trip, { title: 'বাসভাড়া / Bus tickets', category: 'transport', date: dAgo(4), total: T(6400), payers: [{ pid: S, amt: T(6400) }], method: 'equal', spec: { incl: all, values: {} } });
   exp(trip, { title: 'হোটেল রুম / Hotel rooms', category: 'hotel', date: dAgo(4), total: T(10000), payers: [{ pid: R, amt: T(6000) }, { pid: M, amt: T(4000) }], method: 'ratio', spec: { incl: all, values: { [S]: 2, [R]: 2, [M]: 2, [N]: 1 } },
     desc: '২ রুম × ২ রাত × ২,৫০০; তানভীর ১ রাত ছিল', meta: { rooms: '2', nights: '2', rate: '2500' } });
-  exp(trip, { title: 'সৈকতে দুপুরের খাবার / Beach lunch', category: 'food', date: dAgo(3), total: T(3300), payers: [{ pid: M, amt: T(3300) }], method: 'selected', spec: { incl: [S, R, M], values: {} }, desc: 'তানভীর খায়নি' });
+  exp(trip, { title: 'সৈকতে দুপুরের খাবার / Beach lunch', category: 'food', date: dAgo(3), total: T(3300), payers: [{ pid: M, amt: T(3300) }], method: 'selected', spec: { incl: [S, R, M, X], values: {} }, desc: 'তানভীর খায়নি' });
   exp(trip, { title: 'ঘোরাঘুরির টিকেট / Tickets', category: 'tickets', date: dAgo(3), total: T(1200), payers: [{ pid: N, amt: T(1200) }], method: 'custom', spec: { incl: all, values: { [S]: T(400), [R]: T(300), [M]: T(300), [N]: T(200) } } });
   const bill = { items: [
     { id: 'i1', name: 'Grilled fish', unit: T(1200), qty: 1, type: 'individual', orderedBy: R, status: 'ok' },
     { id: 'i2', name: 'Chicken biryani', unit: T(450), qty: 2, type: 'shared', multi: true, sharers: [S, M], weights: { [S]: 1, [M]: 1 }, status: 'ok' },
-    { id: 'i3', name: 'Seafood platter', unit: T(1800), qty: 1, type: 'shared', sharers: all, weights: {}, status: 'ok' },
-    { id: 'i4', name: 'Soft drink', unit: T(60), qty: 4, type: 'shared', multi: true, sharers: all, weights: { [S]: 1, [R]: 1, [M]: 1, [N]: 1 }, status: 'ok' },
+    { id: 'i3', name: 'Seafood platter', unit: T(1800), qty: 1, type: 'shared', sharers: all5, weights: {}, status: 'ok' },
+    { id: 'i4', name: 'Soft drink', unit: T(60), qty: 5, type: 'shared', multi: true, sharers: all5, weights: { [S]: 1, [R]: 1, [M]: 1, [N]: 1, [X]: 1 }, status: 'ok' },
     { id: 'i5', name: 'Dessert (cancelled)', unit: T(300), qty: 1, type: 'individual', orderedBy: N, status: 'cancelled' },
   ], charges: [
     { id: 'c1', kind: 'discount', name: 'Promo discount', amt: T(200), scope: null, method: 'proportional', values: {} },
     { id: 'c2', kind: 'charge', name: 'VAT 15%', amt: T(591), scope: null, method: 'proportional', values: {} },
   ] };
-  const b = hgBill(bill, all);
+  const b = hgBill(bill, all5);
   exp(trip, { title: 'Sea Pearl ডিনার / Dinner', category: 'food', date: dAgo(3), total: b.total, payers: [{ pid: S, amt: b.total }], method: 'bill', mode: 'bill', spec: {}, bill, billActual: b.total, desc: 'আইটেম অনুযায়ী বিল' });
+  exp(trip, { title: 'স্যুভেনির / Souvenirs', category: 'shopping', date: dAgo(2), total: T(2500), payers: [{ pid: R, amt: T(2500) }], method: 'equal', spec: { incl: all5, values: {} }, desc: 'শেষ দিনে কেনাকাটা' });
   trip.refunds.push({ id: 'demo-r1', expenseId: 'demo-e2', amt: T(500), by: R, date: dAgo(2), note: 'এক রাতের আংশিক ফেরত', createdAt: now });
   trip.transfers.push({ id: 'demo-t1', kind: 'advance', from: N, to: S, amt: T(2000), date: dAgo(5), note: '', purpose: 'বাস বুকিংয়ের অ্যাডভান্স', createdAt: now, status: 'confirmed' });
   trip.transfers.push({ id: 'demo-t2', kind: 'settlement', from: N, to: R, amt: T(1000), date: dAgo(1), note: 'আংশিক পরিশোধ', purpose: '', createdAt: now, status: 'confirmed' });

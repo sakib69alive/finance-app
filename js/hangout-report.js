@@ -48,6 +48,7 @@ function hgMemoHtml(ev) {
       exps.map(e => `<tr><td>${fmtDate(e.date)}</td><td>${hgEsc(e.title)}${per[e.id] && per[e.id].refund ? `<br><span class="sm">${L('রিফান্ড', 'refund')} −${hgM(per[e.id].refund)}</span>` : ''}</td><td>${hgEsc(hgCatLabel(ev, e.category))}</td><td>${e.payers.map(p => `${hgEsc(pName(ev, p.pid))} ${hgM(p.amt)}`).join('<br>')}</td><td class="n">${hgM(e.total)}</td></tr>`).join('')
       + `<tr class="tt"><td colspan="4">${L('মোট (গ্রস)', 'Gross total')}</td><td class="n">${hgM(c.gross)}</td></tr>`) : `<p class="sm">${L('কোনো খরচ নেই', 'No expenses')}</p>`}
     ${bills ? `<h3>${L('৩. রেস্টুরেন্ট বিল (আইটেম অনুযায়ী)', '3. Restaurant bills (item-wise)')}</h3>${bills}` : ''}
+    ${hgWhereMemo(ev, c)}
     <h3>${L('৪. কার কত অংশ ও কে কত দিয়েছে', '4. Shares and payments')}</h3>
     ${t([L('নাম', 'Name'), L('তার অংশ', 'Share'), L('দিয়েছে', 'Paid'), L('অ্যাডভান্স', 'Advance'), L('কন্ট্রিবিউশন', 'Contribution')],
       rows.map(r => `<tr><td>${hgEsc(r.p.name)}</td><td class="n">${hgM(r.share)}</td><td class="n">${hgM(r.paid)}</td><td class="n">${hgSigned(r.adv)}</td><td class="n">${hgSigned(r.contrib)}</td></tr>`).join(''))}
@@ -95,6 +96,11 @@ function hgShareText(ev, full) {
     const exps = ev.expenses.filter(e => !e.del);
     if (exps.length) { lines.push(`*${L('খরচ', 'Expenses')}*`); exps.forEach(e => lines.push(`- ${e.title}: ${hgM(e.total)} (${e.payers.map(p => pName(ev, p.pid) + ' ' + hgM(p.amt)).join(', ')})`)); lines.push(''); }
   }
+  if (full) {
+    const cats = hgCatsSorted(c.catTotals);
+    if (cats.length) { lines.push(`*${L('টাকা কোথায় গেল', 'Where the money went')}*`); cats.forEach(([k, v]) => lines.push(`- ${hgCatLabel(ev, k)}: ${hgM(v)}`)); lines.push(''); }
+    if (c.days.length > 1) { lines.push(`*${L('দিন অনুযায়ী', 'Day by day')}*`); c.days.forEach(d => lines.push(`- ${hgDayLabel(ev, d)}: ${hgM(c.byDay[d].total)}`)); lines.push(''); }
+  }
   lines.push(`*${L('কার কী অবস্থা', 'Who stands where')}*`);
   rows.forEach(r => lines.push(`- ${r.p.name}: ${L('অংশ', 'share')} ${hgM(r.share)}, ${L('দিয়েছে', 'paid')} ${hgM(r.paid)} => ${hgFinalText(r.fin)} [${hgPStatusLabel(r.st)}]${r.waivedFor ? ` (${L('মওকুফ', 'waived')} ${hgM(r.waivedFor)})` : ''}${r.waivedBy ? ` (${L('ছেড়েছে', 'forgave')} ${hgM(r.waivedBy)})` : ''}`));
   if (c.suggestions.length) { lines.push(''); lines.push(`*${L('কে কাকে দেবে', 'Who pays whom')}*`); c.suggestions.forEach(s => lines.push(`- ${pName(ev, s.from)} -> ${pName(ev, s.to)}: ${hgM(s.amt)}`)); }
@@ -125,7 +131,8 @@ function hgReportSheet(kind) {
   openSheet(`${sheetHead(kind === 'slip' ? L('সামারি স্লিপ', 'Summary slip') : L('পূর্ণ মেমো', 'Full memo'), L('এক্সপোর্টের আগে দেখে নিন', 'Preview before exporting'))}
     <div class="hg-actions three"><button type="button" class="btn primary" data-action="hg-rep-print">${icon('doc', 18)} PDF</button>
       <button type="button" class="btn" data-action="hg-rep-copy">${icon('share', 18)} ${L('টেক্সট কপি', 'Copy text')}</button><button type="button" class="btn" data-action="hg-rep-share">${icon('share', 18)} ${L('শেয়ার', 'Share')}</button></div>
-    <p class="hint">${L('PDF: খোলা পেজ থেকে প্রিন্ট ডায়ালগে "PDF হিসেবে সেভ" বাছুন। মোবাইল ও ডেস্কটপ দুটোতেই চলে।', 'PDF: in the print dialog choose "Save as PDF". Works on mobile and desktop.')}</p>
+    <p class="hint">${L('PDF বাটনে চাপলে ফাইল নিজে নেমে যাবে। ফোনে শেয়ার সুবিধা থাকলে নিচে "PDF পাঠান" দিয়ে সরাসরি পাঠানো যায়।', 'Tap PDF and the file downloads. On phones with file sharing you can send it with "Send PDF" below.')}</p>
+    ${navigator.canShare ? `<button type="button" class="btn block" data-action="hg-pdf-send">📤 ${L('PDF পাঠান', 'Send PDF')}</button>` : ''}
     <div class="hg-preview">${html}</div>`);
 }
 async function hgCopy(text) {
@@ -144,7 +151,6 @@ Object.assign(ACTIONS, {
   },
   'hg-text-copy': async () => { const ta = $('.hg-text'); toast((await hgCopy(ta.value)) ? L('কপি হয়েছে', 'Copied') : L('কপি করা যায়নি, টেক্সট চেপে ধরে কপি করুন', 'Could not copy, long-press the text to copy it'), ''); },
   'hg-text-share': async () => { const ta = $('.hg-text'); try { if (navigator.share) { await navigator.share({ text: ta.value }); return; } } catch (e) { if (e && e.name === 'AbortError') return; } toast((await hgCopy(ta.value)) ? L('শেয়ার সাপোর্ট নেই, কপি করা হয়েছে', 'Sharing is not supported; copied instead') : L('কপি করা যায়নি', 'Could not copy'), ''); },
-  'hg-rep-print': () => { const ev = hgCur(); if (!ev) return; hgOpenPrint(hgRepKind === 'slip' ? hgSlipHtml(ev) : hgMemoHtml(ev), `${ev.name} ${hgRepKind === 'slip' ? 'summary' : 'memo'}`); },
   'hg-rep-copy': async () => { const ev = hgCur(); if (!ev) return; toast((await hgCopy(hgShareText(ev, hgRepKind !== 'slip'))) ? L('কপি হয়েছে', 'Copied') : L('কপি করা যায়নি', 'Could not copy')); },
   'hg-rep-share': async () => {
     const ev = hgCur(); if (!ev) return; const txt = hgShareText(ev, hgRepKind !== 'slip');
@@ -291,4 +297,25 @@ registerModule({
     { id: 'settle', icon: 'check', label: () => L('মেটানো', 'Settle'), view: ({ ev, c }) => hgSettleTab(ev, c) },
     { id: 'more', icon: 'grid', label: () => L('আরও', 'More'), view: ({ ev, c }) => hgMoreTab(ev, c) },
   ],
+});
+
+function hgWhereMemo(ev, c) {
+  const cats = hgCatsSorted(c.catTotals).slice(0, 8);
+  if (!cats.length) return '';
+  const t = (head, body) => `<table class="rt"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
+  const rows = ev.participants.map(p => `<tr><td>${hgEsc(p.name)}${p.joinedOn ? `<br><span class="sm">${hgEsc(hgDayLabel(ev, p.joinedOn))} ${L('থেকে', 'onward')}</span>` : ''}</td>${cats.map(([k]) => `<td class="n">${c.byPersonCat[p.id][k] ? hgM(c.byPersonCat[p.id][k]) : '—'}</td>`).join('')}<td class="n"><b>${hgM(c.share[p.id])}</b></td></tr>`).join('');
+  const days = c.days.length > 1 ? `<h4>${L('দিন অনুযায়ী খরচ', 'Day by day')}</h4>` + t([L('দিন', 'Day'), L('তারিখ', 'Date'), L('খরচ', 'Items'), L('বড় খাত', 'Main categories'), L('মোট', 'Total')],
+    c.days.map(d => `<tr><td>${hgEsc(hgDayLabel(ev, d))}</td><td>${d ? fmtDate(d) : ''}</td><td class="n">${c.byDay[d].count}</td><td>${hgCatsSorted(c.byDay[d].byCat).slice(0, 3).map(([k, v]) => hgEsc(hgCatLabel(ev, k)) + ' ' + hgM(v)).join(', ')}</td><td class="n">${hgM(c.byDay[d].total)}</td></tr>`).join('')) : '';
+  return `<h3>${L('টাকা কোথায় গেল', 'Where the money went')}</h3>${t([L('খাত', 'Category'), L('মোট', 'Total'), '%'], hgCatsSorted(c.catTotals).map(([k, v]) => `<tr><td>${hgEsc(hgCatLabel(ev, k))}</td><td class="n">${hgM(v)}</td><td class="n">${pct(v / (c.net || 1) * 100)}</td></tr>`).join(''))}
+    <h4>${L('কে কোন খাতে কত বহন করেছে', 'What each person carried, by category')}</h4>${t([L('নাম', 'Name')].concat(cats.map(([k]) => hgEsc(hgCatLabel(ev, k)))).concat(L('মোট ভাগ', 'Share')), rows)}${days}`;
+}
+// সবচেয়ে ছোট কপি: কাকে কাকে কত দিতে হবে, টাকা দেওয়ার সময় সরাসরি কাজে লাগে
+function hgShortText(ev) {
+  const c = hgEventCalc(ev), lines = [`${ev.name}: ${hgM(c.net)}`];
+  if (c.suggestions.length) c.suggestions.forEach(s => lines.push(`${pName(ev, s.from)} -> ${pName(ev, s.to)}: ${hgM(s.amt)}`));
+  else lines.push(c.gross ? L('সবার হিসাব মিটে গেছে', 'Everyone is even') : L('এখনও কোনো খরচ নেই', 'No expenses yet'));
+  return lines.join('\n');
+}
+Object.assign(ACTIONS, {
+  'hg-copy-short': async () => { const ev = hgCur(); if (ev) toast((await hgCopy(hgShortText(ev))) ? L('কপি হয়েছে, পেস্ট করে পাঠান', 'Copied, paste and send') : L('কপি করা যায়নি', 'Could not copy')); },
 });

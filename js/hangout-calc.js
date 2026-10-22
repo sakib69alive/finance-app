@@ -256,6 +256,7 @@ function hgEventCalc(ev) {
   const paid = zero(), share = zero(), refundGot = zero(), out = zero(), inn = zero();
   const per = [], issues = [];
   const catTotals = {};
+  const byPersonCat = Object.fromEntries(ids.map(id => [id, {}])), byPersonDay = Object.fromEntries(ids.map(id => [id, {}])), byDay = {};
   let gross = 0, refundTotal = 0;
   for (const e of exps) {
     const r = hgExpenseAlloc(ev, e);
@@ -281,6 +282,16 @@ function hgEventCalc(ev) {
     const cat = e.category || 'other';
     catTotals[cat] = (catTotals[cat] || 0) + e.total - Math.min(refSum, e.total);
     per.push({ id: e.id, total: e.total, refund: Math.min(refSum, e.total), net: e.total - Math.min(refSum, e.total), alloc, netAlloc: net, ok: r.ok, error: r.error });
+    // কে কোন খাতে আর কোন দিনে কত বহন করল (রিফান্ড বাদ দিয়ে), এভাবে "টাকা কোথায় গেল" বোঝা যায়
+    const day = e.date || '';
+    const dd = byDay[day] || (byDay[day] = { total: 0, byCat: {}, count: 0 });
+    dd.total += e.total - Math.min(refSum, e.total); dd.count++;
+    dd.byCat[cat] = (dd.byCat[cat] || 0) + e.total - Math.min(refSum, e.total);
+    ids.forEach(id => {
+      const v = net[id] || 0; if (!v) return;
+      byPersonCat[id][cat] = (byPersonCat[id][cat] || 0) + v;
+      byPersonDay[id][day] = (byPersonDay[id][day] || 0) + v;
+    });
   }
   // টাকা লেনদেন: advance, contribution, settlement একই প্রভাব ফেলে, শুধু শ্রেণি আলাদা
   const byKind = { advance: zero(), contribution: zero(), settlement: zero() };
@@ -302,7 +313,7 @@ function hgEventCalc(ev) {
   const netExp = gross - refundTotal;
   return {
     ids, per, paid, share, refundGot, out, inn, byKind, inKind, base, pre, adj: dec.adj, waivedFor: dec.waivedFor, waivedBy: dec.waivedBy,
-    applied: dec.applied, final, gross, refundTotal, net: netExp, catTotals, issues, balanced: finalSum === 0 && baseSum === 0,
+    applied: dec.applied, final, gross, refundTotal, net: netExp, catTotals, byPersonCat, byPersonDay, byDay, days: Object.keys(byDay).sort(), issues, balanced: finalSum === 0 && baseSum === 0,
     suggestions: hgSuggest(final),
   };
 }

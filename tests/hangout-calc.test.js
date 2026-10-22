@@ -321,4 +321,29 @@ t('plan: contributions collected are tracked against the target', () => {
 });
 t('plan: no plan or zero budget gives null', () => { const ev = planEv(); delete ev.plan; assert.strictEqual(hgPlanCalc(ev, hgEventCalc(ev), null), null); });
 
+
+// ---- টাকা কোথায় গেল: খাত, দিন, ব্যক্তিভিত্তিক ----
+t('breakdown: per-person-by-category and per-day totals add up to the net expense, refunds included', () => {
+  const ev = mkEv(['a', 'b']);
+  const e1 = exp('e1', T(3000), [{ pid: 'a', amt: T(3000) }], 'equal', { incl: ['a', 'b'] }, 'room'); e1.date = '2026-10-10';
+  const e2 = exp('e2', T(1000), [{ pid: 'b', amt: T(1000) }], 'exact', { values: { a: T(250), b: T(750) } }, 'food'); e2.date = '2026-10-11';
+  ev.expenses.push(e1, e2); ev.refunds.push({ id: 'r', expenseId: 'e1', amt: T(500), by: 'a' });
+  const c = hgEventCalc(ev);
+  assert.deepStrictEqual(c.days, ['2026-10-10', '2026-10-11']);
+  assert.strictEqual(c.byDay['2026-10-10'].total, T(2500)); assert.strictEqual(c.byDay['2026-10-11'].byCat.food, T(1000));
+  assert.deepStrictEqual(c.byPersonCat.a, { room: T(1250), food: T(250) }); assert.deepStrictEqual(c.byPersonCat.b, { room: T(1250), food: T(750) });
+  const sumPC = Object.values(c.byPersonCat).reduce((s, o) => s + Object.values(o).reduce((x, y) => x + y, 0), 0);
+  assert.strictEqual(sumPC, c.net); assert.strictEqual(Object.values(c.byDay).reduce((s, d) => s + d.total, 0), c.net);
+  assert.strictEqual(c.byPersonDay.b['2026-10-11'], T(750));
+});
+t('late joiner: an expense that lists only the people present leaves the newcomer out entirely', () => {
+  const ev = mkEv(['a', 'b', 'c']); // c দ্বিতীয় দিনে যোগ দিয়েছে
+  const d1 = exp('d1', T(900), [{ pid: 'a', amt: T(900) }], 'selected', { incl: ['a', 'b'] }, 'hotel'); d1.date = '2026-10-10';
+  const d2 = exp('d2', T(900), [{ pid: 'a', amt: T(900) }], 'equal', { incl: ['a', 'b', 'c'] }, 'hotel'); d2.date = '2026-10-11';
+  ev.expenses.push(d1, d2);
+  const c = hgEventCalc(ev);
+  assert.deepStrictEqual(c.share, { a: T(450) + T(300), b: T(450) + T(300), c: T(300) });
+  assert.strictEqual(c.byPersonDay.c['2026-10-10'], undefined); assert.ok(c.balanced);
+});
+
 console.log(`\n${passed} tests passed`);
