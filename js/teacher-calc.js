@@ -55,6 +55,7 @@ function tcNormalize(t) {
   if (!b.budget || typeof b.budget !== 'object') b.budget = { total: 0, cats: {} };
   if (!b.budget.cats || typeof b.budget.cats !== 'object') b.budget.cats = {};
   b.students.forEach(s => { if (!Array.isArray(s.subjects)) s.subjects = []; if (!Array.isArray(s.docs)) s.docs = []; });
+  b.exams.forEach(e => { if (!e.results || typeof e.results !== 'object') e.results = {}; if (!Array.isArray(e.studentIds)) e.studentIds = []; });
   b.jobs.forEach(j => { if (!Array.isArray(j.salary)) j.salary = []; if (!Array.isArray(j.sched)) j.sched = []; });
   b.expenses.forEach(e => { if (!Array.isArray(e.photos)) e.photos = []; });
   return b;
@@ -293,6 +294,109 @@ function tcEntityMonths(t, f) {
   return Object.values(rows).sort((a, b) => b.ym.localeCompare(a.ym)).map(r => Object.assign(r, { net: r.earned - r.exp }));
 }
 
+/* =========================================================
+   সব শিক্ষার্থী, ব্যাচের আর্থিক হিসাব, উপস্থিতি, ফি আদায় ও পরীক্ষার ফল
+   (সবই পেমেন্ট ও রেকর্ড থেকে প্রতিবার নতুন করে হিসাব হয়, কোথাও জমানো থাকে না, তাই কিছু বদলালেই সব অঙ্ক বদলে যায়)
+   ========================================================= */
+// একজন শিক্ষার্থীর সব ফি: মোট ঠিক করা, পেয়েছি, বাকি, সময় পার, অবস্থা (paid / partial / unpaid / overdue / none)
+function tcStuFin(t, sid, td, x) {
+  x = x || tcCtx(t);
+  const items = [];
+  x.incomes.filter(i => i.c.studentId === sid).forEach(i => {
+    const st = tcItemState(x, i.id, 'in', td);
+    items.push({ id: i.id, ym: i.ym, kind: i.kind, src: i.src, batchId: i.c.batchId || '', ref: i.c.ref, amt: i.amt, paid: st.paid, rem: st.rem, status: st.status, due: i.due });
+  });
+  items.sort((a, b) => b.ym.localeCompare(a.ym) || b.id.localeCompare(a.id));
+  const agreed = tcSum(items.map(i => i.amt)), paid = tcSum(items.map(i => Math.min(i.amt, i.paid))), due = tcSum(items.map(i => i.rem));
+  const overdue = tcSum(items.filter(i => i.status === 'overdue').map(i => i.rem));
+  const status = !items.length || agreed <= 0 ? 'none' : due <= 0 ? 'paid' : overdue > 0 ? 'overdue' : paid > 0 ? 'partial' : 'unpaid';
+  const ids = new Set(items.map(i => i.id));
+  const pays = (t.pays || []).filter(p => p.side === 'in' && ids.has(p.ref)).sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
+  return { agreed, paid, due, overdue, status, items, pays };
+}
+// ক্লাসে উপস্থিতি: ব্যাচ (উপস্থিত/অনুপস্থিত) ও নিজের প্রাইভেট বিষয় (সম্পন্ন/অনুপস্থিত) মিলিয়ে
+const tcEffDate = s => (s.extra ? (s.status === 'done' ? s.date : null) : s.status === 'done' ? s.date : (s.status === 'postponed' && s.movedTo && s.mst === 'done' ? s.movedTo.date : null));
+function tcStuAtt(t, sid) {
+  const enrs = tcLive(t.enrolls).filter(e => e.studentId === sid), st = tcLive(t.students).find(z => z.id === sid), subIds = new Set(((st && st.subjects) || []).filter(u => !u.del).map(u => u.id));
+  let present = 0, absent = 0; const byBatch = {};
+  tcLive(t.sessions).forEach(s => {
+    if (subIds.has(s.slotId)) { if (s.status === 'absent') absent++; else if (s.status === 'done') present++; return; }
+    const eff = tcEffDate(s); if (!eff) return;
+    const ym = tcYm(eff), en = enrs.find(e => e.batchId === s.slotId && ym >= e.from && (!e.to || ym <= e.to)); if (!en) return;
+    const b = byBatch[s.slotId] || (byBatch[s.slotId] = { present: 0, absent: 0 });
+    if (s.att && s.att[sid] === 'a') { absent++; b.absent++; } else { present++; b.present++; }
+  });
+  const total = present + absent;
+  return { present, absent, total, pct: total ? Math.round(present * 100 / total) : null, byBatch };
+}
+// ব্যাচের প্রতিটা ক্লাসের দিন: কে উপস্থিত, কে অনুপস্থিত (নতুন তারিখ আগে)
+function tcBatchDays(t, batchId) {
+  const out = [];
+  tcLive(t.sessions).filter(s => s.slotId === batchId).forEach(s => {
+    const eff = tcEffDate(s); if (!eff) return;
+    const ym = tcYm(eff), att = s.att || {}, roster = tcLive(t.enrolls).filter(e => e.batchId === batchId && ym >= e.from && (!e.to || ym <= e.to)).map(e => e.studentId);
+    Object.keys(att).forEach(id => { if (!roster.includes(id)) roster.push(id); });
+    const absent = roster.filter(id => att[id] === 'a'), present = roster.filter(id => att[id] !== 'a');
+    out.push({ date: eff, rec: s, roster, absent, present, total: roster.length, pct: roster.length ? Math.round(present.length * 100 / roster.length) : null });
+  });
+  return out.sort((a, b) => b.date.localeCompare(a.date));
+}
+function tcBatchAttSummary(t, batchId, ym) {
+  const days = tcBatchDays(t, batchId).filter(d => !ym || tcYm(d.date) === ym), per = {};
+  days.forEach(d => d.roster.forEach(id => { const r = per[id] || (per[id] = { sid: id, present: 0, absent: 0 }); if (d.absent.includes(id)) r.absent++; else r.present++; }));
+  const rows = Object.values(per).map(r => Object.assign(r, { pct: Math.round(r.present * 100 / ((r.present + r.absent) || 1)) }));
+  const tp = tcSum(days.map(d => d.present.length)), tt = tcSum(days.map(d => d.total));
+  return { classes: days.length, rows, avgPct: tt ? Math.round(tp * 100 / tt) : null };
+}
+// ব্যাচ ধরে ফি: ঠিক করা, আদায়, বাকি; প্রতি শিক্ষার্থী আলাদা
+function tcBatchFin(t, batchId, td, x) {
+  x = x || tcCtx(t);
+  const per = {};
+  x.incomes.filter(i => i.c.batchId === batchId).forEach(i => {
+    const st = tcItemState(x, i.id, 'in', td), sid = i.c.studentId || '', r = per[sid] || (per[sid] = { sid, agreed: 0, paid: 0, due: 0, overdue: 0, n: 0 });
+    r.agreed += i.amt; r.paid += Math.min(i.amt, st.paid); r.due += st.rem; if (st.status === 'overdue') r.overdue += st.rem; r.n++;
+  });
+  const rows = Object.values(per).map(r => Object.assign(r, { status: r.agreed <= 0 ? 'none' : r.due <= 0 ? 'paid' : r.overdue > 0 ? 'overdue' : r.paid > 0 ? 'partial' : 'unpaid' }));
+  return { rows, agreed: tcSum(rows.map(r => r.agreed)), collected: tcSum(rows.map(r => r.paid)), due: tcSum(rows.map(r => r.due)), overdue: tcSum(rows.map(r => r.overdue)) };
+}
+// সব শিক্ষার্থী এক তালিকায় (প্রাইভেট + ব্যাচ), ফি-উপস্থিতিসহ
+function tcAllStudents(t, td) {
+  const x = tcCtx(t), curYm = tcYm(td);
+  return tcLive(t.students).map(s => {
+    const subs = tcLive(s.subjects).filter(u => u.active !== false), enrs = tcLive(t.enrolls).filter(e => e.studentId === s.id && (!e.to || e.to >= curYm) && x.bat[e.batchId]);
+    const batches = enrs.map(e => ({ id: e.batchId, name: x.bat[e.batchId].name, enrollId: e.id }));
+    const kind = subs.length && batches.length ? 'both' : subs.length ? 'private' : batches.length ? 'batch' : 'none';
+    return { s, kind, subjects: subs, batches, fin: tcStuFin(t, s.id, td, x), att: tcStuAtt(t, s.id) };
+  });
+}
+// টাকা নিলে সবচেয়ে পুরোনো বকেয়া থেকে ভরাট (একই ফি দুবার ধরা হয় না, বাড়তি থাকলে left-এ দেখায়)
+function tcCollectPlan(t, sid, amt, td, batchId) {
+  const fin = tcStuFin(t, sid, td), open = fin.items.filter(i => i.rem > 0 && (!batchId || i.batchId === batchId)).sort((a, b) => a.ym.localeCompare(b.ym) || (a.due || '').localeCompare(b.due || '') || a.id.localeCompare(b.id));
+  let left = Math.max(0, amt || 0); const lines = [];
+  open.forEach(i => { if (left <= 0) return; const a = Math.min(left, i.rem); lines.push({ id: i.id, ym: i.ym, kind: i.kind, amt: a, rem: i.rem - a }); left -= a; });
+  return { lines, used: (amt || 0) - left, left, total: tcSum(open.map(i => i.rem)) };
+}
+
+/* ---------- পরীক্ষার ফল (নম্বর সাধারণ সংখ্যা, টাকা নয়) ---------- */
+function tcExamRoster(t, ex) {
+  const ym = tcYm(ex.date), ids = new Set(ex.studentIds || []);
+  if (ex.batchId) tcLive(t.enrolls).forEach(e => { if (e.batchId === ex.batchId && ym >= e.from && (!e.to || ym <= e.to)) ids.add(e.studentId); });
+  Object.keys(ex.results || {}).forEach(id => ids.add(id));
+  const stu = {}; tcLive(t.students).forEach(s => { stu[s.id] = s; });
+  return [...ids].filter(id => stu[id]).map(id => stu[id]).sort((a, b) => a.name.localeCompare(b.name));
+}
+function tcExamSummary(t, ex) {
+  const total = tcNum(ex.marks) || 0, pass = ex.pass > 0 ? ex.pass : 33, res = ex.results || {};
+  const rows = tcExamRoster(t, ex).map(s => { const has = res[s.id] !== undefined && res[s.id] !== '' && res[s.id] !== null, m = has ? tcNum(res[s.id]) : null; return { sid: s.id, name: s.name, marks: m, pct: has && total ? Math.round(m / total * 1000) / 10 : null }; });
+  const graded = rows.filter(r => r.marks != null).sort((a, b) => b.marks - a.marks);
+  graded.forEach((r, i) => { r.rank = i && graded[i - 1].marks === r.marks ? graded[i - 1].rank : i + 1; });
+  const sumM = tcSum(graded.map(r => r.marks));
+  return { total, pass, rows, graded: graded.length, missing: rows.length - graded.length, avg: graded.length ? Math.round(sumM / graded.length * 10) / 10 : null, high: graded.length ? graded[0].marks : null, low: graded.length ? graded[graded.length - 1].marks : null, passed: total ? graded.filter(r => r.marks / total * 100 >= pass).length : 0 };
+}
+function tcStuResults(t, sid) {
+  return tcLive(t.exams).map(ex => { const sm = tcExamSummary(t, ex), r = sm.rows.find(z => z.sid === sid); return r ? { ex, marks: r.marks, pct: r.pct, rank: r.rank || null, of: sm.graded, total: sm.total } : null; }).filter(Boolean).sort((a, b) => b.ex.date.localeCompare(a.ex.date));
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { tcMinor, tcFormat, tcShow, tcRaw, tcYm, tcYmAdd, tcYmIdx, tcLastDay, tcDate, tcDayKey, tcShift, tcRateAt, tcRateSet, tcBlank, tcNormalize, tcCtx, tcPlan, tcMonth, tcYear, tcBudget, tcExamCost, tcStatus, tcItemState, tcSlots, tcDay, tcUpcoming, tcMonthCal, tcEntityMonths, tcAttendance, tcBatchAttendance, tcStudentOk, tcOccur, tcSrcOf, tcSessKey };
+  module.exports = { tcMinor, tcFormat, tcShow, tcRaw, tcYm, tcYmAdd, tcYmIdx, tcLastDay, tcDate, tcDayKey, tcShift, tcRateAt, tcRateSet, tcBlank, tcNormalize, tcCtx, tcPlan, tcMonth, tcYear, tcBudget, tcExamCost, tcStatus, tcItemState, tcSlots, tcDay, tcUpcoming, tcMonthCal, tcEntityMonths, tcAttendance, tcBatchAttendance, tcStudentOk, tcOccur, tcSrcOf, tcSessKey, tcStuFin, tcStuAtt, tcBatchDays, tcBatchAttSummary, tcBatchFin, tcAllStudents, tcCollectPlan, tcExamRoster, tcExamSummary, tcStuResults };
 }

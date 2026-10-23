@@ -258,8 +258,8 @@ function hgFriendsSheet() {
   const cntEv = f => hgEvents().filter(ev => ev.participants.some(p => p.friendId === f.id)).length;
   return `${sheetHead(L('সেভ করা বন্ধুরা', 'Saved friends'), L('নতুন ইভেন্টে আবার বাছতে পারবেন', 'Reuse them in new events'))}
     <button type="button" class="btn primary block" data-action="hg-add-friend">${icon('plus', 18)} ${L('বন্ধু যোগ করুন', 'Add friend')}</button>
-    ${list.length ? `<div class="list mt12">${list.map(f => `<button type="button" class="lrow" data-action="hg-edit-friend" data-id="${f.id}"><span class="lic">${esc(f.name.charAt(0).toUpperCase())}</span>
-      <span class="lmain"><b>${esc(f.name)}</b><small>${f.phone ? '📞 ' + esc(f.phone) + ' · ' : ''}${cntEv(f)} ${L('ইভেন্ট', 'events')}</small></span>${icon('chev', 18)}</button>`).join('')}</div>`
+    ${list.length ? `<div class="list mt12">${list.map(f => `<div class="lwrap"><button type="button" class="lrow" data-action="hg-edit-friend" data-id="${f.id}"><span class="lic">${esc(f.name.charAt(0).toUpperCase())}</span>
+      <span class="lmain"><b>${esc(f.name)}</b><small>${f.phone ? '📞 ' + esc(f.phone) + ' · ' : ''}${cntEv(f)} ${L('ইভেন্ট', 'events')}</small></span>${icon('chev', 18)}</button>${rowTools('hg-edit-friend', 'hg-del-friend', f.id)}</div>`).join('')}</div>`
       : `<p class="hint">${L('এখনও কেউ সেভ নেই। ইভেন্টে বন্ধু যোগ করলে এখানে জমা হয়।', 'No one saved yet. Friends you add to events are saved here.')}</p>`}
     <p class="hint">${L('এখানে নাম বদলালে পুরোনো ইভেন্টের নাম বদলায় না।', 'Renaming here never changes past events.')}</p>`;
 }

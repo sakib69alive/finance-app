@@ -73,6 +73,8 @@ function compute(b) {
   const cod = clamp(toNum(b.codRate), 0, 50) / 100;
   const factor = (1 - r) * (1 - cod);
 
+  // "প্রতি ইউনিটে" খরচ: ইউনিট বদলালে মোট খরচও সাথে সাথে বদলায় (আগে সেভের সময়ের অঙ্কই আটকে থাকত)
+  b.expenses.forEach(e => { if (e.perUnit && toNum(e.perUnitAmount) > 0) e.amount = toNum(e.perUnitAmount) * expenseUnits(b, e.productId); });
   const items = b.products.map(p => {
     const units = Math.max(0, Math.floor(toNum(p.units)));
     const purchase = units * toNum(p.unitCost);
@@ -787,7 +789,7 @@ function viewProducts(b, c) {
         <div><small>${L('ইউনিটে লাভ', 'Profit/unit')}</small><b class="${x.unitProfit >= 0 ? 'pos' : 'neg'}">${fmt(x.unitProfit)}</b></div>
       </div>
       <div class="stockbar"><span class="s-sold" style="width:${soldW}%"></span><span class="s-pend" style="width:${pendW}%"></span></div>
-      <div class="pc-actions"><span class="muted">${L('ট্যাপ করে বিস্তারিত দেখুন', 'Tap for details')}</span>${delBtn('delete-product', x.p.id).replace('class="rowdel"', 'class="rowdel inline"')}</div>
+      <div class="pc-actions"><span class="muted">${L('ট্যাপ করে বিস্তারিত দেখুন', 'Tap for details')}</span>${rowTools('edit-product', 'delete-product', x.p.id)}</div>
     </div>`;
   }).join('');
   return `<div class="page-head"><h1>${L('প্রোডাক্ট', 'Products')}</h1>
@@ -799,9 +801,14 @@ function viewProducts(b, c) {
 }
 
 function productDetail(id) {
+  const h = productDetailHtml(id);
+  if (h) openSheet(h, () => productDetailHtml(id) || sheetHead(L('প্রোডাক্ট পাওয়া যায়নি', 'Product not found')));
+  else closeSheet();
+}
+function productDetailHtml(id) {
   const b = activeBatch(), c = compute(b);
   const x = c.items.find(i => i.p.id === id);
-  if (!x) return closeSheet();
+  if (!x) return '';
   const p = x.p;
   const order = ['product', 'shipping', 'ads', 'packaging', 'courier', 'returns', 'other'];
   const brk = order.filter(k => x.byCat[k] > 0.004).map(k => `<div><i class="dot" style="--c:var(--c-${k})"></i>
@@ -814,7 +821,7 @@ function productDetail(id) {
   const buyLine = p.currency && p.currency !== 'BDT'
     ? `${L('কেনা', 'Bought')} ${CUR[p.currency]}${esc(p.priceInput)}${p.priceMode === 'total' ? L(' মোট', ' total') : perU} × ${L('রেট', 'rate')} ${esc(p.rate)}`
     : `${L('কেনা', 'Bought')} ${fmt(toNum(p.unitCost))}${perU}`;
-  openSheet(`
+  return `
     <div class="sheet-head">${avatar(p, 'avatar lg')}
       <h3>${esc(p.name)}<small>${x.units} ${L('ইউনিট', 'units')} · ${buyLine}</small></h3>
       <button type="button" class="icon-btn" data-action="edit-product" data-id="${p.id}" aria-label="${L('এডিট', 'Edit')}">${icon('edit', 19)}</button>
@@ -860,7 +867,7 @@ function productDetail(id) {
       <button type="button" class="btn" data-action="add-expense" data-product="${p.id}">${icon('receipt', 18)} ${L('খরচ', 'Cost')}</button>
     </div>
     <button type="button" class="btn danger block mt8" data-action="delete-product" data-id="${p.id}">${icon('trash', 18)} ${L('প্রোডাক্ট ডিলিট', 'Delete product')}</button>
-  `);
+  `;
 }
 
 function simOut(c, x, price) {
@@ -967,7 +974,7 @@ function viewExpenses(b, c) {
       <span class="lmain"><b>${esc(e.note || cl(e.category))}</b>
         <small>${cl(e.category)} · ${esc(pname(e.productId))}</small></span>
       <span class="lend"><b>${fmt(toNum(e.amount))}</b><small>${fmtDate(e.date)}</small></span>
-    </button>${delBtn('delete-expense', e.id)}</div>`).join('');
+    </button>${rowTools('edit-expense', 'delete-expense', e.id)}</div>`).join('');
   const catRows = ['product', ...EXPENSE_CATS, 'returns'].filter(k => c.cat[k] > 0)
     .map(k => `<div><span>− ${cicon(k)} ${cl(k)}</span><span>${fmt(c.cat[k])}</span></div>`).join('');
   const usedPct = c.capital > 0 ? clamp(c.spent / c.capital * 100, 0, 100) : 0;
@@ -1043,7 +1050,7 @@ function viewSales(b, c) {
       <span class="lmain"><b>${esc(p ? p.name : L('মুছে ফেলা প্রোডাক্ট', 'Deleted product'))} × ${toNum(s.qty)}</b>
         <small><span class="badge ${s.status}">${statusLabel(s.status)}</span> ${esc(s.note || '')}</small></span>
       <span class="lend"><b class="${s.status === 'returned' ? 'neg' : ''}">${s.status === 'returned' ? fmt(-toNum(s.returnCost)) : fmt(gross)}</b><small>${fmtDate(s.date)}</small></span>
-    </button>${delBtn('delete-sale', s.id)}</div>`;
+    </button>${rowTools('edit-sale', 'delete-sale', s.id)}</div>`;
   }).join('');
   return `<div class="page-head"><h1>${L('বিক্রি', 'Sales')}</h1>
       <button type="button" class="btn primary sm" data-action="add-sale" ${b.products.length ? '' : 'disabled'}>${icon('plus', 18)} ${L('বিক্রি', 'Sale')}</button></div>
@@ -1113,15 +1120,16 @@ function saleForm(s, presetProduct) {
 function viewMore(b, c) {
   const mi = menuItem;
   return `<div class="page-head"><h1>${L('আরও', 'More')}</h1></div>
-    <div class="section-title">${L('ব্যবসা', 'Business')}</div>
-    <div class="menu">
-      ${mi('edit-batch', 'sliders', L('ব্যাচ সেটিংস', 'Batch settings'), `${L('মূলধন', 'Capital')} ${fmt(c.capital)} · ${L('টার্গেট', 'Target')} ${fmt(c.target)} · ${L('বাফার', 'Buffer')} ${toNum(b.returnRate)}%`)}
-      ${mi('batches', 'layers', L('সব ব্যাচ', 'All batches'), L(`${cnt(state.batches.length)} ব্যাচ · নতুন ব্যাচ শুরু করুন`, `${state.batches.length} batch(es) · start a new one`))}
-      ${mi('edit-budget', 'pie', L('বাজেট পরিকল্পনা', 'Budget plan'), L('খাতভিত্তিক % বা ৳ সীমা ও সতর্কতা', 'Limits per category in % or ৳, with warnings'))}
-      ${mi('calculator', 'calc', L('ব্যবসার পরিকল্পনা', 'Business planner'), L('মূলধনের ভাগ, দাম, টার্গেটে কয়টা বিক্রি লাগবে', 'Capital split, price, sales needed for your target'))}
-    </div>
-    <button type="button" class="btn danger block mt12" data-action="delete-batch" data-id="${b.id}">${icon('trash', 18)} ${L(`"${esc(b.name)}" ব্যাচ ডিলিট করুন`, `Delete batch "${esc(b.name)}"`)}</button>
-    ${appSections()}`;
+    ${menuGroup('💼 ' + L('এই ব্যাচের সেটিংস', 'Batch settings'), L('মূলধন, টার্গেট, বাজেট ঠিক করুন বা বদলান', 'Set or change capital, target and budget'),
+      `${mi('edit-batch', 'sliders', L('ব্যাচ সেটিংস', 'Batch settings'), `${L('মূলধন', 'Capital')} ${fmt(c.capital)} · ${L('টার্গেট', 'Target')} ${fmt(c.target)} · ${L('বাফার', 'Buffer')} ${toNum(b.returnRate)}%`)}
+      ${mi('edit-budget', 'pie', L('বাজেট পরিকল্পনা', 'Budget plan'), L('খাতভিত্তিক % বা ৳ সীমা ও সতর্কতা', 'Limits per category in % or ৳, with warnings'))}`)}
+    ${menuGroup('🧮 ' + L('হিসাব ও পরিকল্পনা', 'Plan & calculate'), L('কিছু সেভ হয় না, শুধু ভেবে দেখার জন্য', 'Nothing is saved, just for thinking it through'),
+      mi('calculator', 'calc', L('ব্যবসার পরিকল্পনা', 'Business planner'), L('মূলধনের ভাগ, দাম, টার্গেটে কয়টা বিক্রি লাগবে', 'Capital split, price, sales needed for your target')))}
+    ${menuGroup('📚 ' + L('ব্যাচ', 'Batches'), L('প্রতিটা ইনভেস্টমেন্ট রাউন্ড আলাদা ব্যাচ', 'Each investment round is its own batch'),
+      mi('batches', 'layers', L('সব ব্যাচ', 'All batches'), L(`${cnt(state.batches.length)} ব্যাচ · বদলান, মুছুন, নতুন শুরু করুন`, `${state.batches.length} batch(es) · edit, delete or start a new one`)))}
+    ${appSections()}
+    <div class="danger-zone"><small>${L('সাবধান: এই ব্যাচের সব প্রোডাক্ট, খরচ ও বিক্রি মুছে যাবে (সাথে সাথে ফিরিয়ে আনা যায়)।', 'Careful: this removes every product, cost and sale of this batch (you can undo right after).')}</small>
+      <button type="button" class="btn danger block" data-action="delete-batch" data-id="${b.id}">${icon('trash', 18)} ${L(`"${esc(b.name)}" ব্যাচ ডিলিট করুন`, `Delete batch "${esc(b.name)}"`)}</button></div>`;
 }
 
 const PRESETS = {
@@ -1204,7 +1212,7 @@ function batchesSheet() {
         <span class="lic">${b.id === state.activeBatchId ? `<span class="check-mark">${icon('check', 20)}</span>` : '📒'}</span>
         <span class="lmain"><b>${esc(b.name)}</b><small>${L('মূলধন', 'Capital')} ${fmt(c.capital)} → ${L('টার্গেট', 'target')} ${fmt(c.target)}</small></span>
         <span class="lend"><b>${c.target > 0 ? Math.round(clamp(c.cash / c.target, 0, 9.99) * 100) : 0}%</b><small>${L('পূরণ', 'done')}</small></span>
-      </button>${delBtn('delete-batch', b.id)}</div>`;
+      </button>${rowTools('edit-batch-id', 'delete-batch', b.id)}</div>`;
     }).join('')}</div>
     <button type="button" class="btn primary block mt12" data-action="new-batch">${icon('plus', 18)} ${L('নতুন ব্যাচ', 'New batch')}</button>`;
 }
@@ -1279,7 +1287,8 @@ Object.assign(ACTIONS, {
   batches: () => openSheet(batchesSheet()),
   'switch-batch': el => { state.activeBatchId = el.dataset.id; closeSheet(); commit(L('ব্যাচ বদলানো হয়েছে', 'Batch switched')); },
   'new-batch': () => openSheet(`${sheetHead(L('নতুন ব্যাচ', 'New batch'), L('নতুন ইনভেস্টমেন্ট রাউন্ড', 'A new investment round'))}${batchForm(null)}`),
-  'hero-detail': () => { const b = activeBatch(); openSheet(heroDetail(b, compute(b))); },
+  'hero-detail': () => { const b = activeBatch(); openSheet(heroDetail(b, compute(b)), () => { const bb = activeBatch(); return bb && heroDetail(bb, compute(bb)); }); },
+  'edit-batch-id': el => { state.activeBatchId = el.dataset.id; closeSheet(); render(); setTimeout(() => ACTIONS['edit-batch'](), 340); },
   'add-days': el => {
     const b = activeBatch();
     b.days = Math.max(0, Math.floor(toNum(b.days))) + Math.floor(toNum(el.dataset.n));
@@ -1341,7 +1350,9 @@ Object.assign(FORMS, {
     };
     const id = f.dataset.id;
     if (id) {
-      Object.assign(state.batches.find(b => b.id === id), data);
+      const cur = state.batches.find(b => b.id === id), oldCod = toNum(cur.codRate);
+      if (oldCod !== data.codRate) cur.sales.forEach(s => { if (s.cod == null || toNum(s.cod) === oldCod) s.cod = data.codRate; });
+      Object.assign(cur, data);
       closeSheet();
       commit(SAVED());
     } else {

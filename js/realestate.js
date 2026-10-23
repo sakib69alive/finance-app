@@ -55,7 +55,11 @@ const reV = (f, n) => (f.elements[n] ? String(f.elements[n].value).trim() : '');
 const reAmt = (f, n) => Math.round(toNum(reV(f, n)));
 const reSubmit = (l = '') => `<button class="btn primary block mt12" type="submit">${l || L('সেভ করুন', 'Save')}</button>`;
 const reBadge = st => `<span class="badge ${st === 'paid' ? 'delivered' : ['partial', 'partially-paid', 'due', 'upcoming', 'pending'].includes(st) ? 'pending' : 'returned'}">${reN(RE_PAYN, st)}</span>`;
-const reDel = (_, fn) => { closeSheet(); undoable(L('ডিলিট হয়েছে', 'Deleted'), fn); };
+let reDelCancelled = false;
+const reDel = (_, fn) => {
+  if (!confirm(L('ডিলিট করবেন? এর সাথে যুক্ত পেমেন্ট বা হিসাবও সরে যাবে। সাথে সাথে "ফিরিয়ে আনুন" চাপলে ফেরত আসবে।', 'Delete this? Linked payments or entries go with it. Tap Undo right after to bring it back.'))) { reDelCancelled = true; return; }
+  closeSheet(); undoable(L('ডিলিট হয়েছে', 'Deleted'), fn);
+};
 const reCustOpts = (val, allowNew) => [].concat(allowNew ? [['', L('➕ নতুন ক্রেতা (নাম নিচে লিখুন)', '➕ New buyer (type name below)')]] : [], re().customers.map(c => [c.id, esc(reCustName(c.id))]));
 const reUnitOpts = () => [['', L('— ইউনিট বেছে নিন (না থাকলে খালি) —', '— pick a unit (or leave blank) —')]].concat(re().units.map(u => [u.id, esc(`${u.number || u.name} · ${u.sqft || ''} sqft`)]));
 // ফর্মে "নতুন ক্রেতা" থাকলে সাথে সাথে ক্রেতা বানায়
@@ -133,7 +137,7 @@ function reUnitRows() {
   if (!list.length) return empty('🏢', L('কোনো ইউনিট নেই', 'No units'), `<p class="hint">${L('"＋ ইউনিট" চেপে যোগ করুন।', 'Tap "＋ Unit" to add one.')}</p>`);
   return `<div class="list">${list.map(u => `<div class="lwrap"><button type="button" class="lrow" data-action="re-unit" data-id="${u.id}"><span class="lic">${RE_UNIT_ST[u.status] ? RE_UNIT_ST[u.status][2] : '🏠'}</span>
     <span class="lmain"><b>${esc(u.number || u.name)}</b><small>${[u.floor ? L('তলা ', 'Floor ') + u.floor : '', u.sqft ? u.sqft + ' sqft' : '', u.type, u.facing].filter(Boolean).map(esc).join(' · ')}</small></span>
-    <span class="lend"><b>${u.price ? reShort(u.price) : '—'}</b><small>${reN(RE_UNIT_ST, u.status)}</small></span></button></div>`).join('')}</div>`;
+    <span class="lend"><b>${u.price ? reShort(u.price) : '—'}</b><small>${reN(RE_UNIT_ST, u.status)}</small></span></button>${rowTools('re-unit', 're-unit-del', u.id)}</div>`).join('')}</div>`;
 }
 function reUnitsTab() {
   const d = re(), fl = [['all', L('সব', 'All')], ['available', L('খালি', 'Available')], ['booked', L('বুকড', 'Booked')], ['sold', L('বিক্রি', 'Sold')]];
@@ -151,7 +155,7 @@ function reSalesList() {
   return `<div class="list">${list.map(x => { const r = reSaleRow(d, x);
     return `<div class="lwrap"><button type="button" class="lrow" data-action="re-sale" data-id="${x.id}"><span class="lic">🤝</span>
       <span class="lmain"><b>${esc(reSaleLabel(x))}${x.sample ? ' 🧪' : ''}</b><small>${fmtDate(x.date)} · ${L('মোট', 'Total')} ${reM(r.price)}${x.status === 'cancelled' ? ' · ' + L('বাতিল', 'cancelled') : ''}</small></span>
-      <span class="lend"><b class="${r.due > 0 ? 'neg' : 'pos'}">${r.due > 0 ? reM(r.due) : reM(r.paid)}</b>${reBadge(r.state)}</span></button></div>`; }).join('')}</div>`;
+      <span class="lend"><b class="${r.due > 0 ? 'neg' : 'pos'}">${r.due > 0 ? reM(r.due) : reM(r.paid)}</b>${reBadge(r.state)}</span></button>${rowTools('re-sale-edit', 're-sale-del', x.id)}</div>`; }).join('')}</div>`;
 }
 function reBookList() {
   const d = re(), list = d.bookings.slice().sort(byDateDesc);
@@ -159,14 +163,14 @@ function reBookList() {
   return `<div class="list">${list.map(b => { const paid = rePaidFor(d.pays, 'booking', b.id);
     return `<div class="lwrap"><button type="button" class="lrow" data-action="re-book" data-id="${b.id}"><span class="lic">📝</span>
       <span class="lmain"><b>${esc((reUnitName(b.unitId) || b.ref || L('বুকিং', 'Booking')) + ' · ' + reCustName(b.customerId))}${b.sample ? ' 🧪' : ''}</b><small>${fmtDate(b.date)} · ${L('চুক্তি', 'Agreed')} ${reM(b.agreed)} · ${reN(RE_BOOK_ST, b.status)}</small></span>
-      <span class="lend"><b>${reM(b.deposit)}</b><small>${L('বুকিং মানি', 'deposit')}${paid ? ' · ' + L('পাওয়া ', 'got ') + reM(paid) : ''}</small></span></button></div>`; }).join('')}</div>`;
+      <span class="lend"><b>${reM(b.deposit)}</b><small>${L('বুকিং মানি', 'deposit')}${paid ? ' · ' + L('পাওয়া ', 'got ') + reM(paid) : ''}</small></span></button>${rowTools('re-book-edit', 're-book-del', b.id)}</div>`; }).join('')}</div>`;
 }
 function reCostList() {
   const list = re().costs.slice().sort(byDateDesc);
   if (!list.length) return empty('🧾', L('কোনো খরচ নেই', 'No costs yet'), `<p class="hint">${L('ঠিকাদার বিল, মালামাল, ফি, বেতন সব এখানে লিখুন।', 'Record contractor bills, materials, fees and salaries here.')}</p>`);
   return `<div class="list">${list.map(c => `<div class="lwrap"><button type="button" class="lrow" data-action="re-cost" data-id="${c.id}"><span class="lic">${(RE_CATS[c.category] || RE_CATS.other)[2]}</span>
     <span class="lmain"><b>${esc(c.title || reN(RE_CATS, c.category))}${c.sample ? ' 🧪' : ''}</b><small>${fmtDate(c.date)} · ${esc(reN(RE_CATS, c.category))}${c.contractorId ? ' · ' + esc(reContrName(c.contractorId)) : ''}</small></span>
-    <span class="lend"><b>${reM(c.amount)}</b><small>${reN(RE_COST_ST, c.status)}</small></span></button></div>`).join('')}</div>`;
+    <span class="lend"><b>${reM(c.amount)}</b><small>${reN(RE_COST_ST, c.status)}</small></span></button>${rowTools('re-cost', 're-cost-del', c.id)}</div>`).join('')}</div>`;
 }
 function reShareList() {
   const d = re();
@@ -174,7 +178,7 @@ function reShareList() {
   return `<div class="list">${d.shares.slice().sort(byDateDesc).map(sh => { const rows = reShareRows(d, sh), paid = reSum(rows.map(r => r.paid)), due = reSum(rows.map(r => r.due));
     return `<div class="lwrap"><button type="button" class="lrow" data-action="re-share" data-id="${sh.id}"><span class="lic">🧮</span>
       <span class="lmain"><b>${esc(sh.title)}${sh.sample ? ' 🧪' : ''}</b><small>${fmtDate(sh.date)} · ${L('মোট', 'Total')} ${reM(sh.total)} · ${cnt(rows.length)} ${L('ক্রেতা', 'buyer(s)')}</small></span>
-      <span class="lend"><b class="${due > 0 ? 'neg' : 'pos'}">${due > 0 ? reM(due) : reM(paid)}</b><small>${due > 0 ? L('বাকি', 'due') : L('সব আদায়', 'all in')}</small></span></button></div>`; }).join('')}</div>`;
+      <span class="lend"><b class="${due > 0 ? 'neg' : 'pos'}">${due > 0 ? reM(due) : reM(paid)}</b><small>${due > 0 ? L('বাকি', 'due') : L('সব আদায়', 'all in')}</small></span></button>${rowTools('re-share', 're-share-del', sh.id)}</div>`; }).join('')}</div>`;
 }
 // টাকা ও মানুষ ট্যাবের উপ-পাতা: এখানে রেজিস্টার হয়, realestate-ext.js আরও যোগ করে
 const RE_MONEY = {
@@ -199,7 +203,7 @@ function reBuyersBody() {
     const parts = d.shares.flatMap(sh => reShareRows(d, sh)).filter(r => r.part.customerId === c.id), shDue = reSum(parts.map(r => r.totalDue)), due = Math.max(0, buy - pd) + shDue;
     return `<div class="lwrap"><button type="button" class="lrow" data-action="re-cust" data-id="${c.id}"><span class="lic">🙂</span>
       <span class="lmain"><b>${esc(reCustName(c.id))}${c.sample ? ' 🧪' : ''}</b><small>${esc(c.phone || '')}${c.phone ? ' · ' : ''}${cnt(sales.length)} ${L('ইউনিট', 'unit(s)')} · ${L('কেনা', 'bought')} ${reShort(buy)}</small></span>
-      <span class="lend">${due > 0 ? `<b class="neg">${reShort(due)}</b><small>${L('বাকি', 'due')}</small>` : `<small class="pos">${L('বাকি নেই', 'no dues')}</small>`}</span></button></div>`;
+      <span class="lend">${due > 0 ? `<b class="neg">${reShort(due)}</b><small>${L('বাকি', 'due')}</small>` : `<small class="pos">${L('বাকি নেই', 'no dues')}</small>`}</span></button>${rowTools('re-cust', 're-cust-del', c.id)}</div>`;
   };
   return d.customers.length ? `<div class="list">${d.customers.map(cRow).join('')}</div>` : empty('🙂', L('কোনো ক্রেতা নেই', 'No buyers'), '');
 }
@@ -207,7 +211,7 @@ function reContrBody() {
   const d = re();
   const kRow = r => {
     const c = r.contractor;
-    return `<div class="lwrap"><button type="button" class="lrow" data-action="re-contr" data-id="${c.id}"><span class="lic">👷</span><span class="lmain"><b>${esc(c.name || L('নামহীন ঠিকাদার', 'Unnamed contractor'))}${c.sample ? ' 🧪' : ''}</b><small>${esc(c.phone || '')}${r.contract ? (c.phone ? ' · ' : '') + L('চুক্তি ', 'contract ') + reShort(r.contract) : ''}${r.awaiting ? ' · ' + L('অপেক্ষমাণ ', 'awaiting ') + reShort(r.awaiting) : ''}</small></span><span class="lend"><b>${reShort(r.paid)}</b><small>${L('দেওয়া', 'paid')}</small></span></button></div>`;
+    return `<div class="lwrap"><button type="button" class="lrow" data-action="re-contr" data-id="${c.id}"><span class="lic">👷</span><span class="lmain"><b>${esc(c.name || L('নামহীন ঠিকাদার', 'Unnamed contractor'))}${c.sample ? ' 🧪' : ''}</b><small>${esc(c.phone || '')}${r.contract ? (c.phone ? ' · ' : '') + L('চুক্তি ', 'contract ') + reShort(r.contract) : ''}${r.awaiting ? ' · ' + L('অপেক্ষমাণ ', 'awaiting ') + reShort(r.awaiting) : ''}</small></span><span class="lend"><b>${reShort(r.paid)}</b><small>${L('দেওয়া', 'paid')}</small></span></button>${rowTools('re-contr', 're-contr-del', c.id)}</div>`;
   };
   return d.contractors.length ? `<div class="list">${reContractorRows(d).map(kRow).join('')}</div>` : `<p class="hint">${L('কোনো ঠিকাদার নেই।', 'No contractors.')}</p>`;
 }

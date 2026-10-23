@@ -237,10 +237,10 @@ function hgFilterEvents() {
 function hgEventRow(ev) {
   const c = hgEventCalc(ev);
   const owe = sum(ev.participants.map(p => Math.max(0, c.final[p.id])));
-  return `<button type="button" class="lrow hg-evrow" data-action="hg-open" data-id="${ev.id}">
+  return `<div class="lwrap"><button type="button" class="lrow hg-evrow" data-action="hg-open" data-id="${ev.id}">
     <span class="lic hg-ic">${(HG_TYPES[ev.type] || HG_TYPES.custom).icon}</span>
     <span class="lmain"><b>${esc(ev.name)}</b><small>${hgTypeLabel(ev.type)} · ${ev.start ? fmtDate(ev.start) : ''} · ${ev.participants.length} ${L('জন', 'people')}</small></span>
-    <span class="lend"><b>${hgM(c.net)}</b><small>${owe > 0 ? `${L('বাকি', 'Open')} ${hgM(owe)}` : hgStatusLabel(ev.status)}</small></span></button>`;
+    <span class="lend"><b>${hgM(c.net)}</b><small>${owe > 0 ? `${L('বাকি', 'Open')} ${hgM(owe)}` : hgStatusLabel(ev.status)}</small></span></button>${rowTools('hg-edit-event-id', 'hg-del-event-id', ev.id)}</div>`;
 }
 function hgIssuesHtml(ev, c) {
   const msgs = [];
@@ -281,7 +281,7 @@ function hgSecExpenses(ev, c) {
         <span class="lic">${e.mode === 'bill' ? '🧾' : '💸'}</span>
         <span class="lmain"><b>${e.personal ? '👤 ' : ''}${esc(e.title)}${x.ok ? '' : ' ⚠️'}</b><small>${esc(hgCatLabel(ev, e.category))}${e.personal ? ` · ${esc(pName(ev, e.personal))}${L('-এর নিজের', "'s own")}` : ''} · ${fmtDate(e.date)}${hgSimple(ev) ? '' : ` · ${L('দিয়েছে', 'paid by')} ${e.payers.map(p => esc(pName(ev, p.pid))).join(', ')}`}${e.desc ? ' · ' + esc(e.desc) : ''}${e.receipt ? ' 📎' : ''}</small></span>
         <span class="lend"><b>${hgM(e.total)}</b><small>${x.refund ? `${L('রিফান্ড', 'refund')} ${hgM(x.refund)}` : (e.mode === 'bill' ? L('আইটেম বিল', 'itemised') : hgMethodLabel(e.method))}</small></span></button>
-        ${ev.status === 'active' ? delBtn('hg-del-expense', e.id) : ''}</div>`;
+        ${ev.status === 'active' ? rowTools('hg-edit-expense', 'hg-del-expense', e.id) : ''}</div>`;
     }).join('')}</div>` : empty('🧾', L('কোনো খরচ নেই', 'No expenses'), L('খরচ যোগ করলে এখানে দেখা যাবে।', 'Added expenses show up here.'))}`;
 }
 document.addEventListener('input', e => {
@@ -321,10 +321,10 @@ function hgSecPayments(ev, c) {
     <div class="section-title">${L('লেনদেন', 'Transfers')} · ${ts.length}</div>
     ${ts.length ? `<div class="list">${ts.map(t => `<div class="lwrap"><button type="button" class="lrow" data-action="hg-edit-transfer" data-id="${t.id}">
       <span class="lic">${HG_TKIND[t.kind][2]}</span><span class="lmain"><b>${esc(pName(ev, t.from))} → ${esc(pName(ev, t.to))}</b><small>${HG_TKIND[t.kind][isEN() ? 1 : 0]} · ${fmtDate(t.date)}${t.purpose ? ' · ' + esc(t.purpose) : ''}${t.note ? ' · ' + esc(t.note) : ''}</small></span>
-      <span class="lend"><b>${hgM(t.amt)}</b></span></button>${act ? delBtn('hg-del-transfer', t.id) : ''}</div>`).join('')}</div>` : `<p class="hint">${L('এখনও কোনো লেনদেন নেই।', 'No transfers yet.')}</p>`}
+      <span class="lend"><b>${hgM(t.amt)}</b></span></button>${act ? rowTools('hg-edit-transfer', 'hg-del-transfer', t.id) : ''}</div>`).join('')}</div>` : `<p class="hint">${L('এখনও কোনো লেনদেন নেই।', 'No transfers yet.')}</p>`}
     <div class="section-title">${L('রিফান্ড', 'Refunds')} · ${rs.length}</div>
     ${rs.length ? `<div class="list">${rs.map(r => { const ex = ev.expenses.find(e => e.id === r.expenseId); return `<div class="lwrap"><button type="button" class="lrow" data-action="hg-edit-refund" data-id="${r.id}">
-      <span class="lic">↩️</span><span class="lmain"><b>${esc(ex ? ex.title : '—')}</b><small>${L('পেয়েছে', 'received by')} ${esc(pName(ev, r.by))} · ${fmtDate(r.date)}${r.note ? ' · ' + esc(r.note) : ''}</small></span><span class="lend"><b>${hgM(r.amt)}</b></span></button>${act ? delBtn('hg-del-refund', r.id) : ''}</div>`; }).join('')}</div>` : `<p class="hint">${L('কোনো রিফান্ড নেই। রিফান্ড মানে দোকান বা হোটেল থেকে টাকা ফেরত আসা, এটা নতুন আয় নয়, খরচ কমায়।', 'No refunds. A refund is money coming back from a shop or hotel; it reduces the expense and is not income.')}</p>`}
+      <span class="lic">↩️</span><span class="lmain"><b>${esc(ex ? ex.title : '—')}</b><small>${L('পেয়েছে', 'received by')} ${esc(pName(ev, r.by))} · ${fmtDate(r.date)}${r.note ? ' · ' + esc(r.note) : ''}</small></span><span class="lend"><b>${hgM(r.amt)}</b></span></button>${act ? rowTools('hg-edit-refund', 'hg-del-refund', r.id) : ''}</div>`; }).join('')}</div>` : `<p class="hint">${L('কোনো রিফান্ড নেই। রিফান্ড মানে দোকান বা হোটেল থেকে টাকা ফেরত আসা, এটা নতুন আয় নয়, খরচ কমায়।', 'No refunds. A refund is money coming back from a shop or hotel; it reduces the expense and is not income.')}</p>`}
     <section class="card"><div class="card-head"><h2>${L('কে কত পরিশোধ করেছে', 'Payments by person')}</h2></div>
       ${ev.participants.map(p => `<div class="prows"><div><span>${esc(p.name)}</span><b>${L('দিয়েছে', 'sent')} ${hgM(c.out[p.id])} · ${L('পেয়েছে', 'got')} ${hgM(c.inn[p.id])}</b></div></div>`).join('')}</section>`;
 }

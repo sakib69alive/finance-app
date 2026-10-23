@@ -13,7 +13,7 @@ function tcDuesTab() {
   rows.sort((a, b) => (b.st.status === 'overdue') - (a.st.status === 'overdue') || (a.i.due || '').localeCompare(b.i.due || '') || a.i.id.localeCompare(b.i.id));
   const tot = tcSum(rows.map(r => r.i.amt)), got = tcSum(rows.map(r => Math.min(r.i.amt, r.st.paid))), rem = tcSum(rows.map(r => r.st.rem));
   const sc = [['month', L('এই মাস', 'This month')], ['open', L('সব বকেয়া', 'All unpaid')]];
-  const fl = [['all', L('সব', 'All')], ['unpaid', 'Unpaid'], ['partial', 'Partially Paid'], ['overdue', 'Overdue'], ['paid', 'Paid']];
+  const fl = [['all', L('সব', 'All')], ['unpaid', 'Due'], ['partial', 'Partially Paid'], ['overdue', 'Overdue'], ['paid', 'Paid']];
   const sec = (title, list) => (list.length ? `<div class="section-title">${title} · ${list.length}</div><div class="list">${list.map(r => tcIncRow(x, r.i, td)).join('')}</div>` : '');
   const body = rows.length ? (tcUi.dscope === 'open'
     ? sec(L('আগের মাসের বকেয়া', 'Dues from earlier months'), rows.filter(r => r.i.ym < ym)) + sec(L('এই মাসের নতুন ফি', 'New fees this month'), rows.filter(r => r.i.ym === ym)) + sec(L('পরের মাসের', 'Later months'), rows.filter(r => r.i.ym > ym))
@@ -40,21 +40,22 @@ function tcExpTab() {
     <div class="mt8">${tcSel('ecat', [['all', L('সব খাত', 'All categories')]].concat(tcCatsAll().map(c => [c.k, `${c.e} ${esc(isEN() ? c.en : c.bn)}`])), tcUi.ecat).replace('<select', '<select data-tc-ecat')}</div>
     <div class="mt12">${list.length ? `<div class="list">${list.map(e => tcExpRow(x, e, td)).join('')}</div>` : empty('🧾', L('এই মাসে খরচ নেই', 'No expenses this month'), `<p class="hint">${L('"＋ খরচ" চেপে যোগ করুন, অথবা নিয়মিত খরচ "মাস তৈরি" থেকে আসবে।', 'Tap "＋ Expense", or regular costs arrive from "New month".')}</p>`)}</div>
     <section class="card mt12"><div class="card-head"><h2>🔁 ${L('নিয়মিত (পুনরাবৃত্ত) খরচ', 'Regular (recurring) costs')}</h2><button type="button" class="link" data-action="tc-rec-add">+ ${L('যোগ', 'Add')}</button></div>
-      ${recs.length ? recs.map(r => `<button type="button" class="lrow" data-action="tc-rec-edit" data-id="${r.id}"><span class="lic">${tcCat(r.cat).e}</span><span class="lmain"><b>${esc(r.name)}</b><small>${esc(tcCatName(r.cat))} · ${L('প্রতি মাসে', 'monthly')} ${r.day || 1} ${L('তারিখ', '')}${r.active === false ? ' · ' + L('বন্ধ', 'stopped') : ''}</small></span><span class="lend"><b>${tcM(tcRateAt(r.amts, ym))}</b></span></button>`).join('')
+      ${recs.length ? recs.map(r => `<div class="lwrap"><button type="button" class="lrow" data-action="tc-rec-edit" data-id="${r.id}"><span class="lic">${tcCat(r.cat).e}</span><span class="lmain"><b>${esc(r.name)}</b><small>${esc(tcCatName(r.cat))} · ${L('প্রতি মাসে', 'monthly')} ${r.day || 1} ${L('তারিখ', '')}${r.active === false ? ' · ' + L('বন্ধ', 'stopped') : ''}</small></span><span class="lend"><b>${tcM(tcRateAt(r.amts, ym))}</b></span></button>${rowTools('tc-rec-edit', 'tc-rec-del', r.id)}</div>`).join('')
         : `<p class="hint" style="margin:0">${L('ভাড়া, বিদ্যুৎ, ইন্টারনেট বা সহকারীর বেতনের মতো যা প্রতি মাসে লাগে তা একবার এখানে দিন। প্রতি মাসে নিজে থেকে আসবে (আপনি দেখে নিয়ে তৈরি করবেন)।', 'Add rent, electricity, internet or assistant pay once. They come every month (you review before creating).')}</p>`}</section>`;
 }
 document.addEventListener('change', e => { const el = e.target.closest && e.target.closest('[data-tc-ecat]'); if (!el) return; tcUi.ecat = el.value; render(); });
 
 /* ---------- পরীক্ষা ---------- */
 function tcExamTab() {
-  const t = tcd(), exams = tcLive(t.exams).sort(byDateDesc), x = tcCtx(t);
+  const t = tcd(), exams = tcLive(t.exams).sort(byDateDesc);
   const tot = tcSum(exams.map(e => tcExamCost(e).total));
   return `<div class="page-head"><h1>${L('পরীক্ষা', 'Exams')}</h1><button type="button" class="btn primary sm" data-action="tc-exam-add">${icon('plus', 18)} ${L('পরীক্ষা', 'Exam')}</button></div>
     ${exams.length ? `<div class="minis"><div class="mini"><small>${L('মোট পরীক্ষা', 'Exams')}</small><b>${exams.length}</b></div><div class="mini"><small>${L('মোট খরচ', 'Total cost')}</small><b>${tcM(tot)}</b></div><div class="mini"><small>${L('এই মাস', 'This month')}</small><b>${tcM(tcSum(exams.filter(e => tcYm(e.date) === tcUi.ym).map(e => tcExamCost(e).total)))}</b></div></div>
-    <div class="list mt12">${exams.map(e => { const c = tcExamCost(e), b = x.bat[e.batchId];
-      return `<div class="lwrap"><button type="button" class="lrow" data-action="tc-exam-edit" data-id="${e.id}"><span class="lic">📝</span><span class="lmain"><b>${esc(e.name)}</b><small>${fmtDate(e.date)}${b ? ' · ' + esc(b.name) : ''} · ${e.students | 0} ${L('জন', 'students')}${c.budget != null ? ` · ${L('বাজেট', 'budget')} ${tcM(c.budget)}` : ''}</small></span>
-        <span class="lend"><b>${tcM(c.total)}</b>${c.diff != null ? `<small class="${c.diff > 0 ? 'neg' : 'pos'}">${c.diff > 0 ? tcM(c.diff) + ' ' + L('বেশি', 'over') : L('বাজেটের মধ্যে', 'within budget')}</small>` : ''}</span></button></div>`; }).join('')}</div>`
-    : empty('📝', L('কোনো পরীক্ষা নেই', 'No exams yet'), `<p class="hint">${L('শিক্ষার্থী, পৃষ্ঠা ও দাম দিলে প্রশ্নপত্র আর খাতার খরচ নিজে হিসাব হবে এবং ব্যাচ ও মাসের খরচে একবারই যুক্ত হবে।', 'Give students, pages and prices; question-paper and sheet costs are worked out and added once to the batch and month.')}</p>`)}
+    <div class="list mt12">${exams.map(e => { const c = tcExamCost(e), b = tcBat(e.batchId), sm = tcExamSummary(t, e);
+      return `<div class="lwrap"><button type="button" class="lrow" data-action="tc-exam-open" data-id="${e.id}"><span class="lic">📝</span><span class="lmain"><b>${esc(e.name)}</b><small>${fmtDate(e.date)}${e.subject ? ' · ' + esc(e.subject) : ''}${b ? ' · ' + esc(b.name) : ''} · ${sm.rows.length} ${L('জন', 'students')}${sm.total ? ` · ${L('পূর্ণমান', 'marks')} ${sm.total}` : ''}</small>
+        <small>${sm.graded ? `${L('গড়', 'Avg')} ${tcMk(sm.avg)} · ${L('সর্বোচ্চ', 'High')} ${tcMk(sm.high)}` : L('নম্বর লেখা হয়নি', 'no marks yet')}${c.total > 0 ? ` · ${L('খরচ', 'cost')} ${tcM(c.total)}` : ''}</small></span>
+        <span class="lend">${c.diff != null ? `<small class="${c.diff > 0 ? 'neg' : 'pos'}">${c.diff > 0 ? tcM(c.diff) + ' ' + L('বেশি', 'over') : L('বাজেটের মধ্যে', 'within budget')}</small>` : ''}</span></button>${rowTools('tc-exam-edit', 'tc-exam-del', e.id)}</div>`; }).join('')}</div>`
+    : empty('📝', L('কোনো পরীক্ষা নেই', 'No exams yet'), `<p class="hint">${L('পরীক্ষার নাম, তারিখ, বিষয়, পূর্ণমান আর কোন ব্যাচ বা শিক্ষার্থী সেটা দিন। পরে নম্বর লিখলে ফল নিজে হিসাব হবে। খরচ দিলে মাসের খরচে একবারই যুক্ত হবে।', 'Give the exam a name, date, subject, total marks and who sits it. Enter marks later and results are worked out. If you add a cost it is counted once in that month.')}</p>`)}
     <p class="hint">${L('পরীক্ষার খরচ আলাদাভাবে যোগ হয় না: প্রতিটা পরীক্ষা একটাই খরচ হিসেবে মাসের খরচে যায় (দুবার গণনা হয় না)।', 'Exam costs are not added twice: each exam becomes one expense in that month.')}</p>`;
 }
 
@@ -67,15 +68,15 @@ function tcSupTab() {
     <div class="minis"><div class="mini"><small>${L('এই মাস', 'This month')}</small><b>${tcM(month)}</b></div><div class="mini"><small>${L('মোট কেনা', 'All time')}</small><b>${tcM(tcSum(all.map(e => e.amt)))}</b></div><div class="mini"><small>${L('কেনাকাটা', 'Purchases')}</small><b>${all.length}</b></div></div>
     <div class="mt12">${all.length ? `<div class="list">${all.slice(0, 60).map(e => { const s = e.sup || {}, st = tcItemState(x, e.id, 'out', td);
       return `<div class="lwrap"><button type="button" class="lrow" data-action="tc-item" data-id="${e.id}" data-side="out"><span class="lic">${tcCat(e.cat).e}</span><span class="lmain"><b>${esc(s.item || e.desc || tcCatName(e.cat))}</b>
-        <small>${fmtDate(e.date)}${s.qty ? ` · ${s.qty} × ${tcM(s.unit || 0)}` : ''}${s.shop ? ' · 🏪 ' + esc(s.shop) : ''}${s.purpose ? ' · ' + esc(s.purpose) : ''}${e.reusable ? ' · ♻️ ' + L('পুনর্ব্যবহারযোগ্য', 'reusable') : ''} ${tcBadge(st.status)}</small></span><span class="lend"><b>${tcM(e.amt)}</b></span></button></div>`; }).join('')}</div>`
+        <small>${fmtDate(e.date)}${s.qty ? ` · ${s.qty} × ${tcM(s.unit || 0)}` : ''}${s.shop ? ' · 🏪 ' + esc(s.shop) : ''}${s.purpose ? ' · ' + esc(s.purpose) : ''}${e.reusable ? ' · ♻️ ' + L('পুনর্ব্যবহারযোগ্য', 'reusable') : ''} ${tcBadge(st.status)}</small></span><span class="lend"><b>${tcM(e.amt)}</b></span></button>${rowTools('tc-exp-edit', 'tc-exp-del', e.id)}</div>`; }).join('')}</div>`
       : empty('📚', L('কোনো কেনাকাটা নেই', 'No purchases yet'), `<p class="hint">${L('বই, খাতা, কলম, মার্কার, নোট ও প্রশ্নপত্র প্রিন্ট বা সরঞ্জাম কিনলে এখানে লিখুন। আগের কেনাকাটার ইতিহাস থাকবে।', 'Record books, notebooks, pens, markers, printing or equipment here. Past purchases stay as history.')}</p>`)}</div>
     <p class="hint">${L('♻️ পুনর্ব্যবহারযোগ্য সরঞ্জাম (বোর্ড, ফ্যান ইত্যাদি) কেনার দিনেই একবার খরচ ধরা হয়, ব্যবহারের সময় আবার নয়। পরীক্ষার কাগজ ও প্রিন্ট "পরীক্ষা" থেকে হিসাব করুন, এখানে আবার লিখলে দুবার ধরা হবে।', '♻️ Reusable equipment (board, fan…) is counted once on the purchase day, not again when used. Work out exam paper and printing under "Exams"; entering it here too would count it twice.')}</p>`;
 }
 
 /* ---------- টাকা-ট্যাব ---------- */
 function tcMoneyTab() {
-  const subs = [['dues', L('পাওনা', 'Dues')], ['exp', L('খরচ', 'Expenses')], ['exam', L('পরীক্ষা', 'Exams')], ['sup', L('সামগ্রী', 'Supplies')], ['report', L('রিপোর্ট', 'Reports')]];
-  const body = { dues: tcDuesTab, exp: tcExpTab, exam: tcExamTab, sup: tcSupTab, report: tcReportTab }[tcUi.msub]();
+  const subs = [['dues', L('পাওনা', 'Dues')], ['exp', L('খরচ', 'Expenses')], ['exam', L('পরীক্ষা', 'Exams')], ['res', L('ফল', 'Results')], ['sup', L('সামগ্রী', 'Supplies')], ['report', L('রিপোর্ট', 'Reports')]];
+  const body = { dues: tcDuesTab, exp: tcExpTab, exam: tcExamTab, res: tcResultsTab, sup: tcSupTab, report: tcReportTab }[tcUi.msub]();
   return tcPage(`<div class="chiprow mb12">${subs.map(([k, l]) => `<button type="button" class="fchip ${tcUi.msub === k ? 'active' : ''}" data-action="tc-msub" data-v="${k}">${l}</button>`).join('')}</div>${body}`);
 }
 
@@ -171,15 +172,22 @@ function tcReportText(ym, annual) {
 
 /* ---------- আরও ---------- */
 function tcMoreTab() {
-  const t = tcd(), mi = menuItem, plan = tcPlan(t, tcUi.ym).length;
+  const t = tcd(), mi = menuItem, plan = tcPlan(t, tcUi.ym).length, nStu = tcLive(t.students).filter(x => !x.archived).length, nArch = tcLive(t.students).filter(x => x.archived).length, nBat = tcLive(t.batches).filter(x => !x.archived).length;
+  const go = (it, attrs) => it.replace('data-action="tc-open"', `data-action="tc-open" ${attrs}`);
   return tcPage(`<div class="page-head"><h1>${L('আরও', 'More')}</h1></div>
-    <div class="section-title">${L('মাস', 'Month')}</div>
-    <div class="menu">${mi('tc-roll', 'cal', L('নতুন মাসের হিসাব তৈরি', 'Create a month\'s books'), plan ? L(`${tcYmLabel(tcUi.ym)}: ${plan}টা তৈরি বাকি`, `${tcYmLabel(tcUi.ym)}: ${plan} to create`) : L('ফি, বেতন ও নিয়মিত খরচ, দেখে নিয়ে তৈরি', 'Fees, salary and regular costs, reviewed first'))}
-      ${mi('tc-goto-rep', 'chart', L('মাসিক ও বার্ষিক রিপোর্ট', 'Monthly & annual reports'), L('PDF, শেয়ার, আগের মাসের তুলনা', 'PDF, share, last-month comparison'))}</div>
-    <div class="section-title">${L('হিসাব', 'Books')}</div>
-    <div class="menu">${mi('tc-budget', 'pie', L('মাসের বাজেট', 'Monthly budget'), t.budget.total > 0 ? tcM(t.budget.total) : L('ঠিক করা নেই', 'Not set'))}
+    ${menuGroup('👥 ' + L('শিক্ষার্থী ও ব্যাচ', 'Students & batches'), L('সব শিক্ষার্থী, ব্যাচ, উপস্থিতি ও ফি এক জায়গা থেকে', 'Students, batches, attendance and fees from one place'),
+      `${go(mi('tc-open', 'cap', L('সব শিক্ষার্থী', 'All Students'), `${nStu} ${L('জন সক্রিয়', 'active')}${nArch ? ' · ' + nArch + ' ' + L('আর্কাইভ', 'archived') : ''}`), 'data-tab="work" data-ws="stu"')}
+      ${go(mi('tc-open', 'layers', L('ব্যাচ ব্যবস্থাপনা', 'Batch management'), `${nBat} ${L('টা ব্যাচ · এডিট, আর্কাইভ, ফি', 'batches · edit, archive, fees')}`), 'data-tab="work" data-ws="coach"')}
+      ${mi('tc-att-pick', 'check', L('উপস্থিতি নিন', 'Take attendance'), L('ব্যাচের দৈনিক উপস্থিত/অনুপস্থিত', 'Daily present/absent for a batch'))}
+      ${mi('tc-collect', 'wallet', L('ফি নিন', 'Collect fee'), L('বকেয়া থেকে সবচেয়ে পুরোনোটা আগে মেটে', 'Pays the oldest dues first'))}`)}
+    ${menuGroup('🗓️ ' + L('মাস ও রিপোর্ট', 'Month & reports'), L('মাসের শুরুতে ফি তৈরি করুন, শেষে রিপোর্ট দেখুন', 'Create fees at the start of the month, review at the end'),
+      `${mi('tc-roll', 'cal', L('নতুন মাসের হিসাব তৈরি', 'Create a month\'s books'), plan ? L(`${tcYmLabel(tcUi.ym)}: ${plan}টা তৈরি বাকি`, `${tcYmLabel(tcUi.ym)}: ${plan} to create`) : L('ফি, বেতন ও নিয়মিত খরচ, দেখে নিয়ে তৈরি', 'Fees, salary and regular costs, reviewed first'))}
+      ${mi('tc-goto-rep', 'chart', L('মাসিক ও বার্ষিক রিপোর্ট', 'Monthly & annual reports'), L('PDF, শেয়ার, আগের মাসের তুলনা', 'PDF, share, last-month comparison'))}
+      ${go(mi('tc-open', 'trend', L('পরীক্ষার ফল', 'Exam results'), L('ব্যাচ ও শিক্ষার্থী অনুযায়ী ফল', 'By batch and by student')), 'data-tab="money" data-ms="res"')}`)}
+    ${menuGroup('💰 ' + L('হিসাবের সেটিংস', 'Books settings'), L('বাজেট, নগদ, খাত ও নিয়মিত খরচ', 'Budget, cash, categories and regular costs'),
+      `${mi('tc-budget', 'pie', L('মাসের বাজেট', 'Monthly budget'), t.budget.total > 0 ? tcM(t.budget.total) : L('ঠিক করা নেই', 'Not set'))}
       ${mi('tc-settings', 'wallet', L('ফি ও নগদ', 'Fees & cash'), `${L('প্রারম্ভিক নগদ', 'Opening cash')} ${tcM(t.openingCash)} · ${L('ফি দেওয়ার দিন', 'fee due day')} ${t.feeDay}`)}
-      ${mi('tc-cats', 'grid', L('খরচের খাত', 'Expense categories'), L('নিজের খাত যোগ, বদল, মোছা', 'Add, edit or remove your own'))}
-      ${mi('tc-goto-rec', 'layers', L('নিয়মিত খরচ', 'Regular costs'), L('ভাড়া, বিদ্যুৎ, ইন্টারনেট, সহকারীর বেতন', 'Rent, electricity, internet, assistant pay'))}</div>
+      ${mi('tc-cats', 'grid', L('খরচের খাত', 'Expense categories'), L('নিজের খাত যোগ, এডিট, মোছা', 'Add, edit or remove your own'))}
+      ${mi('tc-goto-rec', 'layers', L('নিয়মিত খরচ', 'Regular costs'), L('ভাড়া, বিদ্যুৎ, ইন্টারনেট, সহকারীর বেতন', 'Rent, electricity, internet, assistant pay'))}`)}
     ${appSections()}`);
 }

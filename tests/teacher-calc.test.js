@@ -199,4 +199,58 @@ t('annual report sums the months', () => {
   assert.strictEqual(y.months.length, 12);
 });
 
+t('student finance: agreed, paid, due and status follow payments', () => {
+  const d = world(); gen(d, '2026-02');
+  const f0 = C.tcStuFin(d, 's1', '2026-02-05');
+  assert.strictEqual(f0.agreed, M(1500) + M(800)); assert.strictEqual(f0.due, M(2300)); assert.strictEqual(f0.status, 'unpaid');
+  d.pays.push(pay('in', 'b:e1:2026-02', M(300), '2026-02-06'));
+  const f1 = C.tcStuFin(d, 's1', '2026-02-06');
+  assert.strictEqual(f1.paid, M(300)); assert.strictEqual(f1.due, M(2000)); assert.strictEqual(f1.status, 'partial');
+  assert.strictEqual(C.tcStuFin(d, 's1', '2026-03-20').status, 'overdue');
+  d.pays.push(pay('in', 'b:e1:2026-02', M(500), '2026-02-07'), pay('in', 's:u1:2026-02', M(1500), '2026-02-07'));
+  assert.strictEqual(C.tcStuFin(d, 's1', '2026-03-20').status, 'paid');
+  d.pays[d.pays.length - 1].void = true;
+  assert.strictEqual(C.tcStuFin(d, 's1', '2026-03-20').due, M(1500));
+});
+
+t('collect plan fills the oldest dues first and never over-allocates', () => {
+  const d = world(); gen(d, '2026-02'); gen(d, '2026-03');
+  const p1 = C.tcCollectPlan(d, 's1', M(1000), '2026-03-05');
+  assert.strictEqual(p1.used, M(1000)); assert.strictEqual(p1.left, 0); assert.ok(p1.lines.every(l => l.ym === '2026-02'));
+  const p2 = C.tcCollectPlan(d, 's1', M(99999), '2026-03-05');
+  assert.strictEqual(p2.used, p2.total); assert.strictEqual(p2.left, M(99999) - p2.total);
+  const pb = C.tcCollectPlan(d, 's1', M(5000), '2026-03-05', 'b1');
+  assert.ok(pb.lines.every(l => l.kind === 'batch'));
+});
+
+t('batch finance and all-students rows add up', () => {
+  const d = world(); gen(d, '2026-02');
+  d.pays.push(pay('in', 'b:e2:2026-02', M(800), '2026-02-08'));
+  const bf = C.tcBatchFin(d, 'b1', '2026-02-10');
+  assert.strictEqual(bf.agreed, M(1600)); assert.strictEqual(bf.collected, M(800)); assert.strictEqual(bf.due, M(800));
+  const all = C.tcAllStudents(d, '2026-02-10');
+  assert.strictEqual(all.length, 2); assert.strictEqual(all.find(r => r.s.id === 's1').kind, 'both'); assert.strictEqual(all.find(r => r.s.id === 's2').fin.status, 'paid');
+});
+
+t('batch attendance history and summary', () => {
+  const d = world();
+  d.sessions.push({ id: 'a1', key: 'b1|2026-02-07', slotId: 'b1', date: '2026-02-07', status: 'done', att: { s1: 'a', s2: 'p' } });
+  d.sessions.push({ id: 'a2', key: 'x:1', slotId: 'b1', date: '2026-02-09', status: 'done', extra: true, att: { s1: 'p', s2: 'p' } });
+  const days = C.tcBatchDays(d, 'b1');
+  assert.strictEqual(days.length, 2); assert.strictEqual(days[0].date, '2026-02-09'); assert.deepStrictEqual(days[1].absent, ['s1']);
+  const sm = C.tcBatchAttSummary(d, 'b1', '2026-02');
+  assert.strictEqual(sm.classes, 2); assert.strictEqual(sm.rows.find(r => r.sid === 's1').pct, 50); assert.strictEqual(sm.avgPct, 75);
+  const a = C.tcStuAtt(d, 's1'); assert.strictEqual(a.present, 1); assert.strictEqual(a.absent, 1); assert.strictEqual(a.pct, 50);
+});
+
+t('exam results: roster, ranks, average and student view', () => {
+  const d = world();
+  d.exams.push({ id: 'x1', name: 'মাসিক', date: '2026-02-20', batchId: 'b1', marks: 50, pass: 50, results: { s1: 45, s2: 20 }, studentIds: [] });
+  const sm = C.tcExamSummary(d, d.exams[0]);
+  assert.strictEqual(sm.rows.length, 2); assert.strictEqual(sm.avg, 32.5); assert.strictEqual(sm.high, 45); assert.strictEqual(sm.passed, 1);
+  assert.strictEqual(sm.rows.find(r => r.sid === 's1').rank, 1); assert.strictEqual(sm.rows.find(r => r.sid === 's2').pct, 40);
+  assert.strictEqual(C.tcStuResults(d, 's2')[0].marks, 20);
+  d.exams[0].results.s2 = ''; assert.strictEqual(C.tcExamSummary(d, d.exams[0]).missing, 1);
+});
+
 console.log(`\n${n} tests passed`);

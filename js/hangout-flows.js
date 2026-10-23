@@ -518,6 +518,9 @@ Object.assign(ACTIONS, {
   'hg-reopen': () => { const ev = hgCur(); if (!ev || ev.status !== 'settled') return; if (!confirm(L('ইভেন্ট আবার খুলবেন? তখন সব কিছু বদলানো যাবে।', 'Reopen this event? Everything becomes editable again.'))) return; if (sheetOpen) closeSheet(); ev.status = 'active'; hgCommit(ev, 'ইভেন্ট আবার খোলা হয়েছে', 'Event reopened', L('ইভেন্ট খোলা হয়েছে', 'Event reopened')); },
   'hg-archive': () => { const ev = hgCur(); if (!ev) return; if (sheetOpen) closeSheet(); ev.prev = ev.status; ev.status = 'archived'; hgCommit(ev, 'আর্কাইভ করা হয়েছে', 'Archived', L('আর্কাইভে গেছে', 'Archived')); },
   'hg-restore': () => { const ev = hgCur(); if (!ev || ev.status !== 'archived') return; if (sheetOpen) closeSheet(); ev.status = ev.prev && ev.prev !== 'archived' ? ev.prev : 'active'; hgCommit(ev, 'আর্কাইভ থেকে ফেরানো হয়েছে', 'Restored from archive', L('রিস্টোর হয়েছে', 'Restored')); },
+  // ইভেন্টের তালিকার সারি থেকে সরাসরি এডিট/ডিলিট (সেই মুহূর্তের জন্য ওই ইভেন্টকে "বর্তমান" ধরে)
+  'hg-edit-event-id': el => { const old = hgRoute.ev; hgRoute.ev = el.dataset.id; try { ACTIONS['hg-edit-event'](); } finally { hgRoute.ev = old; } },
+  'hg-del-event-id': el => { const old = hgRoute.ev; hgRoute.ev = el.dataset.id; try { ACTIONS['hg-del-event'](); } finally { if (hgRoute.ev === el.dataset.id) hgRoute.ev = old === el.dataset.id ? null : old; } },
   'hg-del-event': () => {
     const ev = hgCur(); if (!ev) return;
     if (!confirm(L(`"${ev.name}" ইভেন্ট ডিলিট করবেন? এর সব খরচ, লেনদেন আর সিদ্ধান্ত এর সাথে যাবে। "আরও" ট্যাবের "সম্প্রতি মোছা" থেকে ফেরানো যাবে।`, `Delete "${ev.name}"? All its expenses, payments and decisions go with it. You can restore it from "Recently deleted" in More.`))) return;

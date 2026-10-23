@@ -26,7 +26,7 @@ const TC_SRCN = { job: ['চাকরি', 'Job', '💼'], private: ['প্র�
 const TC_KIND = { job: ['বেতন', 'Salary'], private: ['প্রাইভেটের ফি', 'Private fee'], batch: ['কোচিংয়ের ফি', 'Coaching fee'], bonus: ['বোনাস', 'Bonus'], extra: ['অতিরিক্ত ক্লাস / আয়', 'Extra class / income'], other: ['অন্যান্য আয়', 'Other income'] };
 const TC_METHOD = { cash: ['নগদ', 'Cash'], mobile: ['মোবাইল ব্যাংকিং', 'Mobile banking'], bank: ['ব্যাংক', 'Bank'], other: ['অন্য', 'Other'] };
 const TC_STN = { pending: ['অপেক্ষমাণ', 'Pending'], done: ['সম্পন্ন', 'Done'], absent: ['অনুপস্থিত', 'Absent'], cancelled: ['বাতিল', 'Cancelled'], postponed: ['স্থগিত', 'Postponed'] };
-const TC_PAYN = { unpaid: ['Unpaid', 'Unpaid'], partial: ['Partially Paid', 'Partially Paid'], paid: ['Paid', 'Paid'], overdue: ['Overdue', 'Overdue'] };
+const TC_PAYN = { unpaid: ['Due', 'Due'], partial: ['Partially Paid', 'Partially Paid'], paid: ['Paid', 'Paid'], overdue: ['Overdue', 'Overdue'], none: ['ফি নেই', 'No fee'] };
 const TC_DAYN = { sat: ['শনি', 'Sat'], sun: ['রবি', 'Sun'], mon: ['সোম', 'Mon'], tue: ['মঙ্গল', 'Tue'], wed: ['বুধ', 'Wed'], thu: ['বৃহঃ', 'Thu'], fri: ['শুক্র', 'Fri'] };
 const tcN = (o, k) => o[k][isEN() ? 1 : 0];
 
@@ -34,7 +34,7 @@ const tcN = (o, k) => o[k][isEN() ? 1 : 0];
 const tcd = () => state.teacher;
 function tcMigrate(s) { s.teacher = tcNormalize(s.teacher); }
 const tcM = tcShow; // স্ক্রিনে অর্থ দেখানোর একমাত্র ফাংশন (প্রকৃত + ১ টাকা)
-let tcUi = { ym: tcYm(today()), msub: 'dues', wsub: 'job', ssub: 'day', sdate: today(), cm: tcYm(today()), sf: 'all', q: '', stf: 'active', dscope: 'month', dst: 'all', esrc: 'all', ecat: 'all', rmode: 'month', rollYm: '' };
+let tcUi = { ym: tcYm(today()), msub: 'dues', wsub: 'job', ssub: 'day', sdate: today(), cm: tcYm(today()), sf: 'all', q: '', stf: 'active', dscope: 'month', dst: 'all', esrc: 'all', ecat: 'all', rmode: 'month', rollYm: '', skind: 'all', spay: 'all', rbat: 'all', showArch: false, battDate: '', battBat: '' };
 const tcYmLabel = ym => { const [y, m] = ym.split('-'); return `${MONTHS[isEN() ? 'en' : 'bn'][+m - 1]} ${y}`; };
 const tcTime = hm => { const v = tcMin(hm); if (v == null) return ''; const h = Math.floor(v / 60); return `${h % 12 || 12}:${String(v % 60).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
 const tcDateOk = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
@@ -60,9 +60,9 @@ function tcIncLabel(x, i) {
 }
 function tcIncRow(x, i, td) {
   const st = tcItemState(x, i.id, 'in', td), lb = tcIncLabel(x, i);
-  return `<button type="button" class="lrow" data-action="tc-item" data-id="${esc(i.id)}" data-side="in"><span class="lic">${TC_SRCN[i.src][2]}</span>
+  return `<div class="lwrap"><button type="button" class="lrow" data-action="tc-item" data-id="${esc(i.id)}" data-side="in"><span class="lic">${TC_SRCN[i.src][2]}</span>
     <span class="lmain"><b>${esc(lb.t)}</b><small>${esc(lb.s)}${lb.s ? ' · ' : ''}${tcYmLabel(i.ym)} ${tcBadge(st.status)}${i.c.auto ? ' · ' + L('ক্লাস অনুযায়ী', 'per class') : ''}</small></span>
-    <span class="lend"><b>${tcM(i.amt)}</b>${st.rem > 0 && st.paid > 0 ? `<small class="neg">${L('বাকি', 'due')} ${tcM(st.rem)}</small>` : ''}</span></button>`;
+    <span class="lend"><b>${tcM(i.amt)}</b>${st.rem > 0 && st.paid > 0 ? `<small class="neg">${L('বাকি', 'due')} ${tcM(st.rem)}</small>` : ''}</span></button>${i.c.cancelled ? '' : rowTools('tc-chg-edit', 'tc-chg-del', i.id)}</div>`;
 }
 function tcExpLabel(x, e) {
   const who = e.studentId ? (x.stu[e.studentId] || {}).name : e.jobId ? (x.job[e.jobId] || {}).name : e.batchId ? (x.bat[e.batchId] || {}).name : '';
@@ -70,9 +70,9 @@ function tcExpLabel(x, e) {
 }
 function tcExpRow(x, e, td) {
   const st = tcItemState(x, e.id, 'out', td), lb = tcExpLabel(x, e);
-  return `<button type="button" class="lrow" data-action="tc-item" data-id="${esc(e.id)}" data-side="out"><span class="lic">${tcCat(e.cat).e}</span>
+  return `<div class="lwrap"><button type="button" class="lrow" data-action="tc-item" data-id="${esc(e.id)}" data-side="out"><span class="lic">${tcCat(e.cat).e}</span>
     <span class="lmain"><b>${esc(lb.t)}</b><small>${esc(lb.s)} ${tcBadge(st.status)}${e.recurId ? ' · 🔁' : ''}${e.reusable ? ' · ' + L('পুনর্ব্যবহারযোগ্য', 'reusable') : ''}</small></span>
-    <span class="lend"><b>${tcM(e.amt)}</b>${st.rem > 0 && st.paid > 0 ? `<small class="neg">${L('বাকি', 'due')} ${tcM(st.rem)}</small>` : ''}</span></button>`;
+    <span class="lend"><b>${tcM(e.amt)}</b>${st.rem > 0 && st.paid > 0 ? `<small class="neg">${L('বাকি', 'due')} ${tcM(st.rem)}</small>` : ''}</span></button>${rowTools('tc-exp-edit', 'tc-exp-del', e.id)}</div>`;
 }
 const tcMonthNav = (act = 'tc-ym') => `<div class="tcmn"><button type="button" class="icon-btn" data-action="${act}" data-d="-1" aria-label="${L('আগের মাস', 'Previous month')}">${icon('prev', 20)}</button><b>${tcYmLabel(tcUi.ym)}</b><button type="button" class="icon-btn" data-action="${act}" data-d="1" aria-label="${L('পরের মাস', 'Next month')}">${icon('next', 20)}</button></div>`;
 
@@ -182,21 +182,30 @@ function tcSched() {
 
 /* ---------- কাজ: চাকরি, শিক্ষার্থী, কোচিং ---------- */
 function tcStuDue(x, id) { return tcSum(x.incomes.filter(i => i.c.studentId === id).map(i => Math.max(0, i.amt - x.paid(i.id)))); }
-function tcStuRows(x) {
-  const t = tcd(), q = tcUi.q.trim().toLowerCase();
-  const list = tcLive(t.students).filter(s => (tcUi.stf === 'all' || s.status === tcUi.stf) && (!q || `${s.name} ${s.cls || ''} ${s.school || ''}`.toLowerCase().includes(q))).sort((a, b) => a.name.localeCompare(b.name));
-  if (!list.length) return empty('🎓', L('কোনো শিক্ষার্থী নেই', 'No students'), `<p class="hint">${L('উপরের "＋ শিক্ষার্থী" চেপে যোগ করুন।', 'Tap "＋ Student" to add one.')}</p>`);
+function tcStuRows() {
+  const t = tcd(), td = today(), q = tcUi.q.trim().toLowerCase();
   const stn = { active: ['পড়ছে', 'Active'], paused: ['বিরতিতে', 'Paused'], left: ['ছেড়েছে', 'Left'] };
-  return `<div class="list">${list.map(s => { const due = tcStuDue(x, s.id), nb = tcLive(t.enrolls).filter(e => e.studentId === s.id && !e.to).length, subs = tcLive(s.subjects).filter(u => u.active !== false);
-    return `<div class="lwrap"><button type="button" class="lrow" data-action="tc-stu" data-id="${s.id}"><span class="lic">${s.status === 'active' ? '🎓' : s.status === 'paused' ? '⏸️' : '👋'}</span>
-      <span class="lmain"><b>${esc(s.name)}</b><small>${[s.cls, s.school].filter(Boolean).map(esc).join(' · ')}${[s.cls, s.school].some(Boolean) ? ' · ' : ''}${subs.map(u => esc(u.name)).join(', ') || L('বিষয় নেই', 'no subject')}${nb ? ` · ${nb} ${L('ব্যাচ', 'batch')}` : ''}${s.status !== 'active' ? ' · ' + stn[s.status][isEN() ? 1 : 0] : ''}</small></span>
-      <span class="lend">${due > 0 ? `<b class="neg">${tcM(due)}</b><small>${L('বাকি', 'due')}</small>` : `<small class="pos">${L('বাকি নেই', 'no dues')}</small>`}</span></button></div>`; }).join('')}</div>`;
+  const all = tcAllStudents(t, td).filter(r => {
+    const s = r.s, st = tcUi.stf;
+    if (!(st === 'all' || (st === 'archived' ? s.archived : (s.status === st && !s.archived)))) return false;
+    if (tcUi.skind !== 'all' && !(tcUi.skind === 'private' ? r.subjects.length : r.batches.length)) return false;
+    if (tcUi.spay !== 'all' && r.fin.status !== tcUi.spay) return false;
+    return !q || (s.name + ' ' + (s.cls || '') + ' ' + (s.school || '') + ' ' + (s.phone || '') + ' ' + r.batches.map(b => b.name).join(' ') + ' ' + r.subjects.map(u => u.name).join(' ')).toLowerCase().includes(q);
+  }).sort((a, b) => a.s.name.localeCompare(b.s.name));
+  const tot = { due: tcSum(all.map(r => r.fin.due)), od: tcSum(all.map(r => r.fin.overdue)) };
+  if (!all.length) return empty('🎓', L('কোনো শিক্ষার্থী নেই', 'No students'), `<p class="hint">${L('ফিল্টার বদলান বা "＋ শিক্ষার্থী" চেপে নতুন যোগ করুন।', 'Change the filters or tap "＋ Student" to add one.')}</p>`);
+  return `<div class="minis"><div class="mini"><small>${L('শিক্ষার্থী', 'Students')}</small><b>${all.length}</b></div><div class="mini"><small>${L('মোট বাকি', 'Total due')}</small><b class="${tot.due > 0 ? 'neg' : ''}">${tcM(tot.due)}</b></div><div class="mini"><small>${L('সময় পার', 'Overdue')}</small><b class="${tot.od > 0 ? 'neg' : ''}">${tcM(tot.od)}</b></div></div>
+    <div class="list mt12">${all.map(r => { const s = r.s, f = r.fin, meta = [s.cls, s.school].filter(Boolean).map(esc).join(' · ');
+    return `<div class="lwrap tall"><button type="button" class="lrow" data-action="tc-stu" data-id="${s.id}"><span class="lic">${s.archived ? '🗄️' : s.status === 'active' ? '🎓' : s.status === 'paused' ? '⏸️' : '👋'}</span>
+      <span class="lmain"><b>${esc(s.name)}</b><small>${meta}${meta ? ' · ' : ''}${r.subjects.length ? '🏠 ' + r.subjects.map(u => esc(u.name)).join(', ') : ''}${r.subjects.length && r.batches.length ? ' · ' : ''}${r.batches.length ? '🏫 ' + r.batches.map(b => esc(b.name)).join(', ') : ''}${!r.subjects.length && !r.batches.length ? L('বিষয়/ব্যাচ নেই', 'no subject or batch') : ''}${s.status !== 'active' && !s.archived ? ' · ' + stn[s.status][isEN() ? 1 : 0] : ''}</small>
+        <small>${f.agreed > 0 ? `${L('ঠিক', 'Agreed')} ${tcM(f.agreed)} · ${L('পেয়েছি', 'paid')} ${tcM(f.paid)} ` : ''}${tcStBadge(f.status)} · ${tcAttLine(r.att)}</small></span>
+      <span class="lend">${f.due > 0 ? `<b class="neg">${tcM(f.due)}</b><small>${L('বাকি', 'due')}</small>` : `<small class="pos">${L('বাকি নেই', 'no dues')}</small>`}</span></button>${f.due > 0 ? `<button type="button" class="rowedit coll" data-action="tc-collect" data-id="${s.id}" aria-label="Collect fee">💵 ${L('ফি নিন', 'Collect')}</button>` : ''}${rowTools('tc-stu-edit', 'tc-stu-del', s.id)}</div>`; }).join('')}</div>`;
 }
 document.addEventListener('input', e => {
   const el = e.target.closest && e.target.closest('[data-tc-q]');
   if (!el) return;
   tcUi.q = el.value;
-  const b = $('[data-tc-stulist]'); if (b) b.innerHTML = tcStuRows(tcCtx(tcd()));
+  const b = $('[data-tc-stulist]'); if (b) b.innerHTML = tcStuRows();
 });
 function tcJobsList(x) {
   const t = tcd(), ym = tcUi.ym, td = today(), jobs = tcLive(t.jobs);
@@ -204,31 +213,35 @@ function tcJobsList(x) {
   return `<div class="list">${jobs.map(j => { const i = x.incomes.find(z => z.c.kind === 'job' && z.c.jobId === j.id && z.ym === ym), st = i && tcItemState(x, i.id, 'in', td);
     return `<div class="lwrap"><button type="button" class="lrow" data-action="tc-job" data-id="${j.id}"><span class="lic">💼</span>
       <span class="lmain"><b>${esc(j.name)}</b><small>${esc(j.role || '')}${j.role ? ' · ' : ''}${L('বেতন', 'Salary')} ${tcM(tcRateAt(j.salary, ym))}${j.active === false ? ' · ' + L('নিষ্ক্রিয়', 'inactive') : ''}</small></span>
-      <span class="lend">${st ? tcBadge(st.status) : `<small>${L('এই মাসের বেতন তৈরি হয়নি', 'not created')}</small>`}</span></button></div>`; }).join('')}</div>`;
+      <span class="lend">${st ? tcBadge(st.status) : `<small>${L('এই মাসের বেতন তৈরি হয়নি', 'not created')}</small>`}</span></button>${rowTools('tc-job-edit', 'tc-job-del', j.id)}</div>`; }).join('')}</div>`;
 }
 function tcCoachList() {
-  const t = tcd(), ym = tcUi.ym, bats = tcLive(t.batches), cs = tcLive(t.centers);
-  if (!bats.length && !cs.length) return empty('🏫', L('কোনো কোচিং নেই', 'No coaching yet'), `<p class="hint">${L('কোচিংয়ের নাম আর ব্যাচ যোগ করুন। প্রতিটা ব্যাচের ফি, খরচ আর লাভ আলাদা থাকবে।', 'Add the coaching and its batches. Each batch keeps its own fees, costs and profit.')}</p>`);
+  const t = tcd(), ym = tcUi.ym, td = today(), allB = tcLive(t.batches), nArch = allB.filter(b => b.archived).length, bats = allB.filter(b => tcUi.showArch ? true : !b.archived), cs = tcLive(t.centers);
+  if (!bats.length && !cs.length) return empty('🏫', L('কোনো ব্যাচ নেই', 'No batches yet'), `<p class="hint">${L('ব্যাচ তৈরি করে শিক্ষার্থী যোগ করুন। প্রতিটা ব্যাচের উপস্থিতি, ফি, বকেয়া আর লাভ আলাদা থাকবে।', 'Create a batch and add students. Each batch keeps its own attendance, fees, dues and profit.')}</p>`);
   const x = tcCtx(t);
-  const bRow = b => { const n = tcLive(t.enrolls).filter(e => e.batchId === b.id && tcEnrollOk(x, e, ym)).length, r = tcEntityMonths(t, { batchId: b.id }).find(z => z.ym === ym) || { earned: 0, exp: 0, net: 0 };
-    return `<div class="lwrap"><button type="button" class="lrow" data-action="tc-bat" data-id="${b.id}"><span class="lic">🏫</span><span class="lmain"><b>${esc(b.name)}${b.code ? ` <small>(${esc(b.code)})</small>` : ''}</b><small>${[b.cls, b.subject].filter(Boolean).map(esc).join(' · ')}${[b.cls, b.subject].some(Boolean) ? ' · ' : ''}${n} ${L('জন', 'students')}${b.active === false ? ' · ' + L('নিষ্ক্রিয়', 'inactive') : ''}</small></span>
-      <span class="lend"><b class="${r.net < 0 ? 'neg' : ''}">${tcM(r.net)}</b><small>${L('লাভ', 'profit')}</small></span></button></div>`; };
-  const groups = cs.map(c => `<div class="section-title">${esc(c.name)}<button type="button" class="link" style="float:right" data-action="tc-center-edit" data-id="${c.id}">${L('বদলান', 'Edit')}</button></div>${(bats.filter(b => b.centerId === c.id).map(bRow).join('') && `<div class="list">${bats.filter(b => b.centerId === c.id).map(bRow).join('')}</div>`) || `<p class="hint">${L('এই কোচিংয়ে এখনও ব্যাচ নেই।', 'No batches here yet.')}</p>`}`);
+  const bRow = b => { const n = tcLive(t.enrolls).filter(e => e.batchId === b.id && tcEnrollOk(x, e, ym)).length, bf = tcBatchFin(t, b.id, td, x), sm = tcBatchAttSummary(t, b.id, ym);
+    return `<div class="lwrap tall"><button type="button" class="lrow" data-action="tc-bat" data-id="${b.id}"><span class="lic">${b.archived ? '🗄️' : '🏫'}</span><span class="lmain"><b>${esc(b.name)}${b.code ? ` <small>(${esc(b.code)})</small>` : ''}</b><small>${[b.cls, b.subject].filter(Boolean).map(esc).join(' · ')}${[b.cls, b.subject].some(Boolean) ? ' · ' : ''}${n} ${L('জন', 'students')}${b.archived ? ' · ' + L('আর্কাইভ', 'archived') : b.active === false ? ' · ' + L('নিষ্ক্রিয়', 'inactive') : ''}</small>
+      <small>${L('আদায়', 'Collected')} ${tcM(bf.collected)} · ${bf.due > 0 ? `<span class="neg">${L('বাকি', 'due')} ${tcM(bf.due)}</span>` : L('বাকি নেই', 'no dues')}${sm.avgPct != null ? ' · ' + L('উপস্থিতি', 'att.') + ' ' + sm.avgPct + '%' : ''}</small></span></button>${rowTools('tc-bat-edit', 'tc-bat-del', b.id)}</div>`; };
+  const grp = list => `<div class="list">${list.map(bRow).join('')}</div>`;
+  const groups = cs.map(c => { const l = bats.filter(b => b.centerId === c.id); return `<div class="section-title">${esc(c.name)}<button type="button" class="link" style="float:right" data-action="tc-center-edit" data-id="${c.id}">${L('বদলান', 'Edit')}</button></div>${l.length ? grp(l) : `<p class="hint">${L('এই কোচিংয়ে এখনও ব্যাচ নেই।', 'No batches here yet.')}</p>`}`; });
   const loose = bats.filter(b => !cs.some(c => c.id === b.centerId));
-  return groups.join('') + (loose.length ? `<div class="section-title">${L('কোচিং ছাড়া ব্যাচ', 'Batches without a coaching')}</div><div class="list">${loose.map(bRow).join('')}</div>` : '');
+  return groups.join('') + (loose.length ? (cs.length ? `<div class="section-title">${L('কোচিং ছাড়া ব্যাচ', 'Batches without a coaching')}</div>` : '') + grp(loose) : '')
+    + (nArch ? `<button type="button" class="btn sm block mt12" data-action="tc-show-arch">${tcUi.showArch ? L('আর্কাইভ করা ব্যাচ লুকান', 'Hide archived batches') : L(`আর্কাইভ করা ${nArch}টা ব্যাচ দেখান`, `Show ${nArch} archived batch(es)`)}</button>` : '');
 }
 function tcWork() {
-  const x = tcCtx(tcd());
-  const subs = [['job', L('চাকরি', 'Jobs')], ['stu', L('শিক্ষার্থী', 'Students')], ['coach', L('কোচিং', 'Coaching')]];
+  const subs = [['job', L('চাকরি', 'Jobs')], ['stu', L('সব শিক্ষার্থী', 'All Students')], ['coach', L('ব্যাচ', 'Batches')]];
   const add = { job: ['tc-job-add', L('চাকরি', 'Job')], stu: ['tc-stu-add', L('শিক্ষার্থী', 'Student')], coach: ['tc-bat-add', L('ব্যাচ', 'Batch')] }[tcUi.wsub];
+  const x = tcCtx(tcd()), chip = (key, opts) => `<div class="chiprow mt8">${opts.map(([k, l]) => `<button type="button" class="fchip ${tcUi[key] === k ? 'active' : ''}" data-action="tc-flt" data-key="${key}" data-v="${k}">${l}</button>`).join('')}</div>`;
   let body;
   if (tcUi.wsub === 'job') body = tcMonthNav() + tcJobsList(x);
   else if (tcUi.wsub === 'stu') {
-    const fl = [['active', L('পড়ছে', 'Active')], ['paused', L('বিরতিতে', 'Paused')], ['left', L('ছেড়েছে', 'Left')], ['all', L('সব', 'All')]];
-    body = `<input class="input" type="search" data-tc-q value="${esc(tcUi.q)}" placeholder="${L('নাম, শ্রেণি বা স্কুল খুঁজুন', 'Search name, class or school')}">
-      <div class="chiprow mt8">${fl.map(([k, l]) => `<button type="button" class="fchip ${tcUi.stf === k ? 'active' : ''}" data-action="tc-stf" data-v="${k}">${l}</button>`).join('')}</div>
-      <div class="mt12" data-tc-stulist>${tcStuRows(x)}</div>`;
-  } else body = tcMonthNav() + `<div class="chiprow"><button type="button" class="fchip" data-action="tc-center-add">＋ ${L('কোচিং', 'Coaching')}</button></div><div class="mt8">${tcCoachList()}</div>`;
+    body = `<p class="hint" style="margin:0 0 8px">${L('প্রাইভেট ও ব্যাচের সব শিক্ষার্থী এক জায়গায়। নামে চাপলে পুরো প্রোফাইল: ফি, পেমেন্ট, উপস্থিতি ও ফল।', 'Private and batch students in one place. Tap a name for the full profile: fees, payments, attendance and results.')}</p>
+      <input class="input" type="search" data-tc-q value="${esc(tcUi.q)}" placeholder="${L('নাম, শ্রেণি, স্কুল, ব্যাচ বা বিষয় খুঁজুন', 'Search name, class, school, batch or subject')}">
+      ${chip('stf', [['active', L('পড়ছে', 'Active')], ['paused', L('বিরতিতে', 'Paused')], ['left', L('ছেড়েছে', 'Left')], ['archived', L('আর্কাইভ', 'Archived')], ['all', L('সব', 'All')]])}
+      ${chip('skind', [['all', L('সব ধরন', 'All types')], ['private', '🏠 ' + L('প্রাইভেট', 'Private')], ['batch', '🏫 ' + L('ব্যাচ', 'Batch')]])}
+      ${chip('spay', [['all', L('ফি: সব', 'Fees: all')], ['unpaid', 'Due'], ['partial', 'Partially Paid'], ['overdue', 'Overdue'], ['paid', 'Paid']])}
+      <div class="mt12" data-tc-stulist>${tcStuRows()}</div>`;
+  } else body = tcMonthNav() + `<div class="chiprow"><button type="button" class="fchip" data-action="tc-center-add">＋ ${L('কোচিং', 'Coaching')}</button><button type="button" class="fchip" data-action="tc-att-pick">✅ ${L('উপস্থিতি নিন', 'Take attendance')}</button></div><div class="mt8">${tcCoachList()}</div>`;
   return tcPage(`<div class="page-head"><h1>${L('কাজ ও শিক্ষার্থী', 'Work & students')}</h1><button type="button" class="btn primary sm" data-action="${add[0]}">${icon('plus', 18)} ${add[1]}</button></div>
     <div class="seg mb12">${subs.map(([k, l]) => `<button type="button" class="${tcUi.wsub === k ? 'active' : ''}" data-action="tc-wsub" data-v="${k}">${l}</button>`).join('')}</div>${body}`);
 }

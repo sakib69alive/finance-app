@@ -245,21 +245,27 @@ Object.assign(ACTIONS, {
 
 /* ---------- পরীক্ষা ---------- */
 function tcExamForm(e, bid) {
-  const v = e || { date: today(), students: 0, pages: 0, sheets: 0, wasteCopies: 0, batchId: bid || '' };
-  tcOpenForm(`${sheetHead(e ? L('পরীক্ষা সম্পাদনা', 'Edit exam') : L('নতুন পরীক্ষা', 'New exam'), L('খরচ নিজে হিসাব হবে', 'The cost is worked out for you'))}
+  const t = tcd(), v = e || { date: today(), students: 0, pages: 0, sheets: 0, wasteCopies: 0, batchId: bid || '', pass: 33 }, picked = new Set(v.studentIds || []);
+  const stuAll = tcLive(t.students).filter(z => !z.archived).sort((a, b) => a.name.localeCompare(b.name)), hasCost = !!(e && tcExamCost(e).total > 0);
+  tcOpenForm(`${sheetHead(e ? L('পরীক্ষা সম্পাদনা', 'Edit exam') : L('নতুন পরীক্ষা', 'New exam'), L('নম্বর পরে লিখবেন, খরচ দিলে নিজে হিসাব হবে', 'Enter marks later; any cost is worked out for you'))}
     <form data-form="tc-exam" data-live="tc-exam" data-id="${e ? e.id : ''}" autocomplete="off">
-      ${tcField(L('পরীক্ষার নাম', 'Exam name'), tcTxt('name', v.name, '', 'maxlength="60"'))}
-      <div class="row2">${tcField(L('তারিখ', 'Date'), tcDateIn('date', v.date))}${tcField(L('কোন ব্যাচের', 'Which batch'), tcSel('batch', [['', L('কোনো ব্যাচ নয়', 'None')]].concat(tcLive(tcd().batches).map(b => [b.id, esc(b.name)])), v.batchId || ''))}</div>
+      ${tcField(L('পরীক্ষার নাম', 'Exam name'), tcTxt('name', v.name, L('যেমন: মাসিক পরীক্ষা ১', 'e.g. Monthly test 1'), 'maxlength="60"'))}
+      <div class="row2">${tcField(L('তারিখ', 'Date'), tcDateIn('date', v.date))}${tcField(L('বিষয়', 'Subject'), tcTxt('subject', v.subject, '', 'maxlength="40"'))}</div>
+      <div class="row2">${tcField(L('পূর্ণমান (মোট নম্বর)', 'Total marks'), `<input class="input" name="marks" inputmode="decimal" value="${v.marks || ''}" placeholder="100">`)}${tcField(L('পাস নম্বর (%)', 'Pass mark (%)'), `<input class="input" name="pass" inputmode="decimal" value="${v.pass || 33}">`)}</div>
+      ${tcField(L('কোন ব্যাচের', 'Which batch'), tcSel('batch', [['', L('কোনো ব্যাচ নয় (নিচে শিক্ষার্থী বাছুন)', 'No batch (pick students below)')]].concat(tcLive(t.batches).filter(b => !b.archived || b.id === v.batchId).map(b => [b.id, esc(b.name)])), v.batchId || ''))}
+      <details class="tcmore" ${picked.size ? 'open' : ''}><summary>${L('আলাদা শিক্ষার্থী বাছুন (ব্যাচের বাইরে বা প্রাইভেট)', 'Pick individual students (outside the batch, or private)')}</summary>
+        <div style="max-height:30vh;overflow:auto">${stuAll.map(z => `<label class="check"><input type="checkbox" name="xs" value="${z.id}" ${picked.has(z.id) ? 'checked' : ''}><span>${esc(z.name)}<small class="faint"> ${esc(z.cls || '')}</small></span></label>`).join('') || `<p class="hint">${L('এখনও শিক্ষার্থী নেই।', 'No students yet.')}</p>`}</div></details>
+      <details class="tcmore" ${hasCost ? 'open' : ''}><summary>${L('পরীক্ষার খরচ (ঐচ্ছিক)', 'Exam cost (optional)')}</summary>
       <div class="row2">${tcField(L('মোট শিক্ষার্থী', 'Students'), `<input class="input" name="students" inputmode="numeric" value="${v.students || ''}" placeholder="0">`)}${tcField(L('প্রশ্নপত্রের পৃষ্ঠা (প্রত্যেকের)', 'Question pages (each)'), `<input class="input" name="pages" inputmode="decimal" value="${v.pages || ''}" placeholder="0">`)}</div>
       <div class="row2">${tcField(L('প্রতি পৃষ্ঠার প্রিন্ট খরচ', 'Print cost per page'), moneyInput('pp', v.pagePrice ? String(v.pagePrice / 100) : '', '0'))}${tcField(L('উত্তরপত্র/খাতার সংখ্যা', 'Answer sheets / copies'), `<input class="input" name="sheets" inputmode="numeric" value="${v.sheets || ''}" placeholder="0">`)}</div>
       <div class="row2">${tcField(L('প্রতি খাতার মূল্য', 'Price per sheet'), moneyInput('sp', v.sheetPrice ? String(v.sheetPrice / 100) : '', '0'))}${tcField(L('অতিরিক্ত প্রিন্ট (কপি)', 'Extra / wasted copies'), `<input class="input" name="waste" inputmode="numeric" value="${v.wasteCopies || ''}" placeholder="0">`)}</div>
       <div class="row2">${tcField(L('অন্যান্য খরচ (কাগজ, পরিবহন…)', 'Other costs (paper, transport…)'), moneyInput('extra', v.extra ? String(v.extra / 100) : '', '0'))}${tcField(L('আনুমানিক বাজেট (ঐচ্ছিক)', 'Estimated budget (optional)'), moneyInput('budget', v.budget ? String(v.budget / 100) : '', '0'))}</div>
       <div class="bsum ok" data-prev></div>
-      ${e ? '' : tcField(L('পরিশোধ', 'Payment'), tcSel('pstat', [['unpaid', L('বাকি', 'Unpaid')], ['paid', L('পরিশোধিত', 'Paid')]], 'unpaid'))}
+      ${e ? '' : tcField(L('পরিশোধ', 'Payment'), tcSel('pstat', [['unpaid', L('বাকি', 'Unpaid')], ['paid', L('পরিশোধিত', 'Paid')]], 'unpaid'))}</details>
       ${tcSubmit()}</form>
     ${e ? `<button type="button" class="btn danger block mt8" data-action="tc-exam-del" data-id="${e.id}">${icon('trash', 18)} ${L('পরীক্ষা ডিলিট', 'Delete exam')}</button>` : ''}`);
 }
-const tcExamRead = f => ({ name: tcV(f, 'name'), date: tcV(f, 'date'), batchId: tcV(f, 'batch'), students: Math.max(0, Math.floor(tcNum(f.elements.students.value))), pages: Math.max(0, tcNum(f.elements.pages.value)), pagePrice: tcIn(f, 'pp'), sheets: Math.max(0, Math.floor(tcNum(f.elements.sheets.value))), sheetPrice: tcIn(f, 'sp'), wasteCopies: Math.max(0, Math.floor(tcNum(f.elements.waste.value))), extra: tcIn(f, 'extra'), budget: tcIn(f, 'budget') });
+const tcExamRead = f => ({ name: tcV(f, 'name'), date: tcV(f, 'date'), batchId: tcV(f, 'batch'), subject: tcV(f, 'subject'), marks: Math.max(0, tcNum(f.elements.marks.value)), pass: Math.min(100, Math.max(0, tcNum(f.elements.pass.value)) || 33), studentIds: $$('input[name="xs"]:checked', f).map(i => i.value), students: Math.max(0, Math.floor(tcNum(f.elements.students.value))), pages: Math.max(0, tcNum(f.elements.pages.value)), pagePrice: tcIn(f, 'pp'), sheets: Math.max(0, Math.floor(tcNum(f.elements.sheets.value))), sheetPrice: tcIn(f, 'sp'), wasteCopies: Math.max(0, Math.floor(tcNum(f.elements.waste.value))), extra: tcIn(f, 'extra'), budget: tcIn(f, 'budget') });
 LIVE['tc-exam'] = (f, el) => {
   if (el && el.name === 'batch' && el.value && !tcNum(f.elements.students.value)) {
     const n = tcLive(tcd().enrolls).filter(e => e.batchId === el.value && !e.to).length;
@@ -278,18 +284,23 @@ function tcExamSync(ex) {
   const n = Object.assign({ id: uid(), photos: [], createdAt: Date.now() }, fields); t.expenses.push(n); return n;
 }
 FORMS['tc-exam'] = f => {
-  const t = tcd(), id = f.dataset.id, old = id ? t.exams.find(z => z.id === id) : null, v = tcExamRead(f);
+  const t = tcd(), id = f.dataset.id, old = id ? t.exams.find(z => z.id === id) : null, v = tcExamRead(f), cost = tcExamCost(v).total;
   if (!v.name) return fail(f, L('পরীক্ষার নাম লিখুন', 'Enter the exam name'), 'name');
   if (!tcDateOk(v.date)) return fail(f, L('তারিখ ঠিক নেই', 'Check the date'), 'date');
-  if (!(tcExamCost(v).total > 0)) return fail(f, L('শিক্ষার্থী, পৃষ্ঠা, দাম বা অন্যান্য খরচ দিন', 'Enter students, pages, prices or other costs'), 'students');
-  const ex = old ? Object.assign(old, v) : Object.assign({ id: uid(), createdAt: Date.now() }, v);
+  if (!(cost > 0) && !(v.marks > 0)) return fail(f, L('পূর্ণমান (মোট নম্বর) দিন, অথবা খরচ লিখুন', 'Enter the total marks, or a cost'), 'marks');
+  if (old) {
+    const lowered = Object.keys(old.results || {}).filter(sid => v.marks > 0 && tcNum(old.results[sid]) > v.marks);
+    if (lowered.length) return fail(f, L(`কিছু শিক্ষার্থীর নম্বর ${v.marks}-এর বেশি লেখা আছে। আগে নম্বর ঠিক করুন।`, `Some saved marks are above ${v.marks}. Fix those marks first.`), 'marks');
+    const e0 = t.expenses.find(z => z.ref === 'ex:' + old.id && !z.del);
+    if (e0 && tcCtx(t).paid(e0.id) > cost) return fail(f, L('পরিশোধিত টাকার চেয়ে কম হতে পারে না', 'Cannot be below what is already paid'), 'students');
+  }
+  const ex = old ? Object.assign(old, v) : Object.assign({ id: uid(), createdAt: Date.now(), results: {} }, v);
   if (!old) t.exams.push(ex);
-  const prevPaid = old ? (() => { const e = t.expenses.find(z => z.ref === 'ex:' + ex.id && !z.del); return e ? tcCtx(t).paid(e.id) : 0; })() : 0;
-  if (prevPaid > tcExamCost(ex).total) return fail(f, L('পরিশোধিত টাকার চেয়ে কম হতে পারে না', 'Cannot be below what is already paid'), 'students');
   const e = tcExamSync(ex);
   if (!old && e && tcV(f, 'pstat') === 'paid') t.pays.push({ id: uid(), side: 'out', ref: e.id, amt: e.amt, date: ex.date, method: 'cash', note: '', createdAt: Date.now() });
   tcAfter(SAVED());
 };
+
 Object.assign(ACTIONS, {
   'tc-exam-add': el => tcExamForm(null, el && el.dataset && el.dataset.bid),
   'tc-exam-edit': el => { const e = tcd().exams.find(z => z.id === el.dataset.id && !z.del); if (e) tcExamForm(e); },
@@ -366,12 +377,13 @@ Object.assign(ACTIONS, {
 });
 
 /* ---------- শিক্ষার্থী ও বিষয় ---------- */
-function tcStuForm(s) {
-  const v = s || { start: today() }, isNew = !s;
+function tcStuForm(s, bid) {
+  const v = s || { start: today() }, isNew = !s, bat = bid && tcBat(bid);
   tcOpenForm(`${sheetHead(isNew ? L('নতুন শিক্ষার্থী', 'New student') : L('শিক্ষার্থীর তথ্য', 'Student details'))}
-    <form data-form="tc-stu" data-id="${s ? s.id : ''}" autocomplete="off">
+    <form data-form="tc-stu" data-id="${s ? s.id : ''}" data-bid="${bat ? bat.id : ''}" autocomplete="off">
       ${tcField(L('নাম', 'Name'), tcTxt('name', v.name, '', 'maxlength="60"'))}
       <div class="row2">${tcField(L('শ্রেণি', 'Class'), tcTxt('cls', v.cls, '', 'maxlength="30"'))}${tcField(L('শুরুর তারিখ', 'Start date'), tcDateIn('start', v.start))}</div>
+      ${bat ? tcField(L(`${esc(bat.name)} ব্যাচের মাসিক ফি`, `Monthly fee for ${esc(bat.name)}`), moneyInput('bfee', bat.fee ? String(bat.fee / 100) : '', '0')) : ''}
       ${isNew ? `<div class="section-title" style="margin-top:6px">${L('প্রথম বিষয় (ঐচ্ছিক, পরেও যোগ করা যায়)', 'First subject (optional, can add later)')}</div>
         <div class="row2">${tcField(L('বিষয়', 'Subject'), tcTxt('sb_name', '', L('যেমন: গণিত', 'e.g. Maths'), 'maxlength="40"'))}${tcField(L('ফির ধরন', 'Fee type'), tcSel('sb_mode', [['month', L('মাসিক', 'Monthly')], ['class', L('প্রতি ক্লাস', 'Per class')]], 'month'))}</div>
         ${tcField(L('ফি (মাসিক বা প্রতি ক্লাস)', 'Fee (monthly or per class)'), moneyInput('sb_fee', '', '0'))}${tcDaysPick([])}
@@ -386,12 +398,21 @@ FORMS['tc-stu'] = f => {
   if (!tcDateOk(start)) return fail(f, L('তারিখ ঠিক নেই', 'Check the date'), 'start');
   if (end && !tcDateOk(end)) return fail(f, L('তারিখ ঠিক নেই', 'Check the date'), 'end');
   const base = { name, cls: tcV(f, 'cls'), school: tcV(f, 'school'), phone: tcV(f, 'phone'), guardian: tcV(f, 'guardian'), notes: tcV(f, 'notes'), start };
+  if (!old && f.dataset.dupok !== '1' && t.students.some(z => !z.del && z.name.trim().toLowerCase() === name.toLowerCase())) {
+    f.dataset.dupok = '1';
+    return fail(f, L('এই নামে একজন শিক্ষার্থী আগেই আছে। একই জন হলে নতুন না বানিয়ে "ব্যাচে যোগ" থেকে তাকে বেছে নিন। অন্য একজন হলে আবার "সেভ করুন" চাপুন।', 'A student with this name already exists. If it is the same person, pick them from "Add to batch" instead of creating a duplicate. If it is someone else, tap Save again.'), 'name');
+  }
   if (old) { Object.assign(old, base); if (f.elements.end) old.end = end; return tcAfter(SAVED()); }
   const s = Object.assign({ id: uid(), status: 'active', end: '', subjects: [], docs: [], createdAt: Date.now() }, base);
   const sb = tcV(f, 'sb_name');
   if (sb) {
     const fee = tcIn(f, 'sb_fee'); if (!(fee > 0)) return fail(f, L('বিষয়ের ফি লিখুন', 'Enter the subject fee'), 'sb_fee');
     s.subjects.push({ id: uid(), name: sb, mode: tcV(f, 'sb_mode'), fees: [{ from: tcYm(start), amt: fee }], days: tcDaysOf(f), time: tcV(f, 'sb_time'), dur: 60, place: tcV(f, 'sb_place'), active: true });
+  }
+  const bat = f.dataset.bid && tcBat(f.dataset.bid);
+  if (bat) {
+    const bf = tcIn(f, 'bfee'); if (!(bf > 0)) return fail(f, L('ব্যাচের মাসিক ফি লিখুন', 'Enter the batch monthly fee'), 'bfee');
+    t.enrolls.push({ id: uid(), studentId: s.id, batchId: bat.id, from: tcYm(start), to: '', fees: [{ from: tcYm(start), amt: bf }], createdAt: Date.now() });
   }
   t.students.push(s); tcAfter(SAVED());
 };
@@ -419,7 +440,20 @@ FORMS['tc-sub'] = f => {
   tcAfter(SAVED());
 };
 Object.assign(ACTIONS, {
-  'tc-stu-add': () => tcStuForm(null),
+  'tc-stu-add': el => tcStuForm(null, el && el.dataset && el.dataset.bid),
+  'tc-flt': el => { tcUi[el.dataset.key] = el.dataset.v; render(); },
+  'tc-chg-del': el => {
+    const t = tcd(), c = t.charges.find(z => z.id === el.dataset.id); if (!c) return;
+    if (tcCtx(t).paid(c.id) > 0) { toast(L('এতে পেমেন্ট আছে। খুলে আগে পেমেন্ট বাতিল করুন।', 'It has payments. Open it and void the payments first.'), 'danger'); return tcSheet(() => tcItemHtml(c.id, 'in')); }
+    if (!confirm(L('এই ফি/পাওনা হিসাব থেকে বাদ দেবেন? এটা বাতিল হয়ে থাকবে, পরে আবার চালু করা যাবে।', 'Remove this fee from the books? It is cancelled, and can be restored later.'))) return;
+    undoable(L('বাতিল হয়েছে', 'Cancelled'), () => { c.cancelled = true; });
+  },
+  'tc-sub-del': el => {
+    const t = tcd(), s = tcStu(el.dataset.sid), u = s && s.subjects.find(z => z.id === el.dataset.id && !z.del); if (!u) return;
+    if (t.charges.some(c => c.ref === u.id)) return toast(L('এর ফির ইতিহাস আছে, তাই ডিলিট নয়। এডিটে গিয়ে "পড়ানো চলছে" বন্ধ করুন।', 'It has fee history, so it cannot be deleted. Edit it and stop teaching instead.'), 'danger');
+    if (!confirm(L(`"${u.name}" বিষয়টা ডিলিট করবেন?`, `Delete subject "${u.name}"?`))) return;
+    undoable(DELETED(), () => { u.del = true; });
+  },
   'tc-stu-edit': el => { const s = tcStu(el.dataset.id); if (s) tcStuForm(s); },
   'tc-sub-add': el => { const s = tcStu(el.dataset.id); if (s) tcSubForm(s, null); },
   'tc-sub-edit': el => { const s = tcStu(el.dataset.sid); if (s) tcSubForm(s, s.subjects.find(u => u.id === el.dataset.id)); },
@@ -430,12 +464,7 @@ Object.assign(ACTIONS, {
     else { s.status = 'active'; s.end = ''; }
     tcRefresh(SAVED());
   },
-  'tc-stu-del': el => {
-    const t = tcd(), s = tcStu(el.dataset.id); if (!s) return;
-    if (t.charges.some(c => c.studentId === s.id) || t.expenses.some(e => e.studentId === s.id)) return toast(L('এর ফি/পেমেন্টের ইতিহাস আছে, তাই ডিলিট নয়। "পড়া ছেড়েছে" দিন।', 'It has fee history, so it cannot be deleted. Mark as left instead.'), 'danger');
-    if (!confirm(L('এই শিক্ষার্থী ডিলিট করবেন?', 'Delete this student?'))) return;
-    tcSheetFn = null; closeSheet(); undoable(DELETED(), () => { s.del = true; t.enrolls.forEach(e => { if (e.studentId === s.id) e.del = true; }); });
-  },
+  'tc-stu-del': el => { if (tcStu(el.dataset.id)) tcSheet(() => tcRemoveStuHtml(el.dataset.id)); },
 });
 
 /* ---------- কোচিং ও ব্যাচ, ভর্তি, স্থানান্তর ---------- */
@@ -516,14 +545,14 @@ Object.assign(ACTIONS, {
   'tc-center-edit': el => { const c = tcd().centers.find(z => z.id === el.dataset.id); if (c) tcCenterForm(c); },
   'tc-bat-add': () => tcBatForm(null),
   'tc-bat-edit': el => { const b = tcBat(el.dataset.id); if (b) tcBatForm(b); },
-  'tc-enr-add': el => tcEnrForm(el.dataset.sid, el.dataset.bid),
+  'tc-enr-add': el => (el.dataset.bid && !el.dataset.sid ? tcOpenForm(tcEnrMultiHtml(el.dataset.bid)) : tcEnrForm(el.dataset.sid, el.dataset.bid)),
   'tc-enr-fee': el => {
     const e = tcd().enrolls.find(z => z.id === el.dataset.id && !z.del); if (!e) return;
     const x = tcCtx(tcd()), s = x.stu[e.studentId], b = x.bat[e.batchId];
     tcOpenForm(`${sheetHead(L('ব্যাচের ফি', 'Batch fee'), `${s ? esc(s.name) : ''} · ${b ? esc(b.name) : ''}`)}
       <form data-form="tc-enr-fee" data-id="${e.id}" autocomplete="off"><div class="row2">${tcField(L('নতুন মাসিক ফি', 'New monthly fee'), moneyInput('fee', String(tcRateAt(e.fees, tcUi.ym < e.from ? e.from : tcUi.ym) / 100), '0'))}${tcField(L('কার্যকর মাস', 'Effective from'), tcMonthIn('from', tcUi.ym))}</div>
       <p class="hint">${L('আগের মাসের ফি অপরিবর্তিত থাকবে।', 'Earlier months\' fees stay unchanged.')}</p>${tcSubmit()}</form>
-      ${e.to ? '' : `<div class="section-title">${L('ব্যাচ থেকে বাদ দিন', 'Remove from batch')}</div><form data-form="tc-enr-rm" data-id="${e.id}" autocomplete="off">${tcField(L('কোন মাস থেকে ফি বন্ধ', 'Stop fees from month'), tcMonthIn('from', tcUi.ym))}<button class="btn danger block" type="submit">${L('বাদ দিন', 'Remove')}</button></form>`}`);
+      ${e.to ? '' : `<button type="button" class="btn danger block mt12" data-action="tc-enr-rm-ask" data-id="${e.id}">${L('ব্যাচ থেকে বাদ দিন', 'Remove from batch')}</button>`}`);
   },
   'tc-xfer': el => {
     const t = tcd(), e = t.enrolls.find(z => z.id === el.dataset.id && !z.del); if (!e) return;
@@ -534,12 +563,7 @@ Object.assign(ACTIONS, {
       <p class="hint">${L('আগের ব্যাচে ওই মাসের আগ পর্যন্ত ফি থাকবে, একই ফি দুবার তৈরি হবে না।', 'The old batch keeps its fees up to the month before; no fee is created twice.')}</p>${tcSubmit()}</form>`);
   },
   'tc-bat-act': el => { const b = tcBat(el.dataset.id); if (b) { b.active = b.active === false; tcRefresh(SAVED()); } },
-  'tc-bat-del': el => {
-    const t = tcd(), b = tcBat(el.dataset.id); if (!b) return;
-    if (t.charges.some(c => c.batchId === b.id) || t.expenses.some(e => e.batchId === b.id) || t.exams.some(e => !e.del && e.batchId === b.id)) return toast(L('এর ফি/খরচের ইতিহাস আছে, তাই ডিলিট নয়। "নিষ্ক্রিয় করুন" ব্যবহার করুন।', 'It has fee/cost history, so it cannot be deleted. Use Deactivate.'), 'danger');
-    if (!confirm(L('এই ব্যাচ ডিলিট করবেন?', 'Delete this batch?'))) return;
-    tcSheetFn = null; closeSheet(); undoable(DELETED(), () => { b.del = true; t.enrolls.forEach(e => { if (e.batchId === b.id) e.del = true; }); });
-  },
+  'tc-bat-del': el => { if (tcBat(el.dataset.id)) tcSheet(() => tcRemoveBatHtml(el.dataset.id)); },
 });
 
 /* ---------- ক্লাসের স্ট্যাটাস, উপস্থিতি, স্থগিত, অতিরিক্ত ক্লাস ---------- */
@@ -675,7 +699,7 @@ Object.assign(ACTIONS, {
     const list = tcPhotoIds(el.dataset.kind, el.dataset.owner), i = list.indexOf(el.dataset.id); if (i < 0) return;
     list.splice(i, 1); deleteImage('tcp:' + el.dataset.id).catch(() => {}); tcRefresh(DELETED());
   },
-  'tc-back': () => { const b = tcBack; tcBack = null; if (b) { tcSheetFn = b; openSheet(b()); } else closeSheet(); },
+  'tc-back': () => { const b = tcBack; tcBack = null; if (b) { tcSheetFn = b; openSheet(b(), b); } else closeSheet(); },
 });
 
 /* ---------- নেভিগেশন, ফিল্টার, শিট খোলা ---------- */
@@ -710,9 +734,11 @@ function tcGuide() {
   const S = [
     [L('শুরু: ৩ ধাপে', 'Start in 3 steps'), ul([L('<b>কাজ</b> ট্যাবে চাকরি, শিক্ষার্থী (বিষয়, ফি, ক্লাসের দিন) বা কোচিংয়ের ব্যাচ যোগ করুন।', 'In <b>Work</b> add jobs, students (subjects, fee, class days) or coaching batches.'), L('<b>আরও → নতুন মাসের হিসাব</b>: দেখে নিয়ে এক ট্যাপে ফি, বেতন ও নিয়মিত খরচ তৈরি করুন।', '<b>More → Create a month\'s books</b>: review, then create fees, salary and regular costs in one tap.'), L('টাকা পেলে <b>টাকা → পাওনা</b> থেকে পেমেন্ট লিখুন।', 'When money arrives, record it under <b>Money → Dues</b>.')])],
     [L('প্রতি মাসে আবার লিখতে হয় না', 'No retyping each month'), ul([L('সক্রিয় শিক্ষার্থী, ব্যাচ, চাকরি ও নিয়মিত খরচ নতুন মাসে নিজে তৈরির তালিকায় আসে। প্রতিটার একটাই নির্দিষ্ট পরিচয় (মাস সহ), তাই একই ফি দুবার তৈরি হয় না।', 'Active students, batches, jobs and regular costs appear in the new month\'s list. Each has a unique id including the month, so a fee is never created twice.'), L('বেতন/ফি বদল "কার্যকর মাস" থেকে চলে, আগের মাস ও পেমেন্ট বদলায় না।', 'Pay and fee changes apply from an effective month; earlier months and payments are untouched.'), L('শিক্ষার্থী ছেড়ে গেলে বা বিরতিতে থাকলে পরের মাসে ফি আসে না, পুরোনো বকেয়া থেকে যায়।', 'If a student leaves or is paused, no fee is created later; old dues stay.')])],
-    [L('আয়, পাওনা ও পেমেন্ট', 'Income, dues & payments'), `<p>${L('<b>অর্জিত আয়</b> = নির্ধারিত ফি/বেতন। <b>প্রাপ্ত</b> = বাস্তবে হাতে আসা টাকা। <b>পাওনা</b> = বাকি অংশ। অবস্থা: Unpaid, Partially Paid, Paid, Overdue (নির্ধারিত দিন পেরোলে)। আংশিক ও কিস্তির পেমেন্ট চলে। পেমেন্ট নিলে আয় আবার গণনা হয় না। ভুল হলে পেমেন্ট বাতিল করে নতুন লিখুন, ইতিহাস থাকে।', '<b>Earned</b> = scheduled fees/salary. <b>Received</b> = money actually in hand. <b>Receivable</b> = the rest. Status: Unpaid, Partially Paid, Paid, Overdue (past the due date). Partial and instalment payments work. A payment never counts income again. To fix a mistake void it and enter a new one; history stays.')}</p>`],
+    [L('আয়, পাওনা ও পেমেন্ট', 'Income, dues & payments'), `<p>${L('<b>অর্জিত আয়</b> = নির্ধারিত ফি/বেতন। <b>প্রাপ্ত</b> = বাস্তবে হাতে আসা টাকা। <b>পাওনা</b> = বাকি অংশ। অবস্থা: Due, Partially Paid, Paid, Overdue (নির্ধারিত দিন পেরোলে)। আংশিক ও কিস্তির পেমেন্ট চলে। পেমেন্ট নিলে আয় আবার গণনা হয় না। ভুল হলে পেমেন্ট বাতিল করে নতুন লিখুন, ইতিহাস থাকে।', '<b>Earned</b> = scheduled fees/salary. <b>Received</b> = money actually in hand. <b>Receivable</b> = the rest. Status: Due, Partially Paid, Paid, Overdue (past the due date). Partial and instalment payments work. A payment never counts income again. To fix a mistake void it and enter a new one; history stays.')}</p>`],
     [L('লাভ আর নগদ আলাদা', 'Profit vs cash'), `<p>${L('<b>প্রকৃত লাভ</b> = অর্জিত আয় − খরচ। <b>নগদ উদ্বৃত্ত</b> = প্রারম্ভিক নগদ + বাস্তবে প্রাপ্ত − বাস্তবে পরিশোধিত খরচ। তাই বকেয়া থাকলে লাভ বেশি আর নগদ কম দেখায়। এক খাত থেকে অন্য খাতে বদলালে নতুন আয়/খরচ হয় না, একই রেকর্ডের খাত বদলায়।', '<b>Net profit</b> = earned − expenses. <b>Cash balance</b> = opening cash + received − expenses paid. So with unpaid fees, profit looks higher than cash. Re-categorising never creates income or cost; the same record just moves.')}</p>`],
     [L('ক্লাস ও উপস্থিতি', 'Classes & attendance'), ul([L('ক্লাস ট্যাবে আজকের, আসন্ন ও ক্যালেন্ডার দেখুন; প্রাইভেট/ব্যাচ/চাকরি ফিল্টার করা যায়।', 'See today, upcoming and the calendar; filter private/batch/job.'), L('সম্পন্ন, অনুপস্থিত, বাতিল বা স্থগিত চিহ্নিত করুন। ব্যাচে কে অনুপস্থিত তাও লেখা যায়।', 'Mark done, absent, cancelled or postponed. In a batch you also mark who was absent.'), L('একই সময়ে দুটি ক্লাস পড়লে ⚠️ সতর্কতা আসে। প্রতি-ক্লাসের ফিতে শুধু সম্পন্ন ও অতিরিক্ত ক্লাস ধরা হয়।', 'Overlapping classes show a ⚠️ warning. Per-class fees count only done and extra classes.')])],
+    [L('সব শিক্ষার্থী ও ব্যাচ', 'All Students & batches'), ul([L('<b>কাজ → সব শিক্ষার্থী</b>: প্রাইভেট আর ব্যাচের সবাই এক তালিকায়। খুঁজুন, ফিল্টার করুন (ধরন, ফি-র অবস্থা), 💵 চেপে সরাসরি ফি নিন। নামে চাপলে পুরো প্রোফাইল: ফি, পেমেন্টের ইতিহাস, উপস্থিতি, ফল।', '<b>Work → All Students</b>: private and batch students in one list. Search, filter (type, fee status) and tap 💵 to collect a fee. Tap a name for the full profile: fees, payment history, attendance, results.'), L('<b>ব্যাচ</b>: তৈরি, এডিট, আর্কাইভ বা (ইতিহাস না থাকলে) ডিলিট। ব্যাচের পাতায় শিক্ষার্থী যোগ করুন আগে থেকে থাকা শিক্ষার্থী বেছে (নকল তৈরি হয় না), ফি-আদায়-বকেয়া ও উপস্থিতির সারাংশ দেখুন।', '<b>Batches</b>: create, edit, archive or (with no history) delete. Add students by picking existing ones (no duplicates) and see fees collected, dues and attendance at a glance.'), L('<b>উপস্থিতি</b>: ব্যাচের যেকোনো দিনের উপস্থিত/অনুপস্থিত লিখুন। ইতিহাস ও শিক্ষার্থী-ভিত্তিক শতাংশ দেখা যায়।', '<b>Attendance</b>: mark Present/Absent for any day of a batch. See the history and each student’s percentage.'), L('<b>ফি নিন</b>: টাকা সবচেয়ে পুরোনো মাসের বকেয়া থেকে আগে মেটে। অবস্থা: Paid, Partially Paid, Due, Overdue। পেমেন্ট বাতিল/সংশোধন করলে সব অঙ্ক সাথে সাথে বদলায়।', '<b>Collect fee</b>: money goes to the oldest due month first. Status: Paid, Partially Paid, Due, Overdue. Voiding or fixing a payment updates every figure at once.'), L('<b>সরানো</b>: বকেয়া থাকলে পরিমাণসহ সতর্ক করে। "আর্কাইভ" করলে ইতিহাস ও বকেয়া থাকে, সক্রিয় তালিকা থেকে সরে যায়। বকেয়া কখনো চুপচাপ মুছে যায় না।', '<b>Removing</b>: warns with the amount if anything is unpaid. "Archive" keeps history and dues and hides the student. Unpaid balances are never erased silently.'), L('<b>নিচের ＋ দ্রুত বাটন</b>: শিক্ষার্থী যোগ, ব্যাচ তৈরি, উপস্থিতি, ফি নিন, সব শিক্ষার্থী, বকেয়া ফি, পরীক্ষা, ফল, রিপোর্ট।', '<b>The floating ＋ Quick button</b>: Add Student, Create Batch, Attendance, Collect Fee, All Students, Due Fees, Exams, Results, Reports.')])],
+    [L('পরীক্ষা ও ফল', 'Exams & results'), ul([L('পরীক্ষায় নাম, তারিখ, বিষয়, পূর্ণমান আর ব্যাচ বা আলাদা শিক্ষার্থী বাছুন। খরচ ঐচ্ছিক।', 'Give an exam a name, date, subject, total marks and a batch or individual students. Cost is optional.'), L('"নম্বর লিখুন" চেপে প্রত্যেকের নম্বর দিন। গড়, সর্বোচ্চ, পাস সংখ্যা ও অবস্থান নিজে হিসাব হয়; ফাঁকা মানে এখনও নম্বর লেখা হয়নি।', 'Tap "Enter marks" for each student. Average, highest, pass count and rank are worked out; empty means not graded yet.'), L('শিক্ষার্থীর প্রোফাইলে তার সব ফল, ব্যাচের পাতায় ব্যাচের সব পরীক্ষা, আর টাকা → ফল ট্যাবে ব্যাচ ও শিক্ষার্থী ধরে সারাংশ।', 'A student’s profile lists all their results, a batch page lists its exams, and Money → Results gives batch-wise and student-wise summaries.')])],
     [L('পরীক্ষার খরচ', 'Exam costs'), `<p>${L('প্রশ্নপত্র = শিক্ষার্থী × পৃষ্ঠা × প্রতি পৃষ্ঠার দাম। খাতা = সংখ্যা × একক দাম। মোট = প্রশ্নপত্র + খাতা + অপচয় + অন্যান্য। উদাহরণ: ৩০ জন × ৪ পৃষ্ঠা × ২ টাকা = ২৪০, ৩০ খাতা × ৮ টাকা = ২৪০, মোট ৪৮০ টাকা (প্রকৃত)। পরীক্ষা একটাই খরচ হয়ে ব্যাচ ও মাসের হিসাবে যায়।', 'Question paper = students × pages × price per page. Sheets = count × unit price. Total = paper + sheets + waste + other. Example: 30 × 4 pages × ৳2 = 240, 30 sheets × ৳8 = 240, total ৳480 (actual). Each exam becomes one expense in its batch and month.')}</p>`],
     [L('বই ও সামগ্রী', 'Books & supplies'), `<p>${L('কেনা পণ্য, পরিমাণ, একক দাম, দোকান, উদ্দেশ্য ও রসিদের ছবি রাখুন। ♻️ পুনর্ব্যবহারযোগ্য সরঞ্জাম কেনার দিনেই একবার খরচ ধরা হয়। পরীক্ষার কাগজ-প্রিন্ট পরীক্ষা থেকে হিসাব করুন, এখানে আবার দিলে দুবার ধরা হবে।', 'Keep item, quantity, unit price, shop, purpose and receipt photo. ♻️ Reusable equipment is counted once, on purchase day. Work out exam paper and printing under Exams; entering them here as well would count twice.')}</p>`],
     [L('১ টাকা যোগের নিয়ম', 'The ৳1 display rule'), `<p>${L('এই মডিউলের স্ক্রিন, কার্ড, তালিকা, রিপোর্ট, PDF ও শেয়ার করা টেক্সটে প্রতিটি দেখানো টাকায় ঠিক ১ টাকা যোগ করে দেখানো হয়। ডেটা, ইনপুট, হিসাব, ব্যাকআপ ও রপ্তানি সবসময় প্রকৃত অঙ্কে থাকে। রিপোর্টে "প্রকৃত হিসাব" অংশে প্রকৃত মান আলাদা করে দেওয়া আছে। এই নিয়ম অন্য মডিউলে লাগে না।', 'Every amount shown on this module\'s screens, cards, lists, reports, PDFs and shared text has exactly ৳1 added for display. Stored data, inputs, calculations, backups and exports always hold the actual figures. Reports include an "Actual figures" part with the real values. This rule does not apply to other modules.')}</p>`],
@@ -757,6 +783,7 @@ registerModule({
   welcome: () => '',
   context: () => ({}),
   topbar: tcTopbar,
+  fab: () => tcFab(),
   guide: tcGuide,
   tabs: [
     { id: 'home', icon: 'home', label: () => L('হোম', 'Home'), view: () => tcHome() },

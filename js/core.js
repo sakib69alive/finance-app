@@ -82,7 +82,7 @@ const LOGO = '<svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradien
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v65'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v66'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 // boot.js লোডের আগে খালি শেল; আসল ডেটা boot.js-এ মডিউল রেজিস্টার হওয়ার পরে আসে
 let state = { settings: { lang: 'bn' }, batches: [] };
@@ -289,8 +289,9 @@ function render() {
   const cur = m.tabs.find(t => t.id === tab);
   $('#topbar').innerHTML = m.topbar(ctx);
   $('#view').innerHTML = cur.view(ctx);
-  $('#tabbar').innerHTML = `<div class="tabbar-inner">${m.tabs.map(t =>
+  $('#tabbar').innerHTML = `${m.fab ? m.fab() : ''}<div class="tabbar-inner">${m.tabs.map(t =>
     `<button type="button" class="tab ${tab === t.id ? 'active' : ''}" data-action="tab" data-tab="${t.id}"><span class="tw">${icon(t.icon)}</span>${t.label()}</button>`).join('')}</div>`;
+  refreshSheet();
 }
 
 // "আরও" ট্যাবের সাধারণ অংশ: অ্যাপ, ডেটা, ভাষা, ভার্সন (সব মডিউলে একই)
@@ -300,18 +301,14 @@ function appSections() {
   const mi = menuItem;
   const lang = state.settings.lang;
   const last = state.settings.lastBackup ? new Date(state.settings.lastBackup) : null;
-  return `<div class="section-title">${L('অ্যাপ', 'App')}</div>
-    <div class="menu">
-      ${isStandalone() ? '' : mi('install-app', 'download', L('ফোনে ইনস্টল করুন', 'Install on phone'), L('একবার ইনস্টল করলে অফলাইনে চলবে', 'Works offline once installed'))}
-      ${mi('guide', 'spark', L('কিভাবে ব্যবহার করবেন', 'How to use'), L('সব ফিচার আর দাম বের করার হিসাব', 'Every feature and how prices are worked out'))}
-    </div>
-    <div class="section-title">${L('ডেটা', 'Data')}</div>
-    <div class="menu">
-      ${mi('export', 'download', L('ব্যাকআপ নিন', 'Back up'), last ? `${L('শেষ ব্যাকআপ', 'Last backup')}: ${fmtDate(last.toISOString().slice(0, 10))}` : L('এখনও নেওয়া হয়নি', 'Not yet'))}
+  return `${menuGroup('🧭 ' + L('সাহায্য ও অ্যাপ', 'Help & app'), L('কিভাবে চালাবেন, ফোনে রাখবেন', 'How to use it, keep it on your phone'),
+      `${isStandalone() ? '' : mi('install-app', 'download', L('ফোনে ইনস্টল করুন', 'Install on phone'), L('একবার ইনস্টল করলে অফলাইনে চলবে', 'Works offline once installed'))}
+      ${mi('guide', 'spark', L('কিভাবে ব্যবহার করবেন', 'How to use'), L('সব ফিচার আর হিসাব সহজ ভাষায়', 'Every feature and every figure, in plain words'))}`)}
+    ${menuGroup('💾 ' + L('ডেটা ও ব্যাকআপ', 'Data & backup'), L('ফোন বদলালে ডেটা হারাবে, তাই মাঝে মাঝে ব্যাকআপ নিন', 'Changing phones loses data, so back up now and then'),
+      `${mi('export', 'download', L('ব্যাকআপ নিন', 'Back up'), last ? `${L('শেষ ব্যাকআপ', 'Last backup')}: ${fmtDate(last.toISOString().slice(0, 10))}` : L('এখনও নেওয়া হয়নি', 'Not yet'))}
       ${mi('import', 'upload', L('ব্যাকআপ থেকে ফেরত আনুন', 'Restore backup'), L('আগের ব্যাকআপ ফাইল দিন', 'Pick a backup file'))}
-      ${typeof demoBuild === 'function' ? mi('demo-load', 'spark', L('ডেমো ডেটা দিয়ে ভরুন', 'Fill with demo data'), L('সব ফিচার দেখতে (এখনকার সব ডেটা মুছে যায়)', 'To see every feature (replaces all current data)')) : ''}
-    </div>
-    <div class="section-title">${L('ভাষা', 'Language')}</div>
+      ${typeof demoBuild === 'function' ? mi('demo-load', 'spark', L('ডেমো ডেটা দিয়ে ভরুন', 'Fill with demo data'), L('সব ফিচার দেখতে (এখনকার সব ডেটা মুছে যায়)', 'To see every feature (replaces all current data)')) : ''}`)}
+    <div class="mgroup"><div class="mg-head"><b>🌐 ${L('ভাষা', 'Language')}</b></div></div>
     <div class="seg">${[['bn', 'বাংলা'], ['en', 'English']].map(([v, l]) =>
       `<button type="button" class="${lang === v ? 'active' : ''}" data-action="lang" data-v="${v}">${l}</button>`).join('')}</div>
     <p class="about">${L('ভার্সন', 'Version')} ${APP_VERSION}<br>${L('হিসাবী · সব ডেটা শুধু এই ফোনে থাকে, কোনো সার্ভারে যায় না।<br>ফোন বদলালে বা অ্যাপ মুছলে ডেটা হারাবে, তাই মাঝে মাঝে ব্যাকআপ নিন।',
@@ -330,6 +327,10 @@ const stat = (label, value, sub, cls = '') => `<div class="stat"><small>${label}
 const seg = (name, opts, val, disabled = []) => `<div class="seg">${opts.map(([v, l]) =>
   `<label class="${disabled.includes(v) ? 'off' : ''}"><input type="radio" name="${name}" value="${v}" ${v === val ? 'checked' : ''} ${disabled.includes(v) ? 'disabled' : ''}><span>${l}</span></label>`).join('')}</div>`;
 const delBtn = (action, id) => `<button type="button" class="rowdel" data-action="${action}" data-id="${id}" aria-label="${L('ডিলিট', 'Delete')}">${icon('trash', 18)}</button>`;
+// প্রতিটা রেকর্ডে একই রকম এডিট (কলম) ও ডিলিট (বিন) বাটন; extra = অতিরিক্ত data-অ্যাট্রিবিউট
+const rowTools = (editAct, delAct, id, extra = '') => `<span class="rowtools">${editAct ? `<button type="button" class="rowedit" data-action="${editAct}" data-id="${esc(id)}" ${extra} aria-label="${L('এডিট', 'Edit')}">${icon('edit', 17)}</button>` : ''}${delAct ? `<button type="button" class="rowdel" data-action="${delAct}" data-id="${esc(id)}" ${extra} aria-label="${L('ডিলিট', 'Delete')}">${icon('trash', 17)}</button>` : ''}</span>`;
+// "আরও" মেনুর গ্রুপ: শিরোনাম + এক লাইনের ব্যাখ্যা + আইটেম
+const menuGroup = (title, sub, items) => `<div class="mgroup"><div class="mg-head"><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</div><div class="menu">${items}</div></div>`;
 const hintLine = t => `<div class="hint">${t}</div>`;
 const sheetHead = (title, sub = '') => `<div class="sheet-head"><h3>${title}${sub ? `<small>${sub}</small>` : ''}</h3>
   <button type="button" class="icon-btn" data-action="close-sheet" aria-label="${L('বন্ধ করুন', 'Close')}">${icon('x', 20)}</button></div>`;
@@ -340,7 +341,9 @@ const empty = (em, title, text, btn = '') => `<div class="empty"><div class="em"
 
 /* ---------- শিট (নিচ থেকে ওঠা প্যানেল) ---------- */
 let sheetOpen = false;
-function openSheet(html) {
+let sheetRebuild = null; // খোলা বিস্তারিত শিট নিজে নতুন করে আঁকার ফাংশন: কিছু বদলালে শিটের অঙ্কও সাথে সাথে বদলায়
+function openSheet(html, rebuild) {
+  sheetRebuild = typeof rebuild === 'function' ? rebuild : null;
   const root = $('#sheet-root');
   root.innerHTML = `<div class="backdrop" data-action="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div><div class="sheet-body">${html}</div></div>`;
   // মোবাইল ব্রাউজারের ঠিকানা-বারের কারণে vh ভুল হয়, তাই আসল উচ্চতা দিয়ে সীমা
@@ -355,7 +358,15 @@ function openSheet(html) {
   const f = root.querySelector('form[data-live]');
   if (f) runLive(f, null);
 }
+function refreshSheet() {
+  if (!sheetOpen || !sheetRebuild) return;
+  const sb = $('#sheet-root .sheet-body'), ae = document.activeElement;
+  if (!sb || (ae && sb.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))) return;
+  try { const top = sb.scrollTop, html = sheetRebuild(); if (html) { sb.innerHTML = html; sb.scrollTop = top; } } catch (e) { /* পুরোনো শিটই থাকুক */ }
+}
 function hideSheet() {
+  sheetRebuild = null;
+  document.dispatchEvent(new Event('sheetclose'));
   const root = $('#sheet-root');
   root.classList.remove('show');
   document.body.classList.remove('lock');

@@ -167,3 +167,17 @@ Not built yet but possible offline: parking spaces, invoices, document photos. S
 - Hangout's new-event picker no longer offers "Daily market" and "Monthly household" (`hide: true` in `HG_TYPES`). Old events of those types still open and work. Daily market is what the Bazar module is.
 - Bazar Home and More show a "Monthly household" card (`bzHouseCard`): lists household events and creates/opens one. The data still lives in `state.hangout` (type `household`), so the page opens in the Hangout module; use the top-bar module button to return to Bazar.
 - `js/hangout-solo.js`: tapping the yellow card of a transport / shopping / custom event opens a full A-to-Z sheet (budget and what is left, every item bought with category, payer and "for whom", who is in and each share, credit book). Numbers come from `hgEventCalc` and `hgPlanCalc`.
+
+## Changes 2026-10-23 (v66): edit/delete everywhere, live sheets, Teacher upgrade
+
+- **Core helpers** (`js/core.js`): `rowTools(editAction, delAction, id, extra)` draws the same pencil + bin pair on any list row; `menuGroup(title, sub, items)` groups the "More" menus; `openSheet(html, rebuild)` takes an optional rebuild function, and `render()` calls `refreshSheet()` so an open detail sheet (product, hero breakdown, teacher student/batch, Hangout/Bazar breakdown) updates the moment any record changes. A module can also add `fab: () => html` to `registerModule` for a floating button above the tab bar (Teacher uses it for Quick actions). `hideSheet()` fires a `sheetclose` event.
+- **Stale figures fixed**: per-unit costs in Trade now follow the product's unit count (`compute` refreshes `amount` from `perUnitAmount`), changing a batch COD rate updates the sales that followed the old rate, and open sheets refresh (above).
+- **Real estate**: every list row has edit + delete; all deletes now ask for confirmation first (undo still works).
+- **Teacher** (`js/teacher-batch.js`, calc in `teacher-calc.js`, tests in `tests/teacher-calc.test.js`):
+  - Work → *All Students*: private + batch students in one list (search, status/type/fee filters, agreed / paid / due, attendance %, 💵 Collect fee). Statuses are Paid, Partially Paid, Due, Overdue (derived, never stored).
+  - Batches: edit, archive (`archived: true`, hidden unless "show archived"), safe delete only when there is no fee/cost/exam history. Students and batches are removed through a sheet that shows unpaid amounts; archiving keeps every payment and due.
+  - Attendance: any date per batch (Present/Absent), stored in `sessions` (regular session if the batch is scheduled that day, otherwise an `extra` one); history and per-student summary come from `tcBatchDays` / `tcBatchAttSummary`.
+  - Fees: `tcCollectPlan` spreads a received amount over the oldest unpaid fees (one payment per fee), so voiding a payment fixes every total.
+  - Exams: subject, total marks, pass %, batch or individual students (`studentIds`), marks in `exam.results[studentId]`; cost is optional and still becomes one expense. Summaries per exam, batch and student (`tcExamSummary`, `tcStuResults`).
+  - Quick button (＋) opens: Add Student, Create Batch, Attendance, Collect Fee, All Students, Due Fees, Exams, Results, Reports.
+- **Bazar**: edit + bin on items, payments, stock and markets; payments can be edited; a 3-step "how it works" card on Home; grouped More menu.

@@ -44,11 +44,11 @@ function reAcctBody() {
   const d = re(), rows = reAccountBalances(d), total = reSum(rows.map(r => r.balance));
   const un = reSum(d.pays.filter(p => !p.void && !p.accountId).map(p => p.amt)) + reSum(d.costs.filter(c => reCostPaid(c) && !c.accountId).map(c => c.amount));
   return `${rows.length ? `<section class="card"><div class="card-head"><h2>${L('মোট ব্যালেন্স', 'Total balance')}</h2><b class="${total < 0 ? 'neg' : ''}">${reM(total)}</b></div>
-      <div class="list" style="box-shadow:none;border:0">${rows.map(r => `<div class="lwrap"><button type="button" class="lrow" data-action="re-acct" data-id="${r.account.id}"><span class="lic">${(RE_ACCT_T[r.account.type] || RE_ACCT_T.cash)[2]}</span><span class="lmain"><b>${esc(r.account.name)}</b><small>${L('শুরুতে', 'Opening')} ${reM(r.account.opening)} · +${reM(r.inn)} · −${reM(r.out)}</small></span><span class="lend"><b class="${r.balance < 0 ? 'neg' : ''}">${reM(r.balance)}</b></span></button></div>`).join('')}</div></section>`
+      <div class="list" style="box-shadow:none;border:0">${rows.map(r => `<div class="lwrap"><button type="button" class="lrow" data-action="re-acct" data-id="${r.account.id}"><span class="lic">${(RE_ACCT_T[r.account.type] || RE_ACCT_T.cash)[2]}</span><span class="lmain"><b>${esc(r.account.name)}</b><small>${L('শুরুতে', 'Opening')} ${reM(r.account.opening)} · +${reM(r.inn)} · −${reM(r.out)}</small></span><span class="lend"><b class="${r.balance < 0 ? 'neg' : ''}">${reM(r.balance)}</b></span></button>${rowTools('re-acct', 're-acct-del', r.account.id)}</div>`).join('')}</div></section>`
     : empty('🏦', L('কোনো অ্যাকাউন্ট নেই', 'No accounts'), `<p class="hint">${L('নগদ, ব্যাংক বা বিকাশ/নগদ অ্যাকাউন্ট যোগ করুন। পেমেন্ট ও খরচে অ্যাকাউন্ট বাছলে ব্যালেন্স নিজে থেকে বদলাবে।', 'Add cash, bank or wallet accounts. Pick one on payments and costs and the balance updates itself.')}</p>`)}
     ${un ? `<p class="hint">${L('কোনো অ্যাকাউন্টে যুক্ত না করা লেনদেন', 'Moves not linked to an account')}: ${reM(un)}</p>` : ''}
     <div class="section-title">${L('অন্য আয় (বিক্রির বাইরে)', 'Other income')}<button type="button" class="link" style="float:right" data-action="re-inc-add">＋ ${L('আয়', 'Income')}</button></div>
-    ${d.incomes.length ? `<div class="list">${d.incomes.slice().sort(byDateDesc).map(i => `<div class="lwrap"><button type="button" class="lrow" data-action="re-inc" data-id="${i.id}"><span class="lic">➕</span><span class="lmain"><b>${esc(i.title || L('আয়', 'Income'))}</b><small>${fmtDate(i.date)} · ${reN(RE_COST_ST, i.status || 'completed')}</small></span><span class="lend"><b class="pos">${reM(i.amount)}</b></span></button></div>`).join('')}</div>` : `<p class="hint">${L('কোনো অন্য আয় নেই।', 'No other income.')}</p>`}`;
+    ${d.incomes.length ? `<div class="list">${d.incomes.slice().sort(byDateDesc).map(i => `<div class="lwrap"><button type="button" class="lrow" data-action="re-inc" data-id="${i.id}"><span class="lic">➕</span><span class="lmain"><b>${esc(i.title || L('আয়', 'Income'))}</b><small>${fmtDate(i.date)} · ${reN(RE_COST_ST, i.status || 'completed')}</small></span><span class="lend"><b class="pos">${reM(i.amount)}</b></span></button>${rowTools('re-inc', 're-inc-del', i.id)}</div>`).join('')}</div>` : `<p class="hint">${L('কোনো অন্য আয় নেই।', 'No other income.')}</p>`}`;
 }
 const reAcctForm = a => { a = a || {}; return reFormShell(a.id ? L('অ্যাকাউন্ট বদলান', 'Edit account') : L('নতুন অ্যাকাউন্ট', 'New account'), 're-acct', `${reHid('id', a.id)}
   ${reF(L('নাম', 'Name'), reTxt('name', a.name, L('যেমন ক্যাশ বক্স, ডাচ-বাংলা', 'e.g. Cash box, DBBL')))}${reF(L('ধরন', 'Type'), reSel('type', reOpts(RE_ACCT_T), a.type || 'cash'))}
@@ -73,7 +73,7 @@ const reBudForm = b => { b = b || {}; return reFormShell(b.id ? L('বাজে�
 function reStockBody() {
   const rows = reStock(re());
   if (!rows.length) return empty('📦', L('কোনো মালামাল নেই', 'No materials'), `<p class="hint">${L('মালামাল (সিমেন্ট, রড…) যোগ করে ক্রয় আর ব্যবহার লিখুন। স্টক = মোট ক্রয় − মোট ব্যবহার; সীমার নিচে নামলে সতর্ক করবে।', 'Add materials (cement, rods…) then log purchases and usage. Stock = purchases − usage; you get an alert below the threshold.')}</p>`);
-  return `<div class="list">${rows.map(r => `<div class="lwrap"><button type="button" class="lrow" data-action="re-mat" data-id="${r.material.id}"><span class="lic">📦</span><span class="lmain"><b>${esc(r.material.name)}</b><small>${L('ঢুকেছে', 'In')} ${r.inn} · ${L('ব্যবহার', 'Used')} ${r.out}${r.material.threshold ? ' · ' + L('সীমা ', 'min ') + r.material.threshold : ''}</small></span><span class="lend"><b class="${r.low ? 'neg' : ''}">${r.have} ${esc(r.material.unit || '')}</b>${r.low ? `<small class="neg">${L('কম', 'low')}</small>` : ''}</span></button></div>`).join('')}</div>`;
+  return `<div class="list">${rows.map(r => `<div class="lwrap"><button type="button" class="lrow" data-action="re-mat" data-id="${r.material.id}"><span class="lic">📦</span><span class="lmain"><b>${esc(r.material.name)}</b><small>${L('ঢুকেছে', 'In')} ${r.inn} · ${L('ব্যবহার', 'Used')} ${r.out}${r.material.threshold ? ' · ' + L('সীমা ', 'min ') + r.material.threshold : ''}</small></span><span class="lend"><b class="${r.low ? 'neg' : ''}">${r.have} ${esc(r.material.unit || '')}</b>${r.low ? `<small class="neg">${L('কম', 'low')}</small>` : ''}</span></button>${rowTools('re-mat-edit', 're-mat-del', r.material.id)}</div>`).join('')}</div>`;
 }
 function reMatSheet(m) {
   const d = re(), buys = d.purchases.filter(p => p.materialId === m.id).sort(byDateDesc), uses = d.usage.filter(u => u.materialId === m.id).sort(byDateDesc), r = reStock(d).find(x => x.material.id === m.id);
@@ -115,7 +115,7 @@ const RE_OWNER_K = { shareholder: ['শেয়ারহোল্ডার', 'S
 function reLeadsBody() {
   const l = re().leads.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   if (!l.length) return empty('📞', L('কোনো লিড নেই', 'No leads'), `<p class="hint">${L('সম্ভাব্য ক্রেতার নাম, আগ্রহ আর ফলো-আপ লিখুন। রাজি হলে এক ট্যাপে ক্রেতা বানান।', 'Track prospects, their interest and follow-ups. Convert to a buyer in one tap.')}</p>`);
-  return `<div class="list">${l.map(x => `<div class="lwrap"><button type="button" class="lrow" data-action="re-lead" data-id="${x.id}"><span class="lic">📞</span><span class="lmain"><b>${esc(x.name)}</b><small>${esc([x.phone, x.source, reUnitName(x.unitId)].filter(Boolean).join(' · '))}</small></span><span class="lend"><small>${reN(RE_LEAD_ST, x.status)}</small>${x.followUp ? `<small class="${x.followUp < today() && x.status !== 'won' && x.status !== 'lost' ? 'neg' : ''}">${fmtDate(x.followUp)}</small>` : ''}</span></button></div>`).join('')}</div>`;
+  return `<div class="list">${l.map(x => `<div class="lwrap"><button type="button" class="lrow" data-action="re-lead" data-id="${x.id}"><span class="lic">📞</span><span class="lmain"><b>${esc(x.name)}</b><small>${esc([x.phone, x.source, reUnitName(x.unitId)].filter(Boolean).join(' · '))}</small></span><span class="lend"><small>${reN(RE_LEAD_ST, x.status)}</small>${x.followUp ? `<small class="${x.followUp < today() && x.status !== 'won' && x.status !== 'lost' ? 'neg' : ''}">${fmtDate(x.followUp)}</small>` : ''}</span></button>${rowTools('re-lead-edit', 're-lead-del', x.id)}</div>`).join('')}</div>`;
 }
 function reLeadSheet(x) {
   return `${sheetHead(x.name, `${reN(RE_LEAD_ST, x.status)}${x.phone ? ' · ' + esc(x.phone) : ''}`)}
@@ -134,7 +134,7 @@ function reOwnersBody() {
   const d = re();
   if (!d.owners.length) return empty('🌱', L('কোনো মালিক নেই', 'No owners'), `<p class="hint">${L('শেয়ারহোল্ডার বা জমিমালিক যোগ করুন (যেমন চুক্তি ৪০:৬০)। ইউনিটে "মালিক-বরাদ্দ" বা "জমিমালিকের অংশ" বেছে তাদের নাম দিন। একটা ইউনিট একসাথে দুজনের হয় না।', 'Add shareholders or landowners (e.g. a 40:60 deal). Mark units as owner-allocated or landowner share and pick the owner. A unit never belongs to two parties.')}</p>`);
   return `<div class="list">${d.owners.map(o => { const us = d.units.filter(u => u.ownerId === o.id);
-    return `<div class="lwrap"><button type="button" class="lrow" data-action="re-owner" data-id="${o.id}"><span class="lic">${RE_OWNER_K[o.kind][2]}</span><span class="lmain"><b>${esc(o.name)}</b><small>${reN(RE_OWNER_K, o.kind)}${o.share ? ' · ' + esc(o.share) : ''}${us.length ? ' · ' + us.map(u => esc(u.number || u.name)).join(', ') : ''}</small></span></button></div>`; }).join('')}</div>`;
+    return `<div class="lwrap"><button type="button" class="lrow" data-action="re-owner" data-id="${o.id}"><span class="lic">${RE_OWNER_K[o.kind][2]}</span><span class="lmain"><b>${esc(o.name)}</b><small>${reN(RE_OWNER_K, o.kind)}${o.share ? ' · ' + esc(o.share) : ''}${us.length ? ' · ' + us.map(u => esc(u.number || u.name)).join(', ') : ''}</small></span></button>${rowTools('re-owner', 're-owner-del', o.id)}</div>`; }).join('')}</div>`;
 }
 const reOwnerForm = o => { o = o || {}; return reFormShell(o.id ? L('মালিক বদলান', 'Edit owner') : L('নতুন মালিক', 'New owner'), 're-owner', `${reHid('id', o.id)}
   ${reF(L('নাম', 'Name'), reTxt('name', o.name))}${reF(L('ধরন', 'Kind'), reSel('kind', reOpts(RE_OWNER_K), o.kind || 'landowner'))}${reF(L('ফোন', 'Phone'), reTxt('phone', o.phone))}
@@ -143,7 +143,7 @@ function reVendorsBody() {
   const d = re();
   if (!d.vendors.length) return empty('🏪', L('কোনো ভেন্ডর নেই', 'No vendors'), '');
   return `<div class="list">${d.vendors.map(v => { const t = reSum(d.purchases.filter(p => p.vendorId === v.id && reCounts(p.status)).map(reBuyTotal));
-    return `<div class="lwrap"><button type="button" class="lrow" data-action="re-vendor" data-id="${v.id}"><span class="lic">🏪</span><span class="lmain"><b>${esc(v.name)}</b><small>${esc(v.phone || '')}</small></span><span class="lend"><b>${reShort(t)}</b><small>${L('ক্রয়', 'bought')}</small></span></button></div>`; }).join('')}</div>`;
+    return `<div class="lwrap"><button type="button" class="lrow" data-action="re-vendor" data-id="${v.id}"><span class="lic">🏪</span><span class="lmain"><b>${esc(v.name)}</b><small>${esc(v.phone || '')}</small></span><span class="lend"><b>${reShort(t)}</b><small>${L('ক্রয়', 'bought')}</small></span></button>${rowTools('re-vendor', 're-vendor-del', v.id)}</div>`; }).join('')}</div>`;
 }
 const reVendorForm = v => { v = v || {}; return reFormShell(v.id ? L('ভেন্ডর বদলান', 'Edit vendor') : L('নতুন ভেন্ডর', 'New vendor'), 're-vendor', `${reHid('id', v.id)}${reF(L('নাম', 'Name'), reTxt('name', v.name))}${reF(L('ফোন', 'Phone'), reTxt('phone', v.phone))}${reSubmit()}`, v.id ? reDelBtn('re-vendor-del', v.id) : ''); };
 
@@ -402,5 +402,5 @@ Object.keys(FORMS).filter(k => k.startsWith('re-')).forEach(k => {
 });
 Object.keys(ACTIONS).filter(k => /^re-.*(-del|-void|-convert|-complete)$/.test(k)).forEach(k => {
   const fn = ACTIONS[k];
-  ACTIONS[k] = (el, e) => { reLog(k, el.dataset.id); fn(el, e); };
+  ACTIONS[k] = (el, e) => { const a = re().audit, n = a.length; reDelCancelled = false; reLog(k, el.dataset.id); fn(el, e); if (reDelCancelled) a.length = n; };
 });

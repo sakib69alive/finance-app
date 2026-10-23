@@ -83,8 +83,8 @@ function hgHouseDetail(ev) {
 }
 Object.assign(ACTIONS, {
   'hg-hero-detail': () => {
-    const ev = hgCur(); if (!ev) return;
-    const c = hgEventCalc(ev);
-    openSheet(hgIsHouse(ev) ? hgHouseDetail(ev) : hgSolo(ev) ? hgSoloDetail(ev, c) : hgHeroDetail(ev, c));
+    const ev0 = hgCur(); if (!ev0) return;
+    const build = () => { const ev = hgEv(ev0.id); if (!ev) return ''; const c = hgEventCalc(ev); return hgIsHouse(ev) ? hgHouseDetail(ev) : hgSolo(ev) ? hgSoloDetail(ev, c) : hgHeroDetail(ev, c); };
+    openSheet(build(), build); // খরচ বদলালে খোলা শিটের অঙ্কও সাথে সাথে বদলায়
   },
 });

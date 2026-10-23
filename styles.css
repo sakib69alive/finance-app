@@ -1125,3 +1125,50 @@ button.tcstat { text-align: left; width: 100%; font: inherit; color: inherit; cu
 #demo-bar button[data-demo="hide"] { width: 34px; padding: 0; background: rgba(255,255,255,.15); color: #fff; }
 
 .mnav button .ic, .tcmn .icon-btn .ic { display: block; }
+
+/* ===== একই রকম এডিট/ডিলিট বাটন, মেনু গ্রুপ, দ্রুত অ্যাকশন বাটন ===== */
+.rowtools { flex: none; display: flex; align-items: center; gap: 2px; padding-right: 6px; }
+.rowtools .rowedit, .rowtools .rowdel { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; opacity: 1; }
+.rowedit { color: var(--accent); background: var(--accent-soft); }
+.rowtools .rowdel { background: var(--danger-soft); }
+.rowedit:active, .rowtools .rowdel:active { transform: scale(.94); }
+.lwrap .rowtools { align-self: center; }
+.mgroup { margin: 20px 0 8px; }
+.mgroup + .menu, .mgroup > .menu { margin-top: 0; }
+.mg-head { display: flex; flex-direction: column; gap: 1px; margin: 0 4px 8px; }
+.mg-head b { font-size: 14px; }
+.mg-head small { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+.danger-zone { margin-top: 18px; border: 1px dashed var(--danger); border-radius: var(--radius); padding: 10px 12px 12px; }
+.danger-zone small { display: block; color: var(--muted); margin-bottom: 8px; font-size: 12.5px; }
+.help-steps { display: grid; gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; counter-reset: st; }
+.help-steps li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; line-height: 1.45; }
+.help-steps li::before { counter-increment: st; content: counter(st); flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; font-size: 12px; font-weight: 800; }
+.tc-fab { position: absolute; right: 22px; bottom: calc(82px + env(safe-area-inset-bottom)); pointer-events: auto; display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 18px 0 14px; border-radius: 26px; background: #1D1D1B; color: #fff; font-weight: 800; font-size: 14px; box-shadow: 0 10px 22px -8px rgba(20, 20, 15, .55); }
+.tc-fab:active { transform: scale(.96); }
+.qa-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 4px; }
+.qa-tile { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 6px 12px; border-radius: 18px; background: var(--surface); border: 1px solid var(--border); font-size: 12.5px; font-weight: 700; text-align: center; line-height: 1.25; }
+.qa-tile .qi { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: 20px; }
+.qa-tile:active { transform: scale(.96); }
+.attrow { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--border); }
+.attrow:first-child { border-top: 0; }
+.attrow .am { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.attrow .am small { color: var(--muted); }
+.attseg { display: flex; flex: none; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+.attseg label { cursor: pointer; }
+.attseg input { position: absolute; opacity: 0; pointer-events: none; }
+.attseg span { display: block; padding: 8px 12px; font-weight: 800; font-size: 13px; color: var(--muted); background: var(--surface); }
+.attseg input:checked + span.p { background: var(--good); color: #fff; }
+.attseg input:checked + span.a { background: var(--danger); color: #fff; }
+.bzi .rowtools { padding-right: 0; }
+.bzi .rowtools .rowedit, .bzi .rowtools .rowdel { width: 32px; height: 32px; border-radius: 10px; }
+.bzhow summary { cursor: pointer; list-style: none; }
+.bzhow summary::-webkit-details-marker { display: none; }
+.bzhow[open] summary { margin-bottom: 4px; }
+.tcpick.hidden { display: none; }
+.tcb.none { background: var(--surface-2); color: var(--muted); }
+.rowtools .rowedit, .rowtools .rowdel { width: 32px; height: 32px; border-radius: 10px; }
+.lwrap > .rowedit { align-self: center; flex: none; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; margin-right: 2px; font-size: 15px; }
+.lwrap.tall { flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.lwrap.tall > .lrow { flex: 1 1 100%; }
+.lwrap.tall > .rowedit, .lwrap.tall > .rowtools { margin-bottom: 8px; }
+.lwrap.tall > .rowedit.coll { width: auto; padding: 0 12px; gap: 6px; font-size: 13px; font-weight: 800; display: flex; align-items: center; }
