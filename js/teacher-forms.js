@@ -770,6 +770,7 @@ Object.assign(ACTIONS, {
 /* ---------- রেজিস্টার ---------- */
 registerModule({
   id: 'teacher',
+  pin: '1111', // ডেভেলপমেন্টে আছে: সাময়িক লক
   icon: 'cap',
   emoji: '🎓',
   short: () => L('শিক্ষক', 'Teacher'),

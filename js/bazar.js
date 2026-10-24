@@ -988,6 +988,7 @@ const BZ_TABS = [
 ];
 registerModule({
   id: 'bazar',
+  pin: '1111', // ডেভেলপমেন্টে আছে: সাময়িক লক
   icon: 'home',
   emoji: '🏡',
   short: () => L('সংসার', 'Home'),
