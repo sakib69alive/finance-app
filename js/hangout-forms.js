@@ -89,7 +89,7 @@ function hgSecHistory(ev) {
 // ইভেন্টের ধরন: প্রতিটা কার্ডে আইকন, নাম, এক লাইনের মানে আর কোন কোন খাত থাকবে তার নমুনা
 function hgTypePicker(sel) {
   return `<div class="field"><span class="flabel">${L('কী ধরনের ইভেন্ট?', 'What kind of event?')}</span>
-    <p class="hint" style="margin-top:0">${L('ধরন বাছলে খরচের খাত আর আদর্শ বাজেট নিজে সেট হয়। নিচে নিজের মতো বদলানো যাবে।', 'The type sets the categories and the ideal budget. You can change both below.')}</p>
+    <p class="hint" style="margin-top:0">${L('ধরন বাছলে খরচের খাত নিজে সেট হয়। নিচে নিজের মতো বদলানো যাবে।', 'The type sets the categories. You can change both below.')}</p>
     ${Object.keys(HG_TYPE_GROUPS).map(g => `<div class="tgrp"><h4>${esc(HG_TYPE_GROUPS[g][isEN() ? 1 : 0])}</h4><div class="tgrid">${Object.keys(HG_TYPES).filter(k => HG_TYPES[k].g === g && (!HG_TYPES[k].hide || k === sel)).map(k => { const t = HG_TYPES[k];
       return `<label class="tcard"><input type="radio" name="type" value="${k}" ${k === sel ? 'checked' : ''}><span class="tc"><span class="tc-top"><span class="tc-i">${t.icon}</span><b>${esc(hgTypeLabel(k))}</b></span><small>${esc(hgTypeDesc(k))}</small><em>${t.cats.filter(c => !['discount', 'vat', 'service', 'other_charges', 'other', 'misc'].includes(c)).slice(0, 3).map(c => esc(HG_CAT[c][isEN() ? 1 : 0])).join(' · ')}</em></span></label>`; }).join('')}</div></div>`).join('')}</div>`;
 }
@@ -380,7 +380,7 @@ LIVE['hg-expense'] = (f, t) => {
   if (r.total <= 0) { sp.className = 'preview'; sp.innerHTML = ''; return; }
   if (r.split.ok) {
     sp.className = 'preview';
-    sp.innerHTML = L('প্রত্যেকের ভাগ: ', 'Each pays: ') + r.people.filter(p => r.split.alloc[p.id] > 0).map(p => `${esc(p.name)} <b>${hgM(r.split.alloc[p.id])}</b>`).join(' · ');
+    sp.innerHTML = `<div class="sharelist"><div class="sl-h">${L('প্রত্যেকের ভাগ', 'Share per person')}</div>${r.people.filter(p => r.split.alloc[p.id] > 0).map(p => `<div class="sl-r"><span>${esc(p.name)}</span><b>${hgM(r.split.alloc[p.id])}</b></div>`).join('')}</div>`;
   } else { sp.className = 'preview warn'; sp.innerHTML = esc(hgErr(r.split.error)); }
   // প্রত্যেকের ভাগ এক নজরে (অ্যামাউন্টের নিচেই)
   if (r.split.ok) {
@@ -421,7 +421,7 @@ LIVE['hg-expense'] = (f, t) => {
   if (plan) {
     const id = f.dataset.id, old = id && ev.expenses.find(x => x.id === id);
     const cat = f.elements.cat.value, back = old ? old.total : 0;
-    const row = plan.rows.find(x => x.k === cat);
+    const row = plan.live ? null : plan.rows.find(x => x.k === cat);
     const after = plan.spent + r.total - back;
     const catAfter = row ? row.spent + r.total - (old && old.category === cat ? back : 0) : 0;
     const catOver = row && catAfter > row.ideal;

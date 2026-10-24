@@ -160,10 +160,13 @@ function hangoutMigrate(s) {
   });
 }
 const hg = () => state.hangout;
-const hgEvents = () => hg().events.filter(e => !e.del);
+// মাসিক সংসার (household) এখন ঘর-সংসার মডিউলে, তাই আড্ডার তালিকায় আসে না (hgEv দিয়ে খোলা যায়)
+const hgEvents = () => hg().events.filter(e => !e.del && e.type !== 'household');
 const hgEv = id => hg().events.find(e => e.id === id && !e.del) || null;
 let hgRoute = { ev: null, sub: 'overview' };
-const hgCur = () => hgEv(hgRoute.ev) || hgAutoEvent();
+// ঘর-সংসার অংশের বাইরে মাসিক সংসারের ইভেন্ট কখনো "চলতি ইভেন্ট" হয় না
+const hgRouteOk = e => !!e && (e.type !== 'household' || state.settings.module === 'bazar');
+const hgCur = () => { const e = hgEv(hgRoute.ev); return hgRouteOk(e) ? e : hgAutoEvent(); };
 let hgF = { q: '', status: 'all', type: 'all', from: '', to: '' };
 const pName = (ev, id) => { const p = ev.participants.find(x => x.id === id); return p ? p.name : '—'; };
 const hgM = hgMoney;

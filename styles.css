@@ -1119,10 +1119,6 @@ button.tcstat { text-align: left; width: 100%; font: inherit; color: inherit; cu
 .faint { color: var(--faint); }
 .tcstack { display: flex; flex-direction: column; gap: 8px; }
 
-/* ---- ডেমো বাটন (js/demo.js), একবার ব্যবহারের পর চলে যায় ---- */
-#demo-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; z-index: 40; display: flex; align-items: center; gap: 8px; background: var(--ink); color: #fff; border-radius: 999px; padding: 6px 8px 6px 14px; box-shadow: 0 8px 24px rgba(0,0,0,.25); font-size: 13px; font-weight: 700; white-space: nowrap; }
-#demo-bar button { height: 34px; padding: 0 14px; border-radius: 999px; background: #F6D98B; color: #1D1D1B; font-weight: 800; font-size: 13px; }
-#demo-bar button[data-demo="hide"] { width: 34px; padding: 0; background: rgba(255,255,255,.15); color: #fff; }
 
 .mnav button .ic, .tcmn .icon-btn .ic { display: block; }
 
@@ -1172,3 +1168,92 @@ button.tcstat { text-align: left; width: 100%; font: inherit; color: inherit; cu
 .lwrap.tall > .lrow { flex: 1 1 100%; }
 .lwrap.tall > .rowedit, .lwrap.tall > .rowtools { margin-bottom: 8px; }
 .lwrap.tall > .rowedit.coll { width: auto; padding: 0 12px; gap: 6px; font-size: 13px; font-weight: 800; display: flex; align-items: center; }
+
+/* ===== v67: ঘর-সংসার (বাজার + মাসিক সংসার), পালিশ ===== */
+/* দুই অংশের সুইচ (টপবারের নিচে) */
+.secsw { flex: 1 1 100%; order: 5; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 18px; background: rgba(255,255,255,.55); box-shadow: inset 0 0 0 1px rgba(0,0,0,.04); }
+.secsw button { display: flex; align-items: center; justify-content: center; gap: 7px; height: 40px; border-radius: 14px; font-size: 13.5px; font-weight: 800; color: var(--muted); text-align: center; transition: background .15s, color .15s; }
+.secsw button.on { background: var(--ink); color: #fff; box-shadow: 0 6px 14px -8px rgba(0,0,0,.5); }
+.secsw button span { font-size: 16px; line-height: 1; }
+.crumbs { order: 6; }
+
+/* চলতি সারি পুরোটা জুড়ে হাইলাইট */
+.lwrap.cur { background: var(--accent-soft); }
+.lwrap.cur .lrow { background: transparent; }
+.lwrap.cur .lrow .lmain b::after { content: ''; }
+
+/* বাজারের তালিকা ট্যাব: পরিপাটি, প্রিমিয়াম */
+.bzpage { display: flex; flex-direction: column; gap: 14px; }
+.bzpage > * { margin: 0 !important; }
+.bz-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 6px 2px 2px; }
+.bz-ht { min-width: 0; }
+.bz-ht h1 { font-size: 30px; line-height: 1.15; letter-spacing: -.02em; }
+.bz-ht p { margin-top: 3px; font-size: 13px; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bz-hb { display: flex; gap: 8px; flex: none; }
+.bz-hb .btn { height: 42px; padding: 0 16px; border-radius: 14px; font-weight: 800; }
+.bzstats { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface); border-radius: 22px; box-shadow: var(--shadow); padding: 4px; }
+.bzstats > div { padding: 12px 14px; min-width: 0; }
+.bzstats > div + div { border-left: 1px solid var(--border); }
+.bzstats small { display: block; color: var(--muted); font-size: 11.5px; font-weight: 700; letter-spacing: .02em; }
+.bzstats b { display: block; margin-top: 2px; font-size: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bzfind { display: flex; flex-direction: column; gap: 10px; }
+.bzsearch { position: relative; }
+.bzsearch .ic { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
+.bzsearch .input { padding-left: 44px; height: 50px; border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); border-color: transparent; }
+.bzpage .chiprow.wrap { gap: 8px; }
+.bzpage .fchip { padding: 8px 14px; box-shadow: var(--shadow); border-color: transparent; }
+.bzpage .section-title { margin: 8px 4px 0; }
+.bzpage .bzlist { margin-top: 8px; }
+.bzpage .card { margin: 0; }
+
+/* "কিভাবে চালাবেন" কার্ড */
+.bzhow summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.bzhow summary .ic { color: var(--muted); transition: transform .2s; flex: none; }
+.bzhow[open] summary .ic { transform: rotate(180deg); }
+.bzsteps { list-style: none; display: flex; flex-direction: column; gap: 14px; margin: 14px 0 0; padding: 0; }
+.bzsteps li { display: flex; gap: 12px; align-items: flex-start; }
+.bzn { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: #F6D98B; font-size: 13px; font-weight: 800; margin-top: 1px; }
+.bzsteps li > div { min-width: 0; }
+.bzsteps li b { display: block; font-size: 15px; line-height: 1.35; }
+.bzsteps li p { margin: 3px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--muted); }
+.bztip { display: flex; gap: 12px; align-items: flex-start; margin-top: 16px; padding: 12px 14px; border-radius: 16px; background: var(--surface-2); }
+.bztip > span { flex: none; font-size: 15px; letter-spacing: 2px; }
+.bztip p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--muted); }
+
+/* পণ্য বাছাইয়ের শিট */
+.pk-tpls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 4px; }
+.pk-tpls > span { font-size: 12.5px; font-weight: 800; color: var(--muted); width: 100%; }
+.pk-sec { margin-top: 16px; }
+.pk-sec h4 { font-size: 13.5px; margin-bottom: 8px; }
+.pk-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.pk { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 8px 13px; border-radius: 14px; background: var(--surface-2); border: 1.5px solid transparent; font-size: 14px; font-weight: 700; line-height: 1.3; }
+.pk small { font-size: 11px; font-weight: 600; color: var(--muted); }
+.pk.on { background: var(--accent-soft); border-color: var(--accent); }
+.pk.on small { color: var(--accent); }
+.pk.done { opacity: .5; }
+.pk-bar { position: sticky; bottom: 0; margin: 18px -16px -4px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--surface) 70%, rgba(251,249,241,0)); }
+.pk-bar .btn:disabled { opacity: .45; }
+
+/* মাসিক সংসারের শুরুর কার্ড */
+.bzstart { text-align: center; padding: 28px 20px; }
+.bzstart .bzs-ic { font-size: 44px; margin-bottom: 6px; }
+.bzstart h2 { font-size: 20px; margin-bottom: 6px; }
+.bzstart .hint { text-align: left; line-height: 1.6; }
+
+/* আড্ডা: প্রত্যেকের ভাগ এক লাইনে একজন */
+.sharelist { display: flex; flex-direction: column; }
+.sharelist .sl-h { font-size: 12.5px; font-weight: 800; color: var(--muted); letter-spacing: .02em; padding-bottom: 6px; }
+.sharelist .sl-r { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 0; border-top: 1px solid var(--border); font-size: 14.5px; }
+.sharelist .sl-r b { font-variant-numeric: tabular-nums; }
+/* আড্ডা: ব্যক্তির কার্ডের বাটনগুলোর মাঝে ফাঁক */
+.hg-pcard { padding: 14px; margin-top: 14px; }
+.hg-pcard > .btn.block { margin-top: 12px; }
+.hg-pcard .btn-row { margin-top: 12px; gap: 10px; }
+.hg-pcard > .hint { margin: 8px 2px 0; }
+.hg-pcard .hgp { margin-bottom: 4px; }
+/* বাজেট কার্ড */
+.dlegend.flat { margin-bottom: 8px; }
+.bbar.thick { height: 10px; margin: 12px 0 4px; }
+.bbar.thick span { background: var(--good); }
+.bbar.thick span.near { background: var(--warn); }
+.bbar.thick span.over { background: var(--danger); }

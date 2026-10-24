@@ -35,7 +35,7 @@ function hgSoloDetail(ev, c) {
       + row(p.remaining >= 0 ? L('বাজেটের বাকি', 'Budget left') : L('বাজেটের চেয়ে বেশি', 'Over budget'), `<b class="${p.remaining < 0 ? 'neg' : 'pos'}">${hgM(Math.abs(p.remaining))}</b>`, 'total')
     : row(L('বাজেট ঠিক করা নেই', 'No budget set'), `<button type="button" class="link" data-action="hg-plan">${L('ঠিক করুন', 'Set')}</button>`)}
     ${row(L('গড় প্রতিদিন', 'Daily average'), hgM(Math.round(c.net / span)))}${c.refundTotal ? row(L('রিফান্ড (বাদ)', 'Refunds (deducted)'), hgM(c.refundTotal)) : ''}</div>
-  ${p && p.rows.length ? `<div class="ledger fb">${p.rows.filter(r => r.ideal > 0 || r.spent > 0).map(r => row(esc(hgPlanCatLabel(ev, r.k)), `${hgM(r.spent)} / ${hgM(r.ideal)} <small class="${r.over ? 'neg' : 'muted'}">${r.over ? hgM(r.spent - r.ideal) + ' ' + L('বেশি', 'over') : hgM(r.left) + ' ' + L('বাকি', 'left')}</small>`)).join('')}</div>` : ''}
+  ${p && p.rows.length ? `<div class="ledger fb">${p.rows.filter(r => r.ideal > 0 || r.spent > 0).map(r => p.live ? row(esc(hgPlanCatLabel(ev, r.k)), `${hgM(r.spent)} <small class="muted">${pct(p.spent ? r.spent / p.spent * 100 : 0)}</small>`) : row(esc(hgPlanCatLabel(ev, r.k)), `${hgM(r.spent)} / ${hgM(r.ideal)} <small class="${r.over ? 'neg' : 'muted'}">${r.over ? hgM(r.spent - r.ideal) + ' ' + L('বেশি', 'over') : hgM(r.left) + ' ' + L('বাকি', 'left')}</small>`)).join('')}</div>` : ''}
 
   ${h(L('কী কিনেছি / কোথায় খরচ (দিন অনুযায়ী)', 'What was bought (day by day)'))}
   <div class="ledger fb">${exps.length ? c.days.map(dayBlock).join('') + row(`= ${L('মোট', 'Total')}`, hgM(c.gross), 'total')

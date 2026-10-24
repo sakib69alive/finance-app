@@ -643,11 +643,13 @@ function hgCatSelect(f, k, label) {
 // "বাকিটা": পুরো বাকি দেবে, নাকি কিছুটা। দুই ফর্মেই (খরচ ও বিল) একই ঘর
 function hgRestOpen(el, total) {
   const f = el.closest('form'), pid = el.dataset.p; if (!f || !pid) return;
+  // বাকি = মোট − সবার (এই জনেরও) এখনকার অঙ্ক। এই জনের আগের অঙ্ক মুছে না, তার ওপর যোগ হয়
+  const mine = f.elements['pay_' + pid] ? toMinor(f.elements['pay_' + pid].value) : 0;
   const others = sum(hgCur().participants.filter(p => p.id !== pid && f.elements['pay_' + p.id]).map(p => toMinor(f.elements['pay_' + p.id].value)));
   const old = $('.restpick', f); if (old) { const same = old.dataset.p === pid; old.remove(); if (same) return; }
-  if (!(total > others)) { toast(L('বাকি নেই: মোট টাকা আগেই দেওয়া হয়ে গেছে। কারও অঙ্ক কমালে বাকিটা বসবে।', 'Nothing left: the total is already covered. Lower one amount first.')); return; }
-  const rem = total - others, row = el.closest('.payrow');
-  row.insertAdjacentHTML('afterend', `<div class="restpick" data-p="${pid}" data-rem="${rem}"><div class="rp-t">${L('বাকি আছে', 'Still to cover')} <b>${hgM(rem)}</b>. ${esc(pName(hgCur(), pid))} ${L('কত দেবে?', 'pays how much?')}</div>
+  if (!(total > others + mine)) { toast(L('বাকি নেই: মোট টাকা আগেই দেওয়া হয়ে গেছে। কারও অঙ্ক কমালে বাকিটা বসবে।', 'Nothing left: the total is already covered. Lower one amount first.')); return; }
+  const rem = total - others - mine, row = el.closest('.payrow');
+  row.insertAdjacentHTML('afterend', `<div class="restpick" data-p="${pid}" data-rem="${rem}" data-mine="${mine}"><div class="rp-t">${L('এখনও কেউ দেয়নি', 'Not yet assigned')} <b>${hgM(rem)}</b>. ${esc(pName(hgCur(), pid))}${mine ? L(` (আগে লেখা ${hgM(mine)} থাকবে)`, ` (keeps the ${hgM(mine)} already entered)`) : ''} ${L('আরও কত দেবে?', 'pays how much more?')}</div>
     <div class="rp-b"><button type="button" class="btn sm primary" data-action="hg-rest-all">${L('পুরোটা', 'All of it')} · ${hgM(rem)}</button><button type="button" class="btn sm" data-action="hg-rest-some">${L('কিছু পরিমাণ', 'Part of it')}</button></div>
     <div class="rp-s hidden"><div class="input-wrap has-prefix"><span class="prefix">৳</span><input class="input" name="restamt" inputmode="decimal" placeholder="0"></div><button type="button" class="btn sm primary" data-action="hg-rest-ok">${L('ঠিক আছে', 'OK')}</button></div></div>`);
 }
@@ -657,7 +659,7 @@ function hgRestApply(el, amt) {
   if (!(amt > 0)) return toast(L('টাকার পরিমাণ লিখুন', 'Enter an amount'), 'danger');
   if (amt > rem) return toast(L(`বাকি আছে মাত্র ${hgM(rem)}`, `Only ${hgM(rem)} is left`), 'danger');
   f.dataset.ppAuto = '';
-  const i = f.elements['pay_' + pid]; i.value = fromMinor(amt);
+  const i = f.elements['pay_' + pid]; i.value = fromMinor(toMinor(i.value) + amt);
   box.remove(); runLive(f, i);
 }
 Object.assign(ACTIONS, {

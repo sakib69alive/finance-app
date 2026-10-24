@@ -442,5 +442,15 @@ t('central month: unpaid list spans months, oldest due first, month figure count
   const c = C.hgCentralMonth(ev, '2026-06', '2026-06-10');
   assert.deepStrictEqual(c.unpaid.map(u => [u.e.id, u.rem, u.status]), [['old', T(300), 'overdue'], ['new', T(400), 'partial']]); assert.strictEqual(c.unpaidMonth, T(400));
 });
+t('plan without a preset split is live: no ideal shares, no category flags, rows come from real spending', () => {
+  const ev = planEv(); ev.plan = { people: 4, mode: 'total', total: T(25000), split: {} };
+  ev.expenses.push(exp('h', T(12000), [{ pid: 'a', amt: T(12000) }], 'equal', { incl: ['a', 'b', 'c', 'd'] }, 'hotel'));
+  ev.expenses.push(exp('f', T(3000), [{ pid: 'a', amt: T(3000) }], 'equal', { incl: ['a', 'b', 'c', 'd'] }, 'food'));
+  const p = hgPlanCalc(ev, hgEventCalc(ev), null);
+  assert.ok(p.live); assert.strictEqual(p.reserveIdeal, 0);
+  assert.deepStrictEqual(p.rows.map(r => [r.k, r.spent, r.ideal, r.over]), [['hotel', T(12000), 0, false], ['food', T(3000), 0, false]]); // বেশি খরচ আগে
+  assert.deepStrictEqual(p.flags.filter(f => f.code.startsWith('cat_')), []);
+  assert.strictEqual(p.remaining, T(10000));
+});
 
 console.log(`\n${passed} tests passed`);

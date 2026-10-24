@@ -82,15 +82,22 @@ const LOGO = '<svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradien
 
 /* ---------- স্টেট (localStorage) ---------- */
 const STORE_KEY = 'hisabi:v1';
-const APP_VERSION = 'v66'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
+const APP_VERSION = 'v67'; // sw.js-এর VERSION-এর সাথে মিলিয়ে বাড়ান
 
 // boot.js লোডের আগে খালি শেল; আসল ডেটা boot.js-এ মডিউল রেজিস্টার হওয়ার পরে আসে
 let state = { settings: { lang: 'bn' }, batches: [] };
 let persistAsked = false;
 
+// আগে লোড করা ডেমো রেকর্ড (demo: true) সরায়: অ্যাপে আর ডেমো ডেটা নেই
+function scrubDemo(o) {
+  if (Array.isArray(o)) {
+    for (let i = o.length - 1; i >= 0; i--) { const x = o[i]; if (x && typeof x === 'object' && x.demo === true) o.splice(i, 1); else scrubDemo(x); }
+  } else if (o && typeof o === 'object') Object.keys(o).forEach(k => { if (o[k] && typeof o[k] === 'object') scrubDemo(o[k]); });
+}
 // সাধারণ ডিফল্ট + প্রতিটা মডিউলের নিজস্ব migrate (পুরোনো ডেটা কখনো ভাঙবে না)
 function migrate(s) {
   s.version = 1;
+  scrubDemo(s);
   s.settings = Object.assign({ lang: 'bn', rates: { CNY: '', USD: '' }, lastBackup: 0, module: 'trade' }, s.settings || {});
   moduleList().forEach(m => { if (m.migrate) m.migrate(s); });
   if (!MODULES[s.settings.module]) s.settings.module = moduleList()[0].id;
@@ -306,8 +313,7 @@ function appSections() {
       ${mi('guide', 'spark', L('কিভাবে ব্যবহার করবেন', 'How to use'), L('সব ফিচার আর হিসাব সহজ ভাষায়', 'Every feature and every figure, in plain words'))}`)}
     ${menuGroup('💾 ' + L('ডেটা ও ব্যাকআপ', 'Data & backup'), L('ফোন বদলালে ডেটা হারাবে, তাই মাঝে মাঝে ব্যাকআপ নিন', 'Changing phones loses data, so back up now and then'),
       `${mi('export', 'download', L('ব্যাকআপ নিন', 'Back up'), last ? `${L('শেষ ব্যাকআপ', 'Last backup')}: ${fmtDate(last.toISOString().slice(0, 10))}` : L('এখনও নেওয়া হয়নি', 'Not yet'))}
-      ${mi('import', 'upload', L('ব্যাকআপ থেকে ফেরত আনুন', 'Restore backup'), L('আগের ব্যাকআপ ফাইল দিন', 'Pick a backup file'))}
-      ${typeof demoBuild === 'function' ? mi('demo-load', 'spark', L('ডেমো ডেটা দিয়ে ভরুন', 'Fill with demo data'), L('সব ফিচার দেখতে (এখনকার সব ডেটা মুছে যায়)', 'To see every feature (replaces all current data)')) : ''}`)}
+      ${mi('import', 'upload', L('ব্যাকআপ থেকে ফেরত আনুন', 'Restore backup'), L('আগের ব্যাকআপ ফাইল দিন', 'Pick a backup file'))}`)}
     <div class="mgroup"><div class="mg-head"><b>🌐 ${L('ভাষা', 'Language')}</b></div></div>
     <div class="seg">${[['bn', 'বাংলা'], ['en', 'English']].map(([v, l]) =>
       `<button type="button" class="${lang === v ? 'active' : ''}" data-action="lang" data-v="${v}">${l}</button>`).join('')}</div>

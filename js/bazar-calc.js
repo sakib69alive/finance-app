@@ -24,7 +24,7 @@ const bzSum = a => a.reduce((x, y) => x + y, 0);
 /* ---------- নাম ও এককের মিল (ভুল তুলনা এড়াতে) ---------- */
 const BZ_UNIT_ALIAS = {
   kg: 'kg', 'কেজি': 'kg', g: 'g', gm: 'g', 'গ্রাম': 'g', l: 'l', ltr: 'l', liter: 'l', litre: 'l', 'লিটার': 'l', 'লি': 'l', ml: 'ml', 'মিলি': 'ml', 'মিলিলিটার': 'ml',
-  pcs: 'pcs', pc: 'pcs', piece: 'pcs', 'পিস': 'pcs', 'টি': 'pcs', dozen: 'dozen', 'ডজন': 'dozen', pack: 'pack', packet: 'pack', 'প্যাকেট': 'pack', bottle: 'bottle', 'বোতল': 'bottle', bag: 'bag', sack: 'bag', 'বস্তা': 'bag',
+  hali: 'hali', 'হালি': 'hali', bunch: 'bunch', 'আঁটি': 'bunch', pcs: 'pcs', pc: 'pcs', piece: 'pcs', 'পিস': 'pcs', 'টি': 'pcs', dozen: 'dozen', 'ডজন': 'dozen', pack: 'pack', packet: 'pack', 'প্যাকেট': 'pack', bottle: 'bottle', 'বোতল': 'bottle', bag: 'bag', sack: 'bag', 'বস্তা': 'bag',
 };
 const bzUnitKey = u => { const s = String(u || '').trim().toLowerCase(); return BZ_UNIT_ALIAS[s] || s; };
 const bzNameKey = n => String(n || '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -35,7 +35,8 @@ function bzItemCalc(i) {
   const est = bzLine(i.qty, i.est);
   const bought = i.status === 'done' || i.status === 'partial';
   const aQty = bought ? (i.aQty || 0) : 0;
-  const actual = bought ? bzLine(i.aQty, i.aPrice) : 0;
+  // মোট দাম সরাসরি লিখলে (aTotal) সেটাই আসল খরচ, নইলে পরিমাণ × একক-দাম
+  const actual = bought ? (i.aTotal != null && i.aTotal >= 0 ? i.aTotal : bzLine(i.aQty, i.aPrice)) : 0;
   // দামের পার্থক্য: যত পরিমাণ কেনা হয়েছে সেই পরিমাণের আনুমানিক দামের সাথে (আংশিক কেনায় ভুল সাশ্রয় দেখায় না)
   const diff = bought && i.est > 0 ? actual - bzLine(i.aQty, i.est) : null;
   return { est: i.status === 'na' ? 0 : est, planned: est, actual, aQty, bought, diff, missingPrice: bought && !(i.aPrice >= 0 && i.aPrice !== undefined && i.aPrice !== null) };

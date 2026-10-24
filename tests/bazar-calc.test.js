@@ -108,4 +108,17 @@ t('prices remember the shop (item shop first, then the market shop) for shop-to-
   const m = { id: 'a', name: 'a', date: '2026-02-01', createdAt: 1, status: 'done', shop: 'Big Store', items: [it({ name: 'ডিম', unit: 'ডজন', status: 'done', aQty: 1000, aPrice: 14000, shop: 'Corner' }), it({ name: 'চিনি', status: 'done', aQty: 1000, aPrice: 12000 })] };
   assert.deepStrictEqual(C.bzPriceEntries({ markets: [m] }).map(e => [e.name, e.shop]), [['ডিম', 'Corner'], ['চিনি', 'Big Store']]);
 });
+t('a typed total (aTotal) is the real cost: 12 eggs bought as 1 dozen for 150, no dozen/piece mix-up', () => {
+  const egg = it({ name: 'ডিম', unit: 'ডজন', qty: 1000, est: 14000, status: 'done', aQty: 1000, aPrice: 15000, aTotal: 15000 });
+  assert.strictEqual(C.bzItemCalc(egg).actual, 15000);
+  // total that does not divide evenly stays exact (100 for 3 kg, price per kg rounds)
+  const rice = it({ qty: 3000, est: 3000, status: 'done', aQty: 3000, aPrice: 3333, aTotal: 10000 });
+  assert.strictEqual(C.bzItemCalc(rice).actual, 10000);
+  assert.strictEqual(C.bzMarketCalc({ items: [egg, rice], payments: [] }).actualTotal, 25000);
+  // without aTotal the old quantity x price rule is unchanged
+  assert.strictEqual(C.bzItemCalc(it({ status: 'done', aQty: 2000, aPrice: 5000 })).actual, 10000);
+});
+t('hali and bunch units compare only with themselves', () => {
+  assert.strictEqual(C.bzUnitKey('হালি'), 'hali'); assert.strictEqual(C.bzUnitKey('আঁটি'), 'bunch'); assert.notStrictEqual(C.bzUnitKey('হালি'), C.bzUnitKey('ডজন'));
+});
 console.log(n + ' tests passed');

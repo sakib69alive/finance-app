@@ -99,7 +99,7 @@ Files: `js/hangout-calc.js` (pure integer-paisa calculation layer, unit tested),
 Data lives only in `state.hangout` (`schema`, `friends`, `events`). Balances are never stored: they are recomputed from expenses,
 transfers, refunds and finalized decisions by `hgEventCalc`. Run the calculation tests with `node tests/hangout-calc.test.js`.
 
-## Module: bazar (Bazar Sadai: grocery shopping)
+## Module: bazar (Home & Bazar, formerly Bazar Sadai: grocery shopping + monthly household)
 
 Files: `js/bazar-calc.js` (pure integer calculation layer: paisa for money, thousandths for quantity; unit tested), `js/bazar.js` (screens, forms, actions, `registerModule`).
 Run the tests with `node tests/bazar-calc.test.js`.
@@ -128,10 +128,6 @@ Money is stored as integer paisa and **always as the actual amount**. The module
 - Income = `charges`, bills = `expenses`, both settled by `pays` (`side: in|out`). Payments are never deleted, only voided. Paid / partial / unpaid / overdue is always derived.
 - Profit (earned − cost) and cash (opening + received − paid) are separate numbers. Exams and supplies are single expenses (exam: `ref: 'ex:<id>'`), so nothing is counted twice.
 - Receipt and document photos use the existing image store as `tcp:<id>` and travel with the normal backup.
-
-## Demo data (js/demo.js)
-
-One-time button (bottom of screen) that replaces all data with demo data for every module (records tagged `demo: true`). It disappears after use or after the close button. To remove the feature: delete `js/demo.js` and its entries in `index.html` and `sw.js`; to remove the data: filter out records with `demo: true`.
 
 ## Module: realestate (Shopno Bilash Properties: projects, units, sales, collections, costs)
 
@@ -181,3 +177,13 @@ Not built yet but possible offline: parking spaces, invoices, document photos. S
   - Exams: subject, total marks, pass %, batch or individual students (`studentIds`), marks in `exam.results[studentId]`; cost is optional and still becomes one expense. Summaries per exam, batch and student (`tcExamSummary`, `tcStuResults`).
   - Quick button (＋) opens: Add Student, Create Batch, Attendance, Collect Fee, All Students, Due Fees, Exams, Results, Reports.
 - **Bazar**: edit + bin on items, payments, stock and markets; payments can be edited; a 3-step "how it works" card on Home; grouped More menu.
+
+## Changes 2026-10-24 (v67): Home & Bazar merged, live budgets, demo data removed
+
+- **Demo data is gone** (`js/demo.js` deleted). `scrubDemo` in `core.js` runs inside `migrate`, so any record tagged `demo: true` that an earlier version saved is removed on the next load or restore.
+- **Module `bazar` is now "ঘর-সংসার / Home & Bazar"** (same id and data). A switch under the top bar changes `state.bazar.sec` between `market` (groceries: Home, List, Stock, History, More) and `house` (monthly household). The house part reuses the Hangout household event (`type: 'household'`, kept in `state.hangout`) and its screens (`HG_ALL_TABS`: Home, Family, Expenses, More): bills, school and tuition (teacher dues), medical with photos, savings, month budget, credit book. `state.bazar.houseEv` remembers the open month. `registerModule.tabs` is a getter that returns the tab set of the current part, and `context()` sets `hgRoute.ev`.
+- Hangout no longer lists household events (`hgEvents` skips them; `hgCur` only returns one while the Bazar module is current), so there is one place for them.
+- **Budgets are live, not preset.** The Hangout "ideal budget" card, split sheet and templates are replaced by `hgPlanCard` (donut and bars drawn only from real expenses; the only input is people and a total or per-person amount). `ev.plan.split` is empty for new budgets and `hgPlanCalc` returns `live: true` (no ideal shares, no per-category flags); old plans that still have a `split` keep working. Bazar Home gets the same kind of "where the money went" donut from `bzMarketCalc().catRows`. Trade keeps its ideal split on purpose.
+- **Bazar**: `js/bazar-catalog.js` holds 140+ preloaded items (name, English name, category, unit), ready lists (monthly, weekly, daily) and the picker sheet (`bz-catalog`); names autocomplete and fill the unit and category. The buy form can use another unit of the same family (pcs / hali / dozen, g / kg, ml / litre) and either a price per unit or a typed total; `aTotal` (paisa) on an item overrides quantity x price in `bzItemCalc`, so 12 eggs for 150 is exactly 150.
+- **Adda payer form**: "Rest" next to a person now adds on top of what that person already has (it used to replace it). Each person's share is a list, one person per line.
+- Fixed: current-market highlight in the markets sheet now covers the whole row, market names no longer repeat the date, the 3-step help card and the list tab were redesigned.

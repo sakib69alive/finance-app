@@ -491,16 +491,18 @@ function hgPlanCalc(ev, calc, now) {
   const t = hgPlanTotals(plan, ev.participants.length);
   if (!(t.total > 0)) return null;
   const keys = Object.keys(plan.split || {}).filter(k => k !== 'reserve');
+  const live = !keys.length; // নতুন বাজেটে আগে থেকে ঠিক করা খাতভাগ নেই: শুধু মোট বাজেট, খাতের ভাগ আসল খরচ থেকে লাইভ
   const catKeys = keys.slice();
   Object.keys(calc.catTotals).forEach(k => { if (calc.catTotals[k] > 0 && !catKeys.includes(k)) catKeys.push(k); });
   const pctOf = k => Number((plan.split || {})[k] || 0);
   const ideals = hgDist(t.total, Object.fromEntries(catKeys.concat('reserve').map(k => [k, Math.max(0, pctOf(k))])), catKeys.concat('reserve'));
   const rows = catKeys.map(k => {
-    const spent = calc.catTotals[k] || 0, ideal = ideals[k] || 0;
-    return { k, pct: pctOf(k), ideal, spent, left: ideal - spent, over: spent > ideal, ratio: ideal > 0 ? spent / ideal : (spent > 0 ? 2 : 0) };
+    const spent = calc.catTotals[k] || 0, ideal = live ? 0 : (ideals[k] || 0);
+    return { k, pct: pctOf(k), ideal, spent, left: ideal - spent, over: !live && spent > ideal, ratio: ideal > 0 ? spent / ideal : (!live && spent > 0 ? 2 : 0) };
   });
+  if (live) rows.sort((a, b) => b.spent - a.spent);
   const spentAll = calc.net;
-  const reserveIdeal = ideals.reserve || 0;
+  const reserveIdeal = live ? 0 : (ideals.reserve || 0);
   const remaining = t.total - spentAll;
   const flags = [];
   if (spentAll > t.total) flags.push({ code: 'over_total', amt: spentAll - t.total, perPerson: Math.ceil((spentAll - t.total) / t.people) });
@@ -518,7 +520,7 @@ function hgPlanCalc(ev, calc, now) {
     }
   }
   const collected = calc.inKind.contribution ? hgSum(Object.values(calc.inKind.contribution)) : 0;
-  return { people: t.people, total: t.total, each: t.each, spent: spentAll, remaining, spentPerPerson: Math.round(spentAll / t.people), rows, reserveIdeal, reservePct: pctOf('reserve'), flags, burn, collected, short: Math.max(0, t.total - collected) };
+  return { live, people: t.people, total: t.total, each: t.each, spent: spentAll, remaining, spentPerPerson: Math.round(spentAll / t.people), rows, reserveIdeal, reservePct: pctOf('reserve'), flags, burn, collected, short: Math.max(0, t.total - collected) };
 }
 
 /* ---------- দেনা-পাওনার রেকর্ড (বিল, ফি, চিকিৎসা): খরচ একবারই ধরা হয়, পেমেন্ট আলাদা জমা হয় ---------- */
