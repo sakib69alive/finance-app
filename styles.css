@@ -1257,3 +1257,22 @@ button.tcstat { text-align: left; width: 100%; font: inherit; color: inherit; cu
 .bbar.thick span { background: var(--good); }
 .bbar.thick span.near { background: var(--warn); }
 .bbar.thick span.over { background: var(--danger); }
+
+/* ===== v68: আড্ডা খরচ/বন্ধু ট্যাব পালিশ ===== */
+.page-head { padding: 6px 2px 4px; margin-bottom: 4px; }
+.page-head h1 { font-size: 30px; line-height: 1.15; letter-spacing: -.02em; }
+.page-head .btn.sm { height: 42px; padding: 0 16px; border-radius: 14px; font-weight: 800; }
+.view > .minis { gap: 0; background: var(--surface); border-radius: 22px; box-shadow: var(--shadow); padding: 4px; margin: 12px 0 14px; }
+.view > .minis .mini { background: transparent; border: 0; border-radius: 0; padding: 12px 14px; }
+.view > .minis .mini + .mini { border-left: 1px solid var(--border); }
+.view > .minis .mini b { font-size: 18px; margin-top: 2px; }
+.view > .btn.primary.block, .view > .btn-row .btn { height: 52px; border-radius: 18px; font-weight: 800; }
+.view > .btn-row { margin-bottom: 14px; }
+.hg-filters { gap: 12px; margin: 14px 0; }
+.hg-filters .input[type="search"] { height: 50px; border-radius: 18px; background: var(--surface); border-color: transparent; box-shadow: var(--shadow); padding-left: 18px; }
+.fchip { padding: 8px 15px; border-color: transparent; box-shadow: var(--shadow); }
+.fchip.active { box-shadow: 0 6px 14px -8px rgba(0,0,0,.5); }
+.view > .empty, .view > .hg-body > .empty { background: var(--surface); border-radius: 26px; box-shadow: var(--shadow); padding: 36px 24px; margin-top: 16px; text-align: center; }
+.empty .em { font-size: 44px; margin-bottom: 8px; }
+.empty b { display: block; font-size: 17px; margin-bottom: 4px; }
+.view > .hint { background: var(--surface-2); border-radius: 16px; padding: 12px 14px; margin-top: 16px; line-height: 1.6; }

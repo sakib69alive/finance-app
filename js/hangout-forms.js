@@ -441,12 +441,14 @@ Object.assign(FORMS, {
     if (r.total <= 0) return fail(f, L('মোট টাকা লিখুন', 'Enter the total amount'), 'total');
     if (!r.payers.length) return fail(f, L('কে টাকা দিয়েছে তা বাছুন', 'Pick who paid'));
     const ps = hgSum(r.payers.map(p => p.amt));
-    if (ps !== r.total) return fail(f, L(`কে কত দিয়েছে তার যোগফল ${hgM(ps)}, কিন্তু খরচ ${hgM(r.total)}। দুটো সমান হতে হবে।`, `Payments add up to ${hgM(ps)} but the expense is ${hgM(r.total)}. They must match.`));
+    const pending = ps < r.total;
+    if (ps > r.total) return fail(f, L(`কে কত দিয়েছে তার যোগফল ${hgM(ps)}, খরচ ${hgM(r.total)} এর চেয়ে বেশি।`, `Payments add up to ${hgM(ps)}, more than the expense ${hgM(r.total)}.`));
+    if (pending && !confirm(L(`${hgM(r.total - ps)} এখনও কেউ দেয়নি। খরচটা এখনই সেভ হবে, ওই অংশ হিসাবে ধরা হবে না। পরে এডিট করে কে দিল লিখলে যোগ হবে। চালিয়ে যাবেন?`, `${hgM(r.total - ps)} is not paid by anyone yet. The expense is saved now and that part is not counted until you edit it and say who paid. Continue?`))) return;
     if (!r.split.ok) return fail(f, hgErr(r.split.error));
     const alloc = Object.fromEntries(ev.participants.map(p => [p.id, r.split.alloc[p.id] || 0]));
     const x = existing || { id: uid(), createdAt: Date.now(), mode: 'split' };
     const before = existing ? `${x.title} ${hgM(x.total)}` : '';
-    Object.assign(x, { sub: f.elements.sub ? f.elements.sub.value.trim() : '', title, category: f.elements.cat.value, date: f.elements.date.value || today(), desc: f.elements.desc.value.trim(), total: r.total, payers: r.payers,
+    Object.assign(x, { pending: pending || undefined, sub: f.elements.sub ? f.elements.sub.value.trim() : '', title, category: f.elements.cat.value, date: f.elements.date.value || today(), desc: f.elements.desc.value.trim(), total: r.total, payers: r.payers,
       method: r.method, spec: r.spec, alloc, personal: r.personal || null, mode: 'split', updatedAt: Date.now(),
       meta: { rooms: f.elements.rooms.value.trim(), nights: f.elements.nights.value.trim(), rate: f.elements.rate.value.trim() } });
     if (!existing) ev.expenses.push(x);

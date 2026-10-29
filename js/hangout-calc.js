@@ -281,30 +281,31 @@ function hgEventCalc(ev) {
     if (!r.ok) issues.push({ code: 'needs_review', expense: e.id, error: r.error });
     const payers = e.payers || [];
     const payTotal = hgSum(payers.map(p => p.amt));
-    if (payTotal !== e.total) issues.push({ code: 'payers_mismatch', expense: e.id, diff: e.total - payTotal });
+    const pend = e.pending ? Math.max(0, e.total - payTotal) : 0; // এখনও কেউ দেয়নি: এই অংশ হিসাবে ধরা হয় না
+    if (payTotal !== e.total && !e.pending) issues.push({ code: 'payers_mismatch', expense: e.id, diff: e.total - payTotal });
     payers.forEach(p => { if (p.pid in paid) paid[p.pid] += p.amt; });
-    gross += e.total;
+    gross += e.total - pend;
     const ref = refunds.filter(x => x.expenseId === e.id);
-    const refSum = hgSum(ref.map(x => x.amt));
+    const refSum = hgSum(ref.map(x => x.amt)), cut = refSum + pend;
     if (refSum > e.total) issues.push({ code: 'refund_exceeds', expense: e.id });
     let net = alloc;
     ids.forEach(id => { share[id] += alloc[id] || 0; });
-    if (refSum > 0) {
-      const part = hgDist(Math.min(refSum, e.total), alloc, ids);
+    if (cut > 0) {
+      const part = hgDist(Math.min(cut, e.total), alloc, ids);
       ids.forEach(id => { share[id] -= part[id]; });
       net = Object.fromEntries(ids.map(id => [id, (alloc[id] || 0) - part[id]]));
     }
     refundTotal += Math.min(refSum, e.total);
     ref.forEach(x => { if (x.by in refundGot) refundGot[x.by] += x.amt; });
     const cat = e.category || 'other';
-    catTotals[cat] = (catTotals[cat] || 0) + e.total - Math.min(refSum, e.total);
-    per.push({ id: e.id, total: e.total, refund: Math.min(refSum, e.total), net: e.total - Math.min(refSum, e.total), alloc, netAlloc: net, ok: r.ok, error: r.error });
+    catTotals[cat] = (catTotals[cat] || 0) + e.total - Math.min(cut, e.total);
+    per.push({ id: e.id, total: e.total, refund: Math.min(cut, e.total), pending: pend, net: e.total - Math.min(cut, e.total), alloc, netAlloc: net, ok: r.ok, error: r.error });
     if (e.personal && e.personal in personal) personal[e.personal] += net[e.personal] || 0; // শুধু একজনের নিজের খরচ (যেমন কোক)
     // কে কোন খাতে আর কোন দিনে কত বহন করল (রিফান্ড বাদ দিয়ে), এভাবে "টাকা কোথায় গেল" বোঝা যায়
     const day = e.date || '';
     const dd = byDay[day] || (byDay[day] = { total: 0, byCat: {}, count: 0 });
-    dd.total += e.total - Math.min(refSum, e.total); dd.count++;
-    dd.byCat[cat] = (dd.byCat[cat] || 0) + e.total - Math.min(refSum, e.total);
+    dd.total += e.total - Math.min(cut, e.total); dd.count++;
+    dd.byCat[cat] = (dd.byCat[cat] || 0) + e.total - Math.min(cut, e.total);
     ids.forEach(id => {
       const v = net[id] || 0; if (!v) return;
       byPersonCat[id][cat] = (byPersonCat[id][cat] || 0) + v;
